@@ -14,7 +14,7 @@ final class TestRig {
  final CancellationToken cancellation=new CancellationToken();
  HostBindings bindings;
  final DialogueRuntime runtime;
- TestRig(){this(DialogueBuilder.dialogue("demo:runtime").node("start",new Message("npc","hello","demo:wave",List.of(),"bye")).node("bye",new Message("npc","bye",null,List.of(),"end")).node("end",new End("completed")).build(),new HostCatalog("v1",Set.of("npc"),Map.of(),Map.of(),Set.of("demo:wave"),Set.of(),false));}
+ TestRig(){this(DialogueBuilder.dialogue("demo:runtime").locales("en","en","de").node("start",new Message("npc","hello","demo:wave",List.of(),"bye")).node("bye",new Message("npc","bye",null,List.of(),"end")).node("end",new End("completed")).build(),new HostCatalog("v1",Set.of("npc"),Map.of(),Map.of(),Set.of("demo:wave"),Set.of(),false));}
  TestRig(DialogueDefinition d,HostCatalog catalog){
   var report=new DialogueValidator().validate(d,new TextCatalog(Map.of("en",Map.of("hello","Hello friend","bye","Goodbye","c","Continue","speaker.npc","Mechanic"),"de",Map.of("hello","Hallo Freund","bye","Tschüss","c","Weiter","speaker.npc","Mechaniker"))),catalog,ValidationLimits.defaults());
   if(!report.isValid())throw new AssertionError(report.problems());content=report.validated();
