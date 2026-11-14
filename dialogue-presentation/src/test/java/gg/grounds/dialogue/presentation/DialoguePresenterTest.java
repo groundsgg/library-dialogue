@@ -1,0 +1,64 @@
+package gg.grounds.dialogue.presentation;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+import gg.grounds.dialogue.core.runtime.PresentationPreferences;
+import org.junit.jupiter.api.Test;
+
+class DialoguePresenterTest {
+  @Test
+  void profilesReuseSemanticWidgetsAndStableHitRects() {
+    var p =
+        PresenterFixtures.presenter(
+            new PresenterFixtures.Surface(), new PresenterFixtures.Surface());
+    var hidden =
+        p.compose(
+            PresenterFixtures.view("Hello", 0, "c1", 1), "npc", PresentationPreferences.defaults());
+    var full =
+        p.compose(
+            PresenterFixtures.view("Hello", 5, "c2", 2), "npc", PresentationPreferences.defaults());
+    var hText =
+        hidden.widgets().stream()
+            .filter(w -> w.kind() == WidgetFrame.Kind.TEXT)
+            .findFirst()
+            .orElseThrow();
+    var fText =
+        full.widgets().stream()
+            .filter(w -> w.kind() == WidgetFrame.Kind.TEXT)
+            .findFirst()
+            .orElseThrow();
+    assertEquals(hText.bounds(), fText.bounds());
+    var before =
+        hidden.widgets().stream().filter(w -> "c1".equals(w.choiceId())).findFirst().orElseThrow();
+    var after =
+        full.widgets().stream().filter(w -> "c1".equals(w.choiceId())).findFirst().orElseThrow();
+    assertEquals(1.08, before.visualScale());
+    assertEquals(1, after.visualScale());
+    assertEquals(before.hitRect(), after.hitRect());
+    var name =
+        full.widgets().stream()
+            .filter(w -> w.kind() == WidgetFrame.Kind.SPEAKER)
+            .findFirst()
+            .orElseThrow();
+    assertEquals(
+        name.bounds().x() + name.bounds().width() / 2,
+        name.textBounds().x() + name.textBounds().width() / 2,
+        0.00001);
+  }
+
+  @Test
+  void unsupportedGlyphProducesTypedFallback() {
+    var p =
+        PresenterFixtures.presenter(
+            new PresenterFixtures.Surface(), new PresenterFixtures.Surface());
+    var problem =
+        assertThrows(
+            DialoguePresenter.FallbackRequired.class,
+            () ->
+                p.compose(
+                    PresenterFixtures.view("你好", 2, "c1", 1),
+                    "hud",
+                    PresentationPreferences.defaults()));
+    assertEquals("MISSING_GLYPH", problem.code());
+  }
+}

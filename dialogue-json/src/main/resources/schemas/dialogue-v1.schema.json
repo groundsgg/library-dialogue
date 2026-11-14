@@ -1,0 +1,532 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://groundsgg.github.io/library-dialogue/schemas/dialogue-v1.schema.json",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-zA-Z0-9_.:/-]+$"
+    },
+    "contentVersion": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "entry": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-zA-Z0-9_.:/-]+$"
+    },
+    "locales": {
+      "type": "object",
+      "properties": {
+        "default": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_.:/-]+$"
+        },
+        "supported": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[a-zA-Z0-9_.:/-]+$"
+          },
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "default",
+        "supported"
+      ],
+      "additionalProperties": false
+    },
+    "capabilities": {
+      "type": "object",
+      "properties": {
+        "required": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[a-zA-Z0-9_.:/-]+$"
+          },
+          "uniqueItems": true
+        },
+        "optional": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[a-zA-Z0-9_.:/-]+$"
+          },
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "required",
+        "optional"
+      ],
+      "additionalProperties": false
+    },
+    "interaction": {
+      "type": "object",
+      "properties": {
+        "lookAway": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "exitAngleDegrees": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 180
+            },
+            "exitDelayMs": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 60000
+            },
+            "resetAngleDegrees": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 180
+            }
+          },
+          "required": [
+            "exitAngleDegrees",
+            "exitDelayMs",
+            "resetAngleDegrees"
+          ],
+          "additionalProperties": false
+        },
+        "maxDistanceBlocks": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      },
+      "required": [
+        "lookAway",
+        "maxDistanceBlocks"
+      ],
+      "additionalProperties": false
+    },
+    "presentation": {
+      "type": "object",
+      "properties": {
+        "focus": {
+          "enum": [
+            "none",
+            "soft"
+          ]
+        },
+        "nearFraming": {
+          "enum": [
+            "none",
+            "subtle"
+          ]
+        },
+        "vignette": {
+          "enum": [
+            "none",
+            "subtle"
+          ]
+        },
+        "hideHud": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[a-zA-Z0-9_.:/-]+$"
+          },
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "focus",
+        "nearFraming",
+        "vignette",
+        "hideHud"
+      ],
+      "additionalProperties": false
+    },
+    "nodes": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1024,
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128,
+        "pattern": "^[a-zA-Z0-9_.:/-]+$"
+      },
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/message"
+          },
+          {
+            "$ref": "#/$defs/branch"
+          },
+          {
+            "$ref": "#/$defs/action"
+          },
+          {
+            "$ref": "#/$defs/outcome"
+          },
+          {
+            "$ref": "#/$defs/end"
+          }
+        ]
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "id",
+    "contentVersion",
+    "entry",
+    "locales",
+    "nodes"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "condition": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_.:/-]+$"
+        },
+        "arguments": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean",
+              "null"
+            ]
+          },
+          "maxProperties": 1024
+        },
+        "negated": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "key"
+      ],
+      "additionalProperties": false
+    },
+    "choice": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_.:/-]+$"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_.:/-]+$"
+        },
+        "to": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_.:/-]+$"
+        },
+        "default": {
+          "type": "boolean"
+        },
+        "condition": {
+          "$ref": "#/$defs/condition"
+        }
+      },
+      "required": [
+        "id",
+        "text",
+        "to"
+      ],
+      "additionalProperties": false
+    },
+    "message": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "message"
+        },
+        "speaker": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_.:/-]+$"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_.:/-]+$"
+        },
+        "presentation": {
+          "type": "object",
+          "properties": {
+            "gesture": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[a-zA-Z0-9_.:/-]+$"
+            }
+          },
+          "required": [
+            "gesture"
+          ],
+          "additionalProperties": false
+        },
+        "next": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_.:/-]+$"
+        },
+        "choices": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/choice"
+          },
+          "minItems": 1,
+          "maxItems": 64
+        }
+      },
+      "required": [
+        "type",
+        "speaker",
+        "text"
+      ],
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "next"
+          ],
+          "not": {
+            "required": [
+              "choices"
+            ]
+          }
+        },
+        {
+          "required": [
+            "choices"
+          ],
+          "not": {
+            "required": [
+              "next"
+            ]
+          }
+        }
+      ]
+    },
+    "branch": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "branch"
+        },
+        "cases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "condition": {
+                "$ref": "#/$defs/condition"
+              },
+              "to": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "pattern": "^[a-zA-Z0-9_.:/-]+$"
+              }
+            },
+            "required": [
+              "condition",
+              "to"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "defaultTo": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_.:/-]+$"
+        },
+        "unavailableTo": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_.:/-]+$"
+        }
+      },
+      "required": [
+        "type",
+        "cases",
+        "defaultTo",
+        "unavailableTo"
+      ],
+      "additionalProperties": false
+    },
+    "action": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "action"
+        },
+        "action": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_.:/-]+$"
+        },
+        "arguments": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean",
+              "null"
+            ]
+          },
+          "maxProperties": 1024
+        },
+        "onSuccess": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_.:/-]+$"
+        },
+        "onRejected": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_.:/-]+$"
+        },
+        "onUnavailable": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_.:/-]+$"
+        },
+        "onUncertain": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_.:/-]+$"
+        }
+      },
+      "required": [
+        "type",
+        "action",
+        "onSuccess",
+        "onRejected",
+        "onUnavailable",
+        "onUncertain"
+      ],
+      "additionalProperties": false
+    },
+    "outcome": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "outcome"
+        },
+        "milestone": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_.:/-]+$"
+        },
+        "delivery": {
+          "enum": [
+            "local",
+            "durable"
+          ]
+        },
+        "onAcknowledged": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_.:/-]+$"
+        },
+        "onUnavailable": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_.:/-]+$"
+        },
+        "onUncertain": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_.:/-]+$"
+        }
+      },
+      "required": [
+        "type",
+        "milestone",
+        "delivery",
+        "onAcknowledged",
+        "onUnavailable",
+        "onUncertain"
+      ],
+      "additionalProperties": false
+    },
+    "end": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "end"
+        },
+        "reason": {
+          "enum": [
+            "completed",
+            "cancelled",
+            "looked_away",
+            "out_of_range",
+            "disconnected",
+            "host_changed",
+            "superseded",
+            "host_closed",
+            "failed"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "reason"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

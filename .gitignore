@@ -1,0 +1,9 @@
+.gradle/
+**/build/
+.evidence/
+.superpowers/
+*.local
+.idea/
+__pycache__/
+*.pyc
+.kotlin/
