@@ -82,7 +82,10 @@ public final class MinestomDialogueHost {
           var ticket = current(e.getPlayer());
           if (ticket != null) {
             var session = ticket.session;
-            if (session != null) session.checkConnection();
+            if (session != null) {
+              session.checkConnection();
+              session.tickInput();
+            }
           }
         });
     events.addListener(
@@ -100,6 +103,12 @@ public final class MinestomDialogueHost {
           packs.observe(e.getPlayer(), e.getPackUuid(), e.getStatus());
           var t = current(e.getPlayer());
           if (t != null && t.session != null) t.session.refreshPresentation();
+        });
+    events.addListener(
+        PlayerPacketEvent.class,
+        e -> {
+          var t = current(e.getPlayer());
+          if (t != null && t.session != null) t.session.packet(e);
         });
     MinecraftServer.getGlobalEventHandler().addChild(events);
   }

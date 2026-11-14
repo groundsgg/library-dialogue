@@ -6,6 +6,14 @@ import net.minestom.server.entity.Player;
 
 /** Internal capability boundary; the core still authorizes every submitted input. */
 public interface DialogueInputSource {
+  default String effectiveSurface() {
+    return "";
+  }
+
+  default boolean hiddenHotbar() {
+    return false;
+  }
+
   default void refreshOutput() {}
 
   default TargetSnapshot targets() {

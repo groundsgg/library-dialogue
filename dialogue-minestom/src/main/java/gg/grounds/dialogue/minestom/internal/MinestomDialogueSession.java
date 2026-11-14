@@ -23,6 +23,7 @@ public final class MinestomDialogueSession {
   private BiConsumer<MinestomDialogueSession, Throwable> closed;
   private final AtomicBoolean finishing = new AtomicBoolean();
   private final AtomicLong impulse;
+  private final gg.grounds.dialogue.minestom.input.MinestomInputAdapter inputs;
   private volatile DialogueHandle handle;
   private volatile DialogueView view;
   private DialogueStartResult.Rejected rejection;
@@ -45,6 +46,56 @@ public final class MinestomDialogueSession {
     this.scheduler = scheduler;
     runtime = DialogueRuntime.create(new RuntimeOptions(scheduler, options.budgets(), 65536, 256));
     impulse = new AtomicLong(request.openingImpulse());
+    inputs =
+        new gg.grounds.dialogue.minestom.input.MinestomInputAdapter(
+            request.player(),
+            request.hostGeneration(),
+            guard,
+            request.controls(),
+            scheduler,
+            token,
+            new gg.grounds.dialogue.minestom.input.MinestomInputAdapter.Target() {
+              private DialogueInputSource source() {
+                return MinestomDialogueSession.this.renderer instanceof DialogueInputSource source
+                    ? source
+                    : null;
+              }
+
+              public DialogueView view() {
+                return MinestomDialogueSession.this.view;
+              }
+
+              public gg.grounds.dialogue.minestom.input.TargetSnapshot targets() {
+                var s = source();
+                return s == null ? null : s.targets();
+              }
+
+              public gg.grounds.dialogue.minestom.render.NpcDialogueSurface.Geometry npcGeometry() {
+                var s = source();
+                return s == null ? null : s.npcGeometry();
+              }
+
+              public String effectiveSurface() {
+                var s = source();
+                return s == null ? "" : s.effectiveSurface();
+              }
+
+              public boolean hiddenHotbar() {
+                var s = source();
+                return s != null && s.hiddenHotbar();
+              }
+
+              public long nextImpulse() {
+                return MinestomDialogueSession.this.nextImpulse();
+              }
+
+              public CompletionStage<InputResult> submit(DialogueInput input) {
+                return MinestomDialogueSession.this.submit(input);
+              }
+            },
+            (from, to) ->
+                gg.grounds.dialogue.minestom.geometry.MinestomOcclusion.visible(
+                    request.player().getInstance(), from, to));
   }
 
   public void begin() {
@@ -123,9 +174,20 @@ public final class MinestomDialogueSession {
               if (result instanceof DialogueStartResult.Started started) {
                 var running = started.handle();
                 handle = running;
-                var notify = ready;
-                notify.accept(result);
                 running.completion().whenComplete((end, failure) -> finish(failure));
+                inputs
+                    .activate()
+                    .whenComplete(
+                        (v, failure) -> {
+                          if (failure != null) {
+                            finish(failure);
+                            return;
+                          }
+                          if (!finishing.get() && guard.isCurrent() && !token.isCancelled()) {
+                            var notify = ready;
+                            if (notify != null) notify.accept(result);
+                          }
+                        });
               } else {
                 rejection = (DialogueStartResult.Rejected) result;
                 finish(null);
@@ -146,6 +208,14 @@ public final class MinestomDialogueSession {
     } catch (Throwable ignored) {
       return false;
     }
+  }
+
+  public void packet(net.minestom.server.event.player.PlayerPacketEvent event) {
+    inputs.receive(event);
+  }
+
+  public void tickInput() {
+    inputs.tick();
   }
 
   public void checkConnection() {
@@ -205,8 +275,8 @@ public final class MinestomDialogueSession {
   private void finish(Throwable initialError) {
     if (!finishing.compareAndSet(false, true)) return;
     guard.invalidate();
-    runtime
-        .closeAsync()
+    CompletableFuture.allOf(
+            runtime.closeAsync().toCompletableFuture(), inputs.closeAsync().toCompletableFuture())
         .whenComplete(
             (v, cleanup) -> {
               Throwable failure = cleanup == null ? initialError : cleanup;

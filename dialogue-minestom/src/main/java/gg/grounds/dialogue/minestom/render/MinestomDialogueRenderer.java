@@ -63,6 +63,19 @@ public final class MinestomDialogueRenderer implements DialogueRenderer, Dialogu
     if (!profiles.containsKey("chat")) throw new IllegalArgumentException("Chat fallback required");
   }
 
+  public String effectiveSurface() {
+    var r = active;
+    return r == null || !r.firstAck ? "" : r.effective.surfaceKey();
+  }
+
+  public boolean hiddenHotbar() {
+    var r = active;
+    return r != null
+        && r.firstAck
+        && !r.effective.surfaceKey().equals("chat")
+        && "true".equals(r.effective.effects().get("hideHud"));
+  }
+
   public TargetSnapshot targets() {
     return targets.current();
   }

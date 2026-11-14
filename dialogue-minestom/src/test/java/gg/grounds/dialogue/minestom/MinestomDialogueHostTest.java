@@ -139,6 +139,56 @@ class MinestomDialogueHostTest {
   }
 
   @Test
+  void nativeInputRouteOwnsOnlyActiveConnectionAndWaitsItsCatcher(Env env)
+      throws InterruptedException {
+    var f = new Fixture(env);
+    done(env, f.host.closeAsync());
+    var host = new MinestomDialogueHost(f.options);
+    var id = UUID.randomUUID();
+    host.packState().expect(f.player, 1, id, f.options.assets().pin());
+    host.packState()
+        .observe(
+            f.player,
+            1,
+            id,
+            f.options.assets().pin(),
+            net.kyori.adventure.resource.ResourcePackStatus.SUCCESSFULLY_LOADED);
+    var ticket = host.begin(f.request("native-input", "v1"));
+    var handle = ((DialogueStartResult.Started) done(env, ticket.result())).handle();
+    assertEquals(
+        1,
+        f.player.getInstance().getEntities().stream()
+            .filter(e -> e.getEntityType() == net.minestom.server.entity.EntityType.INTERACTION)
+            .count());
+    var packet =
+        new net.minestom.server.network.packet.client.play.ClientPlayerActionPacket(
+            net.minestom.server.network.packet.client.play.ClientPlayerActionPacket.Status
+                .SWAP_ITEM_HAND,
+            net.minestom.server.coordinate.Vec.ZERO,
+            net.minestom.server.instance.block.BlockFace.TOP,
+            0);
+    var opening = new net.minestom.server.event.player.PlayerPacketEvent(f.player, packet);
+    EventDispatcher.call(opening);
+    assertTrue(opening.isCancelled());
+    env.tick();
+    assertFalse(handle.completion().toCompletableFuture().isDone());
+    Thread.sleep(375);
+    var confirm = new net.minestom.server.event.player.PlayerPacketEvent(f.player, packet);
+    EventDispatcher.call(confirm);
+    assertTrue(confirm.isCancelled());
+    assertEquals(DialogueEndReason.COMPLETED, done(env, handle.completion()).reason());
+    done(env, ticket.cancel(DialogueEndReason.CANCELLED));
+    assertTrue(
+        f.player.getInstance().getEntities().stream()
+            .noneMatch(
+                e -> e.getEntityType() == net.minestom.server.entity.EntityType.INTERACTION));
+    var after = new net.minestom.server.event.player.PlayerPacketEvent(f.player, packet);
+    EventDispatcher.call(after);
+    assertFalse(after.isCancelled());
+    done(env, host.closeAsync());
+  }
+
+  @Test
   void nativeHostFallsBackAndDoesNotRestartSessionOnPackRevocation(Env env) {
     var f = new Fixture(env);
     done(env, f.host.closeAsync());
