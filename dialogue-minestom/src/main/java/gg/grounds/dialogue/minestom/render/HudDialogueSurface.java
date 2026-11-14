@@ -180,7 +180,12 @@ public final class HudDialogueSurface implements DialogueSurface {
                       : effects.replace(
                           vignette ? List.of(Key.key("dialogue:vignette")) : List.of());
               effectWrite
-                  .thenCompose(v -> hud.replace(component))
+                  .thenCompose(
+                      v ->
+                          available()
+                              ? hud.replace(component)
+                              : CompletableFuture.failedFuture(
+                                  new DialoguePresenter.FallbackRequired("MISSING_PACK")))
                   .whenComplete(
                       (v, error) ->
                           queue.execute(
@@ -195,6 +200,12 @@ public final class HudDialogueSurface implements DialogueSurface {
                                   result.completeExceptionally(new CancellationException());
                                   return;
                                 }
+                                if (!available()) {
+                                  targets.invalidateCurrent(context.generation());
+                                  result.completeExceptionally(
+                                      new DialoguePresenter.FallbackRequired("MISSING_PACK"));
+                                  return;
+                                }
                                 if (!hud.visible()) {
                                   targets.invalidateCurrent(context.generation());
                                   result.completeExceptionally(
@@ -206,7 +217,11 @@ public final class HudDialogueSurface implements DialogueSurface {
                                 frame.widgets().stream()
                                     .filter(w -> w.kind() == WidgetFrame.Kind.CHOICE && w.enabled())
                                     .forEach(w -> choices.put(w.choiceId(), w.hitRect()));
-                                targets.publish(frame, context.generation(), choices);
+                                targets.publish(
+                                    frame,
+                                    context.generation(),
+                                    choices,
+                                    () -> !closed.get() && available() && hud.visible());
                                 renew();
                                 result.complete(null);
                               }));

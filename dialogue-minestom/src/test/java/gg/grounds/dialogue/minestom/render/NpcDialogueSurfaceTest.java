@@ -90,6 +90,54 @@ class NpcDialogueSurfaceTest {
   }
 
   @Test
+  void retiringCandidateRestoresRetainedGeometry(Env env) {
+    var f = new Fixture(env, CompletableFuture.completedFuture(null));
+    var old = f.open(env);
+    done(env, old.replace(RenderFixtures.frame("npc", "Hello", 5)));
+    var candidate =
+        done(
+            env,
+            f.surface.open(
+                new DialogueSurface.SurfaceContext(
+                    RenderFixtures.SESSION,
+                    f.a.getUuid().toString(),
+                    1,
+                    "npc",
+                    "profile",
+                    new CancellationToken(),
+                    2,
+                    Long.MAX_VALUE,
+                    new PresentationPreferences("npc", Duration.ZERO, false, Map.of()))));
+    done(env, candidate.replace(RenderFixtures.frame("npc", "Hello", 5)));
+    done(env, candidate.closeAsync());
+    assertNotNull(f.surface.geometry());
+    assertEquals(1, f.surface.geometry().surfaceGeneration());
+    done(env, old.closeAsync());
+  }
+
+  @Test
+  void overlappingPendingHandlesShareOneConnectionDisplayBudget(Env env) {
+    var gate = new CompletableFuture<Void>();
+    var f = new Fixture(env, gate);
+    var handles = new ArrayList<DialogueSurface.SurfaceHandle>();
+    for (int n = 0; n < 4; n++) {
+      var h = f.open(env);
+      handles.add(h);
+      h.replace(RenderFixtures.frame("npc", "Hello", 5));
+      for (int k = 0; k < 10; k++) env.tick();
+      assertTrue(
+          f.displays().size() <= 32, "Pending spawns count against the per-connection budget");
+    }
+    gate.complete(null);
+    for (var h : handles) done(env, h.closeAsync());
+    assertTrue(f.displays().isEmpty());
+    var h = f.open(env);
+    done(env, h.replace(RenderFixtures.frame("npc", "Hello", 5)));
+    assertFalse(f.displays().isEmpty());
+    done(env, h.closeAsync());
+  }
+
+  @Test
   void backdropIsBundledForBothProfiles() {
     assertTrue(RenderFixtures.ASSETS.hasEntry("assets/dialogue/font/focus.json"));
     assertTrue(

@@ -224,7 +224,9 @@ public final class MinestomDialogueHost {
       if (reject != null) return rejected(request, reject);
       ticket = new Ticket(request, identity, this::finished);
       starts.put(request.requestId(), ticket);
-      previous = admissionInstance == null ? null : active.put(request.player(), ticket);
+      previous = admissionInstance == null ? null : active.get(request.player());
+      if (previous != null) ticket.predecessor = previous.closeObservation;
+      if (admissionInstance != null) active.put(request.player(), ticket);
     }
     if (admissionInstance == null) {
       ticket.reject("HOST_CHANGED", null);
@@ -272,7 +274,8 @@ public final class MinestomDialogueHost {
   private void finished(Ticket ticket, MinestomDialogueSession failed) {
     synchronized (lock) {
       Player player = ticket.player.get();
-      if (player != null) active.remove(player, ticket);
+      if (player != null && !ticket.close.isCompletedExceptionally() && !ticket.cleanupFailed)
+        active.remove(player, ticket);
       if (failed != null) failedOwners.add(failed);
     }
   }
@@ -383,13 +386,20 @@ public final class MinestomDialogueHost {
     volatile PresentationStatus status;
     volatile MinestomDialogueSession session;
     BiConsumer<Ticket, MinestomDialogueSession> finished;
-    boolean settled;
+    boolean settled, cleanupFailed, applyingIntents;
+    DialogueHandle running;
+    gg.grounds.dialogue.core.text.LocaleContext pendingLocale;
+    PresentationPreferences pendingPreferences;
+    long localeRevision;
+    final List<CompletableFuture<Void>> intentWaiters = new ArrayList<>();
+    CompletionStage<Void> predecessor = CompletableFuture.completedFuture(null);
 
     Ticket(
         MinestomDialogueRequest q,
         String identity,
         BiConsumer<Ticket, MinestomDialogueSession> finished) {
       this.identity = identity;
+      localeRevision = q.locale().revision();
       player = new WeakReference<>(q.player());
       status = new PresentationStatus(q.preferences().surfaceKey(), "", "PREPARING", 0);
       this.finished = finished;
@@ -423,7 +433,86 @@ public final class MinestomDialogueHost {
     }
 
     void ready(DialogueStartResult value) {
-      result.complete(value);
+      if (!(value instanceof DialogueStartResult.Started started)) {
+        result.complete(value);
+        return;
+      }
+      synchronized (lock) {
+        if (settled) return;
+        running = started.handle();
+      }
+      applyIntents();
+    }
+
+    public CompletionStage<Void> updatePreferences(PresentationPreferences value) {
+      Objects.requireNonNull(value);
+      var observer = new CompletableFuture<Void>();
+      synchronized (lock) {
+        if (settled || cancelled())
+          return CompletableFuture.failedFuture(new CancellationException("Dialogue ended"));
+        if (intentWaiters.size() >= 256)
+          return CompletableFuture.failedFuture(new IllegalStateException("INTENT_LIMIT"));
+        pendingPreferences = value;
+        intentWaiters.add(observer);
+      }
+      applyIntents();
+      return observer.minimalCompletionStage();
+    }
+
+    public CompletionStage<RefreshResult> refreshLocale(
+        gg.grounds.dialogue.core.text.LocaleContext value) {
+      Objects.requireNonNull(value);
+      var observer = new CompletableFuture<Void>();
+      synchronized (lock) {
+        if (settled || cancelled()) return CompletableFuture.completedFuture(RefreshResult.ENDED);
+        if (value.revision() <= localeRevision)
+          return CompletableFuture.completedFuture(RefreshResult.STALE);
+        if (intentWaiters.size() >= 256)
+          return CompletableFuture.failedFuture(new IllegalStateException("INTENT_LIMIT"));
+        localeRevision = value.revision();
+        pendingLocale = value;
+        intentWaiters.add(observer);
+      }
+      applyIntents();
+      return observer.thenApply(v -> RefreshResult.UPDATED).minimalCompletionStage();
+    }
+
+    void applyIntents() {
+      DialogueHandle owner;
+      gg.grounds.dialogue.core.text.LocaleContext locale;
+      PresentationPreferences preferences;
+      List<CompletableFuture<Void>> observers;
+      synchronized (lock) {
+        if (settled || cancelled() || running == null || applyingIntents) return;
+        owner = running;
+        locale = pendingLocale;
+        preferences = pendingPreferences;
+        pendingLocale = null;
+        pendingPreferences = null;
+        observers = List.copyOf(intentWaiters);
+        intentWaiters.clear();
+        applyingIntents = !observers.isEmpty();
+      }
+      if (observers.isEmpty()) {
+        result.complete(new DialogueStartResult.Started(owner));
+        return;
+      }
+      CompletionStage<?> work =
+          locale == null ? CompletableFuture.completedFuture(null) : owner.refreshLocale(locale);
+      if (preferences != null) work = work.thenCompose(v -> owner.updatePreferences(preferences));
+      work.whenComplete(
+          (v, error) -> {
+            synchronized (lock) {
+              applyingIntents = false;
+            }
+            if (error != null) {
+              observers.forEach(o -> o.completeExceptionally(error));
+              cancel(DialogueEndReason.FAILED);
+            } else {
+              observers.forEach(o -> o.complete(null));
+              applyIntents();
+            }
+          });
     }
 
     public CompletionStage<Void> cancel(DialogueEndReason reason) {
@@ -451,18 +540,27 @@ public final class MinestomDialogueHost {
 
     void reject(String code, Throwable error) {
       result.complete(new DialogueStartResult.Rejected(code, List.of()));
-      settled(null, error);
+      predecessor.whenComplete(
+          (v, beforeError) -> settled(null, beforeError == null ? error : beforeError));
     }
 
     void settled(MinestomDialogueSession source, Throwable error) {
       BiConsumer<Ticket, MinestomDialogueSession> callback;
+      List<CompletableFuture<Void>> abandoned;
       synchronized (lock) {
         if (settled) return;
         settled = true;
+        cleanupFailed = error != null;
         session = null;
+        running = null;
+        pendingLocale = null;
+        pendingPreferences = null;
+        abandoned = List.copyOf(intentWaiters);
+        intentWaiters.clear();
         callback = finished;
         finished = null;
       }
+      abandoned.forEach(f -> f.completeExceptionally(new CancellationException("Dialogue ended")));
       if (!result.isDone())
         result.complete(
             new DialogueStartResult.Rejected(

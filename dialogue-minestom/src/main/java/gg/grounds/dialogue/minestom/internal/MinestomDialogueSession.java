@@ -329,15 +329,44 @@ public final class MinestomDialogueSession {
         .resolveChat(q.player(), q.hostGeneration(), value)
         .ifPresent(
             target -> {
-              if (target.sessionId().equals(current.sessionId())
-                  && target.nodeVisitId() == current.nodeVisitId()
-                  && target.renderRevision() == current.renderRevision())
+              if (!matchesChat(target, current)) return;
+              if (current.state() == DialogueView.State.REVEALING
+                  || target.choiceId() == null
+                  || target.choiceId().equals(current.selectedChoiceId())) {
                 submit(
                     new DialogueInput.Confirm(
                         new DialogueInput.InputStamp(
                             target.sessionId(), target.renderRevision(), nextImpulse()),
                         target.choiceId()));
+                return;
+              }
+              submit(
+                      new DialogueInput.Select(
+                          new DialogueInput.InputStamp(
+                              target.sessionId(), target.renderRevision(), nextImpulse()),
+                          target.choiceId()))
+                  .thenAccept(
+                      result -> {
+                        var now = view;
+                        if (result == InputResult.ACCEPTED
+                            && guard.isCurrent()
+                            && now != null
+                            && matchesChat(target, now)
+                            && target.choiceId().equals(now.selectedChoiceId()))
+                          submit(
+                              new DialogueInput.Confirm(
+                                  new DialogueInput.InputStamp(
+                                      target.sessionId(), target.renderRevision(), nextImpulse()),
+                                  target.choiceId()));
+                      });
             });
+  }
+
+  private boolean matchesChat(
+      gg.grounds.dialogue.minestom.input.TargetSnapshot.Target target, DialogueView current) {
+    return target.sessionId().equals(current.sessionId())
+        && target.nodeVisitId() == current.nodeVisitId()
+        && target.renderRevision() == current.renderRevision();
   }
 
   public long nextImpulse() {

@@ -32,6 +32,7 @@ public final class MinestomDialogueRenderer implements DialogueRenderer, Dialogu
   private final ChatInputTokens tokens;
   private final Supplier<NpcDialogueSurface.Geometry> geometry;
   private volatile Run active;
+  private final AtomicBoolean refreshing = new AtomicBoolean();
 
   public MinestomDialogueRenderer(
       Map<String, DialoguePresenter.SurfaceProfile> profiles,
@@ -77,7 +78,10 @@ public final class MinestomDialogueRenderer implements DialogueRenderer, Dialogu
   }
 
   public TargetSnapshot targets() {
-    return targets.current();
+    var current = targets.current();
+    var run = active;
+    if (current == null && run != null && run.firstAck && !run.closed.get()) refreshOutput();
+    return current;
   }
 
   public NpcDialogueSurface.Geometry npcGeometry() {
@@ -86,10 +90,12 @@ public final class MinestomDialogueRenderer implements DialogueRenderer, Dialogu
 
   public void refreshOutput() {
     var run = active;
-    if (run != null)
+    if (run != null && refreshing.compareAndSet(false, true))
       run.queue.execute(
           () -> {
-            if (!run.closed.get() && run.latest != null) run.replace(run.latest);
+            if (!run.closed.get() && run.latest != null)
+              run.replace(run.latest).whenComplete((v, e) -> refreshing.set(false));
+            else refreshing.set(false);
           });
   }
 
@@ -174,7 +180,6 @@ public final class MinestomDialogueRenderer implements DialogueRenderer, Dialogu
     void invalidate() {
       var current = targets.current();
       if (current != null) targets.invalidateCurrent(current.surfaceGeneration());
-      if (tokens != null) tokens.clear();
     }
 
     void report() {

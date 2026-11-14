@@ -49,7 +49,9 @@ public final class NpcDialogueSurface implements DialogueSurface {
   private final Consumer<String> diagnostic;
   private final SpawnOperation spawn;
   private final MinecraftWidgetEncoder encoder = new MinecraftWidgetEncoder();
-  private volatile Geometry geometry;
+  private final Map<Long, Geometry> geometries = new ConcurrentHashMap<>();
+  private static final Map<Player, AtomicInteger> COUNTS = new WeakHashMap<>();
+  private final AtomicInteger displayCount;
 
   public NpcDialogueSurface(
       Player player,
@@ -89,6 +91,9 @@ public final class NpcDialogueSurface implements DialogueSurface {
       Consumer<String> diagnostic,
       SpawnOperation spawn) {
     this.player = player;
+    synchronized (COUNTS) {
+      displayCount = COUNTS.computeIfAbsent(player, p -> new AtomicInteger());
+    }
     this.generation = generation;
     this.guard = guard;
     this.packs = packs;
@@ -102,7 +107,8 @@ public final class NpcDialogueSurface implements DialogueSurface {
   }
 
   public Geometry geometry() {
-    return geometry;
+    var snapshot = targets.current();
+    return snapshot == null ? null : geometries.get(snapshot.surfaceGeneration());
   }
 
   private boolean available() {
@@ -116,10 +122,15 @@ public final class NpcDialogueSurface implements DialogueSurface {
   }
 
   private final class Display implements OwnedResource {
-    final Entity entity = new Entity(EntityType.TEXT_DISPLAY);
+    final Entity entity;
     final AtomicBoolean removed = new AtomicBoolean();
 
     Display() {
+      if (displayCount.incrementAndGet() > 32) {
+        displayCount.decrementAndGet();
+        throw new DialogueFailure("DISPLAY_LIMIT", "NPC connection display budget exceeded");
+      }
+      entity = new Entity(EntityType.TEXT_DISPLAY);
       entity.setAutoViewable(false);
       entity.setNoGravity(true);
       entity.setHasPhysics(false);
@@ -141,6 +152,7 @@ public final class NpcDialogueSurface implements DialogueSurface {
       if (removed.compareAndSet(false, true)) {
         entity.removeViewer(player);
         entity.remove();
+        displayCount.decrementAndGet();
       }
       return CompletableFuture.completedFuture(null);
     }
@@ -339,10 +351,15 @@ public final class NpcDialogueSurface implements DialogueSurface {
                                               }
                                               if (closed.get()
                                                   || operation != epoch
-                                                  || !available()
                                                   || context.cancellation().isCancelled()) {
                                                 result.completeExceptionally(
                                                     new CancellationException());
+                                                return;
+                                              }
+                                              if (!available()) {
+                                                result.completeExceptionally(
+                                                    new DialoguePresenter.FallbackRequired(
+                                                        "MISSING_PACK"));
                                                 return;
                                               }
                                               var outputs = new ArrayList<CompletableFuture<?>>();
@@ -379,12 +396,18 @@ public final class NpcDialogueSurface implements DialogueSurface {
                                                                 }
                                                                 if (closed.get()
                                                                     || operation != epoch
-                                                                    || !available()
                                                                     || context
                                                                         .cancellation()
                                                                         .isCancelled()) {
                                                                   result.completeExceptionally(
                                                                       new CancellationException());
+                                                                  return;
+                                                                }
+                                                                if (!available()) {
+                                                                  result.completeExceptionally(
+                                                                      new DialoguePresenter
+                                                                          .FallbackRequired(
+                                                                          "MISSING_PACK"));
                                                                   return;
                                                                 }
                                                                 frame = next;
@@ -454,8 +477,8 @@ public final class NpcDialogueSurface implements DialogueSurface {
         if (w.kind() == WidgetFrame.Kind.CHOICE && w.enabled())
           choices.put(w.choiceId(), w.hitRect());
       }
-      targets.publish(value, context.generation(), choices);
-      geometry = new Geometry(transform, fronts, context.generation());
+      geometries.put(context.generation(), new Geometry(transform, fronts, context.generation()));
+      targets.publish(value, context.generation(), choices, () -> !closed.get() && available());
     }
 
     CompletionStage<Void> positionDisplays(Pos position) {
@@ -532,11 +555,10 @@ public final class NpcDialogueSurface implements DialogueSurface {
                                               return;
                                             }
                                             transform = next;
-                                            geometry =
-                                                new Geometry(
-                                                    transform,
-                                                    geometry.fronts(),
-                                                    context.generation());
+                                            geometries.computeIfPresent(
+                                                context.generation(),
+                                                (g, old) ->
+                                                    new Geometry(transform, old.fronts(), g));
                                             startFollow();
                                           }));
                         } catch (Throwable error) {
@@ -554,8 +576,7 @@ public final class NpcDialogueSurface implements DialogueSurface {
               writes.clear();
               if (follow != null) follow.cancel();
               targets.clear(context.generation());
-              var g = geometry;
-              if (g != null && g.surfaceGeneration() == context.generation()) geometry = null;
+              geometries.remove(context.generation());
               scope
                   .closeAsync()
                   .whenComplete(

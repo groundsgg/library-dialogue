@@ -35,6 +35,23 @@ class SurfaceInputTargetsTest {
   }
 
   @Test
+  void cancelledCandidateDoesNotRetireRetainedHud() {
+    var t = new SurfaceInputTargets();
+    var r = new WidgetFrame.Rect(0, 0, 20, 10);
+    t.publish(frame(1), 1, Map.of("ask", r));
+    t.invalidateCurrent(1);
+    t.clear(2);
+    t.publish(frame(2), 1, Map.of("ask", r));
+    assertNotNull(t.current());
+    assertEquals(1, t.current().surfaceGeneration());
+    t.publish(frame(3), 2, Map.of("leave", r));
+    assertEquals(1, t.current().surfaceGeneration());
+    t.clear(1);
+    t.publish(frame(4), 1, Map.of("ask", r));
+    assertNull(t.current());
+  }
+
+  @Test
   void staleFrameOrRemovedSurfaceCannotIssueTargets() {
     var t = new SurfaceInputTargets();
     var r = new WidgetFrame.Rect(0, 0, 20, 10);

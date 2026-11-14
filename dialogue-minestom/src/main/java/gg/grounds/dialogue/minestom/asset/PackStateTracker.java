@@ -9,6 +9,7 @@ public final class PackStateTracker {
   private record Expected(long generation, UUID id, String pin, boolean ready) {}
 
   private final Map<Player, Expected> current = new WeakHashMap<>();
+  private final Map<Player, Set<UUID>> used = new WeakHashMap<>();
 
   public synchronized void expect(Player player, long generation, UUID id, String manifestPin) {
     Objects.requireNonNull(player);
@@ -23,6 +24,10 @@ public final class PackStateTracker {
         throw new IllegalArgumentException("PACK_UUID_REUSED");
       return;
     }
+    var history = used.computeIfAbsent(player, p -> new HashSet<>());
+    if (history.contains(id)) throw new IllegalArgumentException("PACK_UUID_REUSED");
+    if (history.size() >= 65536) throw new IllegalArgumentException("PACK_REGISTER_FULL");
+    history.add(id);
     current.put(player, new Expected(generation, id, manifestPin, false));
   }
 
@@ -52,9 +57,11 @@ public final class PackStateTracker {
 
   public synchronized void forget(Player player) {
     current.remove(player);
+    used.remove(player);
   }
 
   public synchronized void clear() {
     current.clear();
+    used.clear();
   }
 }

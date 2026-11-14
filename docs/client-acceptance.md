@@ -1,6 +1,10 @@
 # Package C client acceptance
 
-Status: automated implementation candidate. The extracted library's real-client
+Status: automated implementation candidate. The independent whole-branch review
+found one Critical and ten Important issues; all are covered by regression-first
+corrections in the candidate. The minor required-module completeness improvement
+for the consumer-origin checker remains deferred; current consumer logs contain
+all expected module origins. The extracted library's real-client
 matrix is **pending**. Earlier 25570/25572/25576 prototype feedback is design
 evidence, not acceptance of these new Maven artifacts. No merge/release claim may
 replace the rows below with headless, packet or source-inspection evidence.

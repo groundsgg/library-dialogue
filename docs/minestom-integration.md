@@ -36,7 +36,8 @@ player.sendResourcePacks(packRequest);
 The host observes native pack-status events. Only `SUCCESSFULLY_LOADED` for the
 registered concrete player connection, generation, pack UUID and manifest pin
 allows graphics. Acceptance/download alone does not. Keep pack IDs unique for
-changed registrations. Opening a dialogue never sends or switches a pack.
+changed registrations. Retired UUIDs cannot be reused on the same connection;
+the bounded history accepts at most 65,536 distinct registrations. Opening a dialogue never sends or switches a pack.
 
 `MinestomDialogueRequest` supplies a fresh request ID, concrete local `Player`,
 trusted connection generation, `ValidatedDialogue`, versioned `DialogueServices`,
@@ -45,11 +46,19 @@ context, locale, preferences, borrowed speaker bindings, optional `ActorPort`,
 shows the complete public API and actual cleanup. The standalone demo also shows
 native anchors, resource-pack hosting and live changes.
 
+The start ticket also exposes `refreshLocale` and `updatePreferences`. These
+retain the latest pending intent while preparation or an initial write is still
+in flight, then reconcile it through the same core handle before the public
+native `Started` result. Already admitted transport output cannot be unsent;
+startup acknowledgement waits for the corrected output. Cancellation drains its
+predecessor cleanup barrier even if this ticket never attached a session.
+Uncertain cleanup fences further starts on that concrete connection.
+
 ## Three surfaces and fallback
 
 `hud` projects encoded widgets into a registered action-bar lease. `npc` projects
 the same widgets into private text-display front/back pairs. `chat` receives
-semantic text with clickable opaque capabilities, without glyph measurement or
+semantic text with clickable opaque capabilities, routed through normal core selection and confirmation, without glyph measurement or
 one message per reveal character. Seven choices page through three graphic cards;
 chat keeps every available choice reachable. All 64 validated choices fit its
 64-token budget; an extra generic hint token is unnecessary when choices exist.
@@ -96,7 +105,9 @@ Confirm is a Minecraft action (`USE`, `ATTACK`, `SWAP_HANDS`), not a guaranteed
 physical key. Defaults accept Use + Swap hands, with Use as the hint action. The
 opening impulse cannot confirm. A 350 ms quiet-period heuristic groups repeated
 use/interact packets; it cannot prove physical key release. A bounded 256-packet
-queue preserves arrival time and target visit/revision across output waits.
+queue preserves arrival time and the acknowledged target visit, render and state
+revision across output waits. A confirm admitted before a selection/page change
+cannot confirm the later selection; same-visit scroll intent may continue.
 
 Scroll walks all available choices while the server-held slot stays unchanged.
 Visible hotbars get a correction + ping fence; only its own connection's matching
@@ -130,7 +141,7 @@ A public unsupported effect transport diagnoses the request without breaking HUD
 Grounds effects are explicit, namespaced post effects, without vanilla shader
 replacement, world-age control, mod or dialogue-time pack swap.
 
-Limits per active connection: 32 UI displays + 1 interaction catcher, 64 active
+Limits per active connection: 32 UI displays (including pending and closing candidates) + 1 interaction catcher, 64 active
 128-bit random chat tokens with 30 s TTL, 64 KiB encoded frame and 32 MiB asset
 bundle. Native glyph coverage is frozen printable ASCII/Latin-1 plus supplied
 punctuation, half-pixel horizontal spacing and even ascents -64…256. Unsupported

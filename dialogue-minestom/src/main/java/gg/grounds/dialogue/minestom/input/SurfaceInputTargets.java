@@ -3,50 +3,72 @@ package gg.grounds.dialogue.minestom.input;
 import gg.grounds.dialogue.core.runtime.DialogueView;
 import gg.grounds.dialogue.presentation.WidgetFrame;
 import java.util.*;
+import java.util.function.BooleanSupplier;
 
-/** Only successfully published output may issue a current interaction target. */
+/** Successfully published frames, owned and retired by their exact surface generation. */
 public final class SurfaceInputTargets {
-  private long invalidThrough = -1, latestGeneration = -1, lastState = -1, lastRender = -1;
-  private TargetSnapshot current;
+  private record Published(
+      long state, long render, TargetSnapshot snapshot, BooleanSupplier valid) {}
+
+  private final NavigableMap<Long, Published> live = new TreeMap<>();
+  private long highWater = -1;
+
+  public void publish(WidgetFrame frame, long generation, Map<String, WidgetFrame.Rect> choices) {
+    publish(frame, generation, choices, () -> true);
+  }
 
   public synchronized void publish(
-      WidgetFrame frame, long generation, Map<String, WidgetFrame.Rect> choices) {
-    if (generation <= invalidThrough
-        || generation < latestGeneration
-        || (generation == latestGeneration
-            && (frame.semantic().stateRevision() < lastState
-                || (frame.semantic().stateRevision() == lastState
-                    && frame.semantic().renderRevision() < lastRender)))) return;
+      WidgetFrame frame,
+      long generation,
+      Map<String, WidgetFrame.Rect> choices,
+      BooleanSupplier valid) {
+    var old = live.get(generation);
+    var v = frame.semantic();
+    if (old == null && generation <= highWater) return;
+    if (old != null
+        && (v.stateRevision() < old.state()
+            || (v.stateRevision() == old.state() && v.renderRevision() < old.render()))) return;
     var allowed = new HashSet<String>();
-    frame.semantic().choices().stream()
+    v.choices().stream()
         .filter(c -> c.availability() == DialogueView.Availability.AVAILABLE)
         .forEach(c -> allowed.add(c.id()));
     if (!allowed.containsAll(choices.keySet()))
       throw new IllegalArgumentException("UNISSUED_CHOICE");
-    current =
-        new TargetSnapshot(
-            frame.semantic().sessionId(),
-            frame.semantic().renderRevision(),
-            frame.semantic().nodeVisitId(),
-            generation,
-            choices);
-    latestGeneration = generation;
-    lastState = frame.semantic().stateRevision();
-    lastRender = frame.semantic().renderRevision();
+    live.put(
+        generation,
+        new Published(
+            v.stateRevision(),
+            v.renderRevision(),
+            new TargetSnapshot(
+                v.sessionId(),
+                v.renderRevision(),
+                v.nodeVisitId(),
+                generation,
+                choices,
+                v.stateRevision()),
+            Objects.requireNonNull(valid)));
+    highWater = Math.max(highWater, generation);
   }
 
-  /** Invalidates interaction immediately without retiring a still-active surface. */
   public synchronized void invalidateCurrent(long generation) {
-    if (current != null && current.surfaceGeneration() == generation) current = null;
+    var old = live.get(generation);
+    if (old != null)
+      live.put(generation, new Published(old.state(), old.render(), null, old.valid()));
   }
 
   public synchronized void clear(long generation) {
-    invalidThrough = Math.max(invalidThrough, generation);
-    if (current != null && current.surfaceGeneration() <= generation) current = null;
+    highWater = Math.max(highWater, generation);
+    live.remove(generation);
   }
 
-  /** Null until the first successful output, and after the current generation is removed. */
-  public synchronized TargetSnapshot current() {
-    return current;
+  public TargetSnapshot current() {
+    Published issued;
+    synchronized (this) {
+      issued = live.isEmpty() ? null : live.lastEntry().getValue();
+    }
+    if (issued == null || issued.snapshot() == null || !issued.valid().getAsBoolean()) return null;
+    synchronized (this) {
+      return live.get(issued.snapshot().surfaceGeneration()) == issued ? issued.snapshot() : null;
+    }
   }
 }

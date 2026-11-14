@@ -289,6 +289,36 @@ class MinestomDialogueHostTest {
   }
 
   @Test
+  void cancelledMiddleStartPreservesCleanupBarrier(Env env) {
+    var f = new Fixture(env);
+    done(env, f.host.begin(f.request("barrier-a", "v1")).result());
+    var gate = new CompletableFuture<Void>();
+    f.surfaces.getFirst().cleanup = gate;
+    f.host.begin(f.request("barrier-b", "v1"));
+    var third = f.host.begin(f.request("barrier-c", "v1"));
+    for (int n = 0; n < 20; n++) env.tick();
+    assertEquals(1, f.prepares.get());
+    assertFalse(third.result().toCompletableFuture().isDone());
+    gate.complete(null);
+    assertInstanceOf(DialogueStartResult.Started.class, done(env, third.result()));
+    done(env, f.host.closeAsync());
+  }
+
+  @Test
+  void failedCleanupFencesLaterAdmissions(Env env) {
+    var f = new Fixture(env);
+    var first = f.host.begin(f.request("failed-a", "v1"));
+    done(env, first.result());
+    f.surfaces.getFirst().cleanup =
+        CompletableFuture.failedFuture(new IllegalStateException("uncertain removal"));
+    var b = f.host.begin(f.request("failed-b", "v1"));
+    assertInstanceOf(DialogueStartResult.Rejected.class, done(env, b.result()));
+    var c = f.host.begin(f.request("failed-c", "v1"));
+    assertInstanceOf(DialogueStartResult.Rejected.class, done(env, c.result()));
+    assertEquals(1, f.prepares.get());
+  }
+
+  @Test
   void nextStartWaitsPreviousCleanup(Env env) {
     var f = new Fixture(env);
     var first = f.host.begin(f.request("first", "v1"));

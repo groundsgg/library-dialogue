@@ -293,9 +293,10 @@ public final class DialogueDemo {
             if (args.length < 2 || !Set.of("en", "de").contains(args[1]))
               throw new IllegalArgumentException("/lang en|de");
             l.locale = new LocaleContext(args[1], l.locale.revision() + 1, "en");
-            return l.handle == null
+            return l.ticket == null
+                    || (l.handle == null && l.ticket.result().toCompletableFuture().isDone())
                 ? CompletableFuture.completedFuture(null)
-                : l.handle.refreshLocale(l.locale).thenApply(v -> null);
+                : l.ticket.refreshLocale(l.locale).thenApply(v -> null);
           });
       command(
           "confirm",
@@ -438,9 +439,9 @@ public final class DialogueDemo {
       }
 
       CompletionStage<Void> refresh() {
-        return handle == null
+        return ticket == null || (handle == null && ticket.result().toCompletableFuture().isDone())
             ? CompletableFuture.completedFuture(null)
-            : handle.updatePreferences(preferences());
+            : ticket.updatePreferences(preferences());
       }
     }
 

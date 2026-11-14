@@ -324,6 +324,10 @@ public final class MinestomInputAdapter implements OwnedResource {
           ? scroll(direction)
           : ignored();
     }
+    if (packet instanceof ClientInteractEntityPacket interact
+        && (catcher == null || interact.targetId() != catcher.entityId())) return ignored();
+    if (packet instanceof ClientAttackPacket attack
+        && (catcher == null || attack.targetId() != catcher.entityId())) return ignored();
     InputProfile.Trigger trigger = null;
     if (packet instanceof ClientInteractEntityPacket
         || packet instanceof ClientUseItemPacket
@@ -352,7 +356,8 @@ public final class MinestomInputAdapter implements OwnedResource {
         && profile.confirm().contains(trigger)
         && burst.accept(input.arrived())
         && sameVisit(input.admitted())
-        && input.admitted().renderRevision() == current().renderRevision()) return confirm();
+        && input.admitted().renderRevision() == current().renderRevision()
+        && input.admitted().stateRevision() == current().stateRevision()) return confirm();
     return ignored();
   }
 
@@ -369,6 +374,7 @@ public final class MinestomInputAdapter implements OwnedResource {
             && snapshot.sessionId().equals(view.sessionId())
             && snapshot.nodeVisitId() == view.nodeVisitId()
             && snapshot.renderRevision() == view.renderRevision()
+            && (snapshot.stateRevision() < 0 || snapshot.stateRevision() == view.stateRevision())
         ? snapshot
         : null;
   }

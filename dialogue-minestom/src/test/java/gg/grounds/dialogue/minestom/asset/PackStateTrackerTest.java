@@ -11,6 +11,22 @@ import org.junit.jupiter.api.Test;
 @EnvTest
 class PackStateTrackerTest {
   @Test
+  void retiredPackUuidCannotBeRegisteredAgain(Env env) {
+    var p = env.createConnection().connect(env.createFlatInstance(), new Pos(0, 42, 0));
+    var t = new PackStateTracker();
+    var a = UUID.randomUUID();
+    var b = UUID.randomUUID();
+    t.expect(p, 1, a, "old");
+    t.expect(p, 1, b, "middle");
+    assertThrows(IllegalArgumentException.class, () -> t.expect(p, 2, a, "new"));
+    t.observe(p, a, ResourcePackStatus.SUCCESSFULLY_LOADED);
+    assertFalse(t.isReady(p, 1, "middle"));
+    t.expect(p, 1, b, "middle");
+    t.observe(p, b, ResourcePackStatus.SUCCESSFULLY_LOADED);
+    assertTrue(t.isReady(p, 1, "middle"));
+  }
+
+  @Test
   void wrongPackAndOldConnectionNeverEnableGraphics(Env env) {
     var a = env.createConnection().connect(env.createFlatInstance(), new Pos(0, 42, 0));
     var b = env.createConnection().connect(env.createFlatInstance(), new Pos(0, 42, 0));

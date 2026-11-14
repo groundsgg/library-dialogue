@@ -305,7 +305,13 @@ class InputSafetyTest {
     f.now.set(400_000_000);
     f.packet(env, new ClientUseItemPacket(PlayerHand.OFF, 1, 0, 0));
     assertTrue(f.submitted.isEmpty());
-    f.packet(env, new ClientAttackPacket(2));
+    int catcherId =
+        f.player.getInstance().getEntities().stream()
+            .filter(e -> e.getEntityType() == EntityType.INTERACTION)
+            .findFirst()
+            .orElseThrow()
+            .getEntityId();
+    f.packet(env, new ClientAttackPacket(catcherId));
     assertEquals(1, f.submitted.size());
     assertInstanceOf(DialogueInput.Confirm.class, f.submitted.getFirst());
     done(env, f.adapter.closeAsync());
