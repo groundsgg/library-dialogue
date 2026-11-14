@@ -8,20 +8,28 @@ import net.minestom.server.timer.TaskSchedule;
 
 /** Instance work remains schedulable until owned cleanup settles. */
 public final class MinestomDialogueScheduler implements DialogueScheduler {
-  private final Instance instance;
+  private volatile Instance instance;
 
   public MinestomDialogueScheduler(Instance instance) {
     this.instance = Objects.requireNonNull(instance);
   }
 
   public void execute(Runnable runnable) {
-    instance.scheduler().scheduleNextProcess(runnable);
+    var target = instance;
+    if (target == null) runnable.run();
+    else target.scheduler().scheduleNextProcess(runnable);
   }
 
   public ScheduledTask schedule(Duration delay, Runnable runnable) {
+    var target = Objects.requireNonNull(instance, "Scheduler released after confirmed cleanup");
     var task =
-        instance.scheduler().buildTask(runnable).delay(TaskSchedule.duration(delay)).schedule();
+        target.scheduler().buildTask(runnable).delay(TaskSchedule.duration(delay)).schedule();
     return task::cancel;
+  }
+
+  /** After confirmed core close, terminal observers must not retain the old world. */
+  public void releaseAfterCleanup() {
+    instance = null;
   }
 
   public long nanoTime() {
