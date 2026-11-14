@@ -59,6 +59,7 @@ public final class DialoguePresenter implements DialogueRenderer {
   private final Map<String, SurfaceProfile> profiles;
   private final DialogueScheduler clock;
   private final Controls controls;
+  private final UiLabelSource labels;
 
   public DialoguePresenter(Map<String, SurfaceProfile> profiles, DialogueScheduler scheduler) {
     this(profiles, scheduler, Controls.defaults());
@@ -66,9 +67,18 @@ public final class DialoguePresenter implements DialogueRenderer {
 
   public DialoguePresenter(
       Map<String, SurfaceProfile> profiles, DialogueScheduler scheduler, Controls controls) {
+    this(profiles, scheduler, controls, UiLabelSource.defaults());
+  }
+
+  public DialoguePresenter(
+      Map<String, SurfaceProfile> profiles,
+      DialogueScheduler scheduler,
+      Controls controls,
+      UiLabelSource labels) {
     this.profiles = Map.copyOf(profiles);
     clock = Objects.requireNonNull(scheduler);
     this.controls = Objects.requireNonNull(controls);
+    this.labels = Objects.requireNonNull(labels);
   }
 
   private SurfaceProfile profile(String key) {
@@ -91,6 +101,15 @@ public final class DialoguePresenter implements DialogueRenderer {
     var l = p.layout();
     var metrics = p.metrics();
     var widgets = new ArrayList<Widget>();
+    var reasons = new LinkedHashMap<String, String>();
+    view.choices().stream()
+        .filter(c -> c.availability() != DialogueView.Availability.AVAILABLE)
+        .forEach(c -> reasons.put(c.id(), c.unavailableReason()));
+    var ui =
+        Objects.requireNonNull(
+            labels.resolve(
+                new UiLabelSource.LabelRequest(
+                    view.localeTag(), view.hint(), controls, view.notice(), reasons)));
     var text = new ResolvedText(view.text(), view.localeTag());
     var body = layout(text, metrics, l.width() - 2 * l.padding(), l.maxTextLines());
     double bodyHeight = body.height() + 2 * l.padding();
@@ -132,7 +151,17 @@ public final class DialoguePresenter implements DialogueRenderer {
     var window =
         new ChoiceViewport().window(view.choices(), view.selectedChoiceId(), l.choiceCapacity());
     var labels =
-        window.choices().stream().map(c -> new ResolvedText(c.label(), view.localeTag())).toList();
+        window.choices().stream()
+            .map(
+                c -> {
+                  String reason =
+                      c.availability() == DialogueView.Availability.AVAILABLE
+                          ? ""
+                          : ui.choiceReasons().getOrDefault(c.id(), "");
+                  return new ResolvedText(
+                      c.label() + (reason.isEmpty() ? "" : "\n" + reason), view.localeTag());
+                })
+            .toList();
     var layouts =
         labels.stream()
             .map(t -> layout(t, metrics, l.choiceWidth() - 2 * l.padding(), l.maxChoiceLines()))
@@ -157,14 +186,14 @@ public final class DialoguePresenter implements DialogueRenderer {
               layouts.get(i),
               l.padding(),
               (cardHeight - layouts.get(i).height()) / 2,
-              Graphemes.split(c.label()).size(),
+              Graphemes.split(labels.get(i).plain()).size(),
               c.id().equals(view.selectedChoiceId()),
               c.availability() == DialogueView.Availability.AVAILABLE,
               c.id(),
               p,
               preferences));
     }
-    String hint = hint(view, controls);
+    String hint = ui.hint();
     var hintText = new ResolvedText(hint, view.localeTag());
     double hintWidth =
         l.placement() == LayoutProfile.ChoicePlacement.RIGHT ? l.choiceWidth() : l.width();
@@ -189,6 +218,28 @@ public final class DialoguePresenter implements DialogueRenderer {
             null,
             p,
             preferences));
+    if (!ui.notice().isEmpty()) {
+      var statusText = new ResolvedText(ui.notice(), view.localeTag());
+      var statusLayout = layout(statusText, metrics, hintWidth, 2);
+      double statusY = hintY + hintLayout.height() + l.gap();
+      if (l.placement() == LayoutProfile.ChoicePlacement.RIGHT)
+        statusY = y + window.choices().size() * (cardHeight + l.gap()) + l.gap();
+      widgets.add(
+          widget(
+              "status",
+              Kind.HINT,
+              new Rect(hintX, statusY, hintWidth, statusLayout.height()),
+              statusText,
+              statusLayout,
+              0,
+              0,
+              Graphemes.split(statusText.plain()).size(),
+              false,
+              true,
+              null,
+              p,
+              preferences));
+    }
     return new WidgetFrame(view, widgets, metrics.pin(), p.theme());
   }
 
@@ -226,30 +277,6 @@ public final class DialoguePresenter implements DialogueRenderer {
         selected ? p.theme().selectedScale() : 1,
         preferences.reducedMotion() ? Duration.ZERO : p.theme().transition(),
         choiceId);
-  }
-
-  private static String hint(DialogueView v, Controls c) {
-    boolean de = Locale.forLanguageTag(v.localeTag()).getLanguage().equals("de");
-    String action =
-        switch (c.confirm()) {
-          case ATTACK -> de ? "Angreifen" : "Attack";
-          case USE -> de ? "Benutzen" : "Use";
-          case SWAP_HANDS -> de ? "Offhandwechsel" : "Swap hands";
-        };
-    String verb =
-        switch (v.hint()) {
-          case REVEAL -> de ? "Text anzeigen" : "Reveal text";
-          case CHOOSE -> de ? "Auswählen" : "Select";
-          case CONTINUE -> de ? "Weiter" : "Continue";
-          case FINISH -> de ? "Beenden" : "End";
-          case BUSY -> de ? "Bitte warten" : "Please wait";
-        };
-    return (c.scroll() && v.hint() == DialogueView.HintPhase.CHOOSE
-            ? (de ? "Scrollen · " : "Scroll · ")
-            : "")
-        + action
-        + " · "
-        + verb;
   }
 
   public CompletionStage<PresentationHandle> prepare(PresentationRequest request) {
