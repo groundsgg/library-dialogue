@@ -5,8 +5,8 @@ metrics. The source is the existing licensed DejaVu Sans font. The initial
 Minecraft atlas covers printable ASCII, Latin-1 and the supplied control punctuation.
 Other graphemes require another complete profile or semantic/chat fallback.
 
-The compiled raster supports integer horizontal pixel advances and even vertical
-ascents from -32 through 256; unsupported layout geometry is diagnosed. Panel
+The compiled raster supports half-pixel horizontal positioning and even vertical
+ascents from -64 through 256; unsupported layout geometry is diagnosed. Panel
 stripes are one pixel wide, supporting heights 1 through 256. The source atlas
 has 256-pixel cells with ink drawn at baseline 12. Native bitmap scale is one;
 advance is the rightmost ink column plus two (rounded ink width plus native one).

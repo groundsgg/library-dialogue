@@ -118,6 +118,10 @@ public final class AssetBundle {
     }
   }
 
+  public boolean hasEntry(String path) {
+    return files.containsKey(path);
+  }
+
   public MinecraftPackProfile profile() {
     return profile;
   }

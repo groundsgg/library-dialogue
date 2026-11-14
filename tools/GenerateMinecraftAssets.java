@@ -88,6 +88,8 @@ class GenerateMinecraftAssets {
     spaces.put(" ", 4);
     spaces.put("\u00a0", 4);
     spaces.put("\uf800", -1);
+    spaces.put("\uf801", 0.5);
+    spaces.put("\uf802", -0.5);
     for (int i = 0; i < 16; i++) {
       spaces.put(Character.toString(0xf810 + i), 1 << i);
       spaces.put(Character.toString(0xf830 + i), -(1 << i));
@@ -122,7 +124,7 @@ class GenerateMinecraftAssets {
           Map.of(
               "providers",
               List.of(bitmap("dialogue:font/hud-mask.png", 200, 106, List.of("\ue200")), spacing)));
-      for (int a = -32; a <= 256; a += 2)
+      for (int a = -64; a <= 256; a += 2)
         put(
             files,
             "assets/dialogue/font/a_" + a + ".json",
