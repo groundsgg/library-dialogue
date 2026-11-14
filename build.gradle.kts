@@ -3,6 +3,7 @@ plugins { base }
 group = "gg.grounds"
 version = providers.gradleProperty("versionOverride").orElse("0.1.0-SNAPSHOT").get()
 subprojects {
+    if (!name.startsWith("dialogue-")) return@subprojects
     apply(plugin = "java-library")
     apply(plugin = "maven-publish")
     group = rootProject.group
