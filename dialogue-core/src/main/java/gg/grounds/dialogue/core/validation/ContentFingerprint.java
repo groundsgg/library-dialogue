@@ -13,13 +13,13 @@ public final class ContentFingerprint {
  public static ContentPin hash(byte[] bytes) { try { return new ContentPin(HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes))); }catch(NoSuchAlgorithmException e){throw new AssertionError(e);} }
  public static byte[] definitionBytes(DialogueDefinition definition) { return canonicalBytes(definitionData(definition)); }
  private static Map<String,Object> m(Object... pairs) { var map=new LinkedHashMap<String,Object>();for(int i=0;i<pairs.length;i+=2)if(pairs[i+1]!=null)map.put((String)pairs[i],pairs[i+1]);return map; }
- private static Map<String,Object> args(Map<String,ArgumentValue> values) {var result=new LinkedHashMap<String,Object>();values.forEach((k,v)->result.put(k,switch(v){case ArgumentValue.Text t->t.value();case ArgumentValue.Flag f->f.value();case ArgumentValue.Number n->n.value();case ArgumentValue.Nil nil->null;}));return result;}
- private static Map<String,Object> condition(Condition c) {return m("key",c.key(),"arguments",args(c.arguments()),"negated",c.negated());}
+ public static Map<String,Object> argumentData(Map<String,ArgumentValue> values) {var result=new LinkedHashMap<String,Object>();values.forEach((k,v)->result.put(k,switch(v){case ArgumentValue.Text t->t.value();case ArgumentValue.Flag f->f.value();case ArgumentValue.Number n->n.value();case ArgumentValue.Nil nil->null;}));return result;}
+ private static Map<String,Object> condition(Condition c) {return m("key",c.key(),"arguments",argumentData(c.arguments()),"negated",c.negated());}
  public static Map<String,Object> definitionData(DialogueDefinition d) {
   var nodes=new LinkedHashMap<String,Object>();d.nodes().forEach((id,n)->nodes.put(id,switch(n){
    case Message x -> m("type","message","speaker",x.speaker(),"text",x.text(),"presentation",x.gesture()==null?null:m("gesture",x.gesture()),"next",x.next(),"choices",x.choices().isEmpty()?null:x.choices().stream().map(c->m("id",c.id(),"text",c.text(),"to",c.to(),"default",c.defaultChoice(),"condition",c.condition()==null?null:condition(c.condition()))).toList());
    case Branch x -> m("type","branch","cases",x.cases().stream().map(c->m("condition",condition(c.condition()),"to",c.to())).toList(),"defaultTo",x.defaultTo(),"unavailableTo",x.unavailableTo());
-   case Action x -> m("type","action","action",x.key(),"arguments",args(x.arguments()),"onSuccess",x.onSuccess(),"onRejected",x.onRejected(),"onUnavailable",x.onUnavailable(),"onUncertain",x.onUncertain());
+   case Action x -> m("type","action","action",x.key(),"arguments",argumentData(x.arguments()),"onSuccess",x.onSuccess(),"onRejected",x.onRejected(),"onUnavailable",x.onUnavailable(),"onUncertain",x.onUncertain());
    case Outcome x -> m("type","outcome","milestone",x.milestone(),"delivery",x.delivery().name().toLowerCase(Locale.ROOT),"onAcknowledged",x.onAcknowledged(),"onUnavailable",x.onUnavailable(),"onUncertain",x.onUncertain());
    case End x -> m("type","end","reason",x.reason());
   }));
