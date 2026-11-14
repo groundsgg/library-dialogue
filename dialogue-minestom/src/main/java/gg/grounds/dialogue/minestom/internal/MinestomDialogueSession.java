@@ -31,6 +31,7 @@ public final class MinestomDialogueSession {
       MinestomDialogueRequest request,
       MinestomDialogueOptions options,
       ConnectionGuard guard,
+      MinestomDialogueScheduler scheduler,
       DialogueRenderer renderer,
       CancellationToken token,
       Consumer<DialogueStartResult> ready,
@@ -41,7 +42,7 @@ public final class MinestomDialogueSession {
     this.token = token;
     this.ready = ready;
     this.closed = closed;
-    scheduler = new MinestomDialogueScheduler(request.player().getInstance());
+    this.scheduler = scheduler;
     runtime = DialogueRuntime.create(new RuntimeOptions(scheduler, options.budgets(), 65536, 256));
     impulse = new AtomicLong(request.openingImpulse());
   }
@@ -162,6 +163,11 @@ public final class MinestomDialogueSession {
 
   public DialogueView snapshot() {
     return view;
+  }
+
+  public void refreshPresentation() {
+    var r = renderer;
+    if (r instanceof DialogueInputSource source) source.refreshOutput();
   }
 
   public void chat(String value) {

@@ -21,6 +21,7 @@ public final class MinestomDialogueHost {
     DialogueRenderer create(
         MinestomDialogueRequest request,
         ConnectionGuard guard,
+        DialogueScheduler clock,
         Consumer<PresentationStatus> status);
   }
 
@@ -47,10 +48,13 @@ public final class MinestomDialogueHost {
   private CompletableFuture<Void> closed;
   private CompletionStage<Void> closeView;
 
-  // Default surface wiring is added with the real renderer coordinator; no placeholder surfaces.
+  public MinestomDialogueHost(MinestomDialogueOptions options) {
+    this(options, null);
+  }
+
   MinestomDialogueHost(MinestomDialogueOptions options, RendererFactory renderers) {
     this.options = Objects.requireNonNull(options);
-    this.renderers = Objects.requireNonNull(renderers);
+    this.renderers = renderers == null ? this::defaultRenderer : renderers;
     inputRoute =
         new net.minestom.server.command.builder.Command(
             "dialogue_input_" + UUID.randomUUID().toString().replace("-", ""));
@@ -92,8 +96,98 @@ public final class MinestomDialogueHost {
         });
     events.addListener(
         PlayerResourcePackStatusEvent.class,
-        e -> packs.observe(e.getPlayer(), e.getPackUuid(), e.getStatus()));
+        e -> {
+          packs.observe(e.getPlayer(), e.getPackUuid(), e.getStatus());
+          var t = current(e.getPlayer());
+          if (t != null && t.session != null) t.session.refreshPresentation();
+        });
     MinecraftServer.getGlobalEventHandler().addChild(events);
+  }
+
+  private DialogueRenderer defaultRenderer(
+      MinestomDialogueRequest q,
+      ConnectionGuard guard,
+      DialogueScheduler clock,
+      Consumer<PresentationStatus> status) {
+    var targets = new gg.grounds.dialogue.minestom.input.SurfaceInputTargets();
+    var tokens =
+        new gg.grounds.dialogue.minestom.input.ChatInputTokens(
+            q.player(), q.hostGeneration(), targets, clock::nanoTime);
+    var controls =
+        new gg.grounds.dialogue.presentation.DialoguePresenter.Controls(
+            gg.grounds.dialogue.presentation.DialoguePresenter.ConfirmAction.valueOf(
+                q.controls().primaryConfirm().name()),
+            q.controls().scroll());
+    var chat =
+        new gg.grounds.dialogue.minestom.render.ChatDialogueSurface(
+            guard,
+            targets,
+            tokens,
+            c -> {
+              q.player().sendMessage(c);
+              return CompletableFuture.completedFuture(null);
+            },
+            options.labels(),
+            controls,
+            inputRoute());
+    Consumer<String> diagnostics =
+        code ->
+            System.getLogger(MinestomDialogueHost.class.getName())
+                .log(System.Logger.Level.DEBUG, code);
+    var hud =
+        new gg.grounds.dialogue.minestom.render.HudDialogueSurface(
+            q.player(),
+            q.hostGeneration(),
+            guard,
+            packs,
+            options.assets(),
+            options.channels(),
+            targets,
+            clock,
+            diagnostics);
+    var npc =
+        new gg.grounds.dialogue.minestom.render.NpcDialogueSurface(
+            q.player(),
+            q.hostGeneration(),
+            guard,
+            packs,
+            options.assets(),
+            options.channels(),
+            targets,
+            clock,
+            v -> {
+              var node = q.content().definition().nodes().get(v.nodeId());
+              return node
+                      instanceof gg.grounds.dialogue.core.definition.DialogueDefinition.Message m
+                  ? q.speakers().get(m.speaker())
+                  : null;
+            },
+            diagnostics);
+    return new gg.grounds.dialogue.minestom.render.MinestomDialogueRenderer(
+        Map.of(
+            "chat",
+                gg.grounds.dialogue.presentation.DialoguePresenter.SurfaceProfile.semantic(chat),
+            "hud",
+                new gg.grounds.dialogue.presentation.DialoguePresenter.SurfaceProfile(
+                    hud,
+                    gg.grounds.dialogue.presentation.LayoutProfile.hud(),
+                    gg.grounds.dialogue.presentation.DialogueTheme.neutral(),
+                    options.assets().metrics(),
+                    false),
+            "npc",
+                new gg.grounds.dialogue.presentation.DialoguePresenter.SurfaceProfile(
+                    npc,
+                    gg.grounds.dialogue.presentation.LayoutProfile.npc(),
+                    gg.grounds.dialogue.presentation.DialogueTheme.neutral(),
+                    options.assets().metrics(),
+                    false)),
+        clock,
+        controls,
+        options.labels(),
+        targets,
+        status,
+        tokens,
+        npc::geometry);
   }
 
   private Ticket current(Player player) {
@@ -143,12 +237,15 @@ public final class MinestomDialogueHost {
             return;
           }
           try {
-            var renderer = Objects.requireNonNull(renderers.create(request, guard, ticket::status));
+            var clock = new MinestomDialogueScheduler(admissionInstance);
+            var renderer =
+                Objects.requireNonNull(renderers.create(request, guard, clock, ticket::status));
             var session =
                 new MinestomDialogueSession(
                     request,
                     options,
                     guard,
+                    clock,
                     renderer,
                     ticket.token,
                     ticket::ready,

@@ -94,7 +94,7 @@ class MinestomDialogueHostTest {
       host =
           new MinestomDialogueHost(
               options,
-              (request, guard, status) ->
+              (request, guard, clock, status) ->
                   r -> {
                     prepares.incrementAndGet();
                     var s = new Surface();
@@ -136,6 +136,35 @@ class MinestomDialogueHostTest {
   static <T> T done(Env env, CompletionStage<T> stage) {
     assertTrue(env.tickWhile(() -> !stage.toCompletableFuture().isDone(), Duration.ofSeconds(2)));
     return stage.toCompletableFuture().join();
+  }
+
+  @Test
+  void nativeHostFallsBackAndDoesNotRestartSessionOnPackRevocation(Env env) {
+    var f = new Fixture(env);
+    done(env, f.host.closeAsync());
+    var host = new MinestomDialogueHost(f.options);
+    var id = UUID.randomUUID();
+    host.packState().expect(f.player, 1, id, f.options.assets().pin());
+    host.packState()
+        .observe(
+            f.player,
+            1,
+            id,
+            f.options.assets().pin(),
+            net.kyori.adventure.resource.ResourcePackStatus.SUCCESSFULLY_LOADED);
+    var ticket = host.begin(f.request("native", "v1"));
+    var handle = ((DialogueStartResult.Started) done(env, ticket.result())).handle();
+    assertEquals("hud", ticket.status().effectiveSurface());
+    long visit = handle.snapshot().nodeVisitId();
+    EventDispatcher.call(
+        new net.minestom.server.event.player.PlayerResourcePackStatusEvent(
+            f.player, id, net.kyori.adventure.resource.ResourcePackStatus.DECLINED));
+    assertTrue(
+        env.tickWhile(
+            () -> !ticket.status().effectiveSurface().equals("chat"), Duration.ofSeconds(2)));
+    assertEquals(visit, handle.snapshot().nodeVisitId());
+    assertEquals("hud", ticket.status().requestedSurface());
+    done(env, host.closeAsync());
   }
 
   @Test

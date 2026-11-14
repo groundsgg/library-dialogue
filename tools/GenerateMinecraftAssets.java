@@ -116,6 +116,23 @@ class GenerateMinecraftAssets {
       files.put(
           "assets/dialogue/metrics.properties",
           metrics.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      var focusImage = new BufferedImage(192, 256, BufferedImage.TYPE_INT_ARGB);
+      for (int y = 0; y < 256; y++)
+        for (int x = 0; x < 192; x++) {
+          double edge =
+              Math.min(Math.min(x / 40d, (191 - x) / 40d), Math.min(y / 40d, (255 - y) / 40d));
+          double t = Math.clamp(edge, 0, 1);
+          int alpha = (int) Math.round(64 * t * t * (3 - 2 * t));
+          if (alpha > 0 && alpha < 32) alpha = ((x * 157 + y * 67) & 255) < alpha * 8 ? 32 : 0;
+          focusImage.setRGB(x, y, alpha << 24);
+        }
+      files.put("assets/dialogue/textures/font/npc-focus.png", png(focusImage));
+      put(
+          files,
+          "assets/dialogue/font/focus.json",
+          Map.of(
+              "providers",
+              List.of(bitmap("dialogue:font/npc-focus.png", 256, 128, List.of("\ue300")))));
       var spacing = Map.of("type", "space", "advances", spaces);
       put(files, "assets/dialogue/font/spacing.json", Map.of("providers", List.of(spacing)));
       put(

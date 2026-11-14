@@ -29,7 +29,9 @@ public final class MinestomDialogueRenderer implements DialogueRenderer, Dialogu
   private final UiLabelSource labels;
   private final SurfaceInputTargets targets;
   private final Consumer<PresentationStatus> status;
-  private ChatInputTokens tokens;
+  private final ChatInputTokens tokens;
+  private final Supplier<NpcDialogueSurface.Geometry> geometry;
+  private volatile Run active;
 
   public MinestomDialogueRenderer(
       Map<String, DialoguePresenter.SurfaceProfile> profiles,
@@ -38,6 +40,20 @@ public final class MinestomDialogueRenderer implements DialogueRenderer, Dialogu
       UiLabelSource labels,
       SurfaceInputTargets targets,
       Consumer<PresentationStatus> status) {
+    this(profiles, clock, controls, labels, targets, status, null, () -> null);
+  }
+
+  public MinestomDialogueRenderer(
+      Map<String, DialoguePresenter.SurfaceProfile> profiles,
+      DialogueScheduler clock,
+      DialoguePresenter.Controls controls,
+      UiLabelSource labels,
+      SurfaceInputTargets targets,
+      Consumer<PresentationStatus> status,
+      ChatInputTokens tokens,
+      Supplier<NpcDialogueSurface.Geometry> geometry) {
+    this.tokens = tokens;
+    this.geometry = geometry;
     this.profiles = Map.copyOf(profiles);
     this.clock = clock;
     this.controls = controls;
@@ -47,9 +63,21 @@ public final class MinestomDialogueRenderer implements DialogueRenderer, Dialogu
     if (!profiles.containsKey("chat")) throw new IllegalArgumentException("Chat fallback required");
   }
 
-  public MinestomDialogueRenderer withChatTokens(ChatInputTokens tokens) {
-    this.tokens = Objects.requireNonNull(tokens);
-    return this;
+  public TargetSnapshot targets() {
+    return targets.current();
+  }
+
+  public NpcDialogueSurface.Geometry npcGeometry() {
+    return geometry.get();
+  }
+
+  public void refreshOutput() {
+    var run = active;
+    if (run != null)
+      run.queue.execute(
+          () -> {
+            if (!run.closed.get() && run.latest != null) run.replace(run.latest);
+          });
   }
 
   public Optional<TargetSnapshot.Target> resolveChat(Player player, long generation, String token) {
@@ -68,6 +96,7 @@ public final class MinestomDialogueRenderer implements DialogueRenderer, Dialogu
 
   public CompletionStage<PresentationHandle> prepare(PresentationRequest request) {
     var run = new Run(request);
+    active = run;
     run.begin();
     return run.ready.minimalCompletionStage();
   }
@@ -379,6 +408,7 @@ public final class MinestomDialogueRenderer implements DialogueRenderer, Dialogu
                     (v, cleanup) ->
                         queue.execute(
                             () -> {
+                              if (active == this) active = null;
                               delegate = null;
                               latest = null;
                               ready.completeExceptionally(
