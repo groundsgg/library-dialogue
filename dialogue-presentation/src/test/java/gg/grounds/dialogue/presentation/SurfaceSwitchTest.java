@@ -1,13 +1,134 @@
 package gg.grounds.dialogue.presentation;
+
 import static org.junit.jupiter.api.Assertions.*;
+
+import gg.grounds.dialogue.core.runtime.*;
+import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.*;
-import java.time.Duration;
 import org.junit.jupiter.api.Test;
-import gg.grounds.dialogue.core.runtime.*;
+
 class SurfaceSwitchTest {
- @Test void switchKeepsSemanticIdentityAndClosesOldSurface(){var hud=new PresenterFixtures.Surface();var npc=new PresenterFixtures.Surface();var p=PresenterFixtures.presenter(hud,npc);var h=p.prepare(PresenterFixtures.request()).toCompletableFuture().join();var v=PresenterFixtures.view("Hello",5,"leave",1);h.replace(v).toCompletableFuture().join();h.reconfigure(new PresentationPreferences("npc",Duration.ofMillis(35),false,Map.of())).toCompletableFuture().join();assertEquals(1,hud.closes);assertEquals(1,npc.opens);assertEquals(v.nodeVisitId(),npc.frames.getLast().semantic().nodeVisitId());assertEquals("leave",npc.frames.getLast().semantic().selectedChoiceId());h.closeAsync().toCompletableFuture().join();assertEquals(1,npc.closes);h.closeAsync().toCompletableFuture().join();assertEquals(1,npc.closes);}
- @Test void closeWhileNewSurfacePreparesDisposesLateHandle(){var hud=new PresenterFixtures.Surface();var npc=new PresenterFixtures.Surface();npc.delayed=new CompletableFuture<>();var p=PresenterFixtures.presenter(hud,npc);var h=p.prepare(PresenterFixtures.request()).toCompletableFuture().join();h.replace(PresenterFixtures.view("Hello",5,"c1",1));var change=h.reconfigure(new PresentationPreferences("npc",Duration.ofMillis(35),false,Map.of()));assertFalse(change.toCompletableFuture().isDone());var close=h.closeAsync();assertFalse(close.toCompletableFuture().isDone());npc.delayed.complete(npc.handle());assertTrue(close.toCompletableFuture().isDone());assertTrue(change.toCompletableFuture().isCompletedExceptionally());assertEquals(1,npc.closes);assertTrue(npc.frames.isEmpty());}
- @Test void lateFirstFrameCannotActivateAfterItsDeadline(){var hud=new PresenterFixtures.Surface();var gate=new CompletableFuture<Void>();var npc=new PresenterFixtures.Surface(){SurfaceHandle handle(){return new SurfaceHandle(){public CompletionStage<Void> replace(WidgetFrame frame){return gate;}public CompletionStage<Void> closeAsync(){closes++;return CompletableFuture.completedFuture(null);}};}};var clock=new PresenterFixtures.Clock();var p=new DialoguePresenter(Map.of("hud",new DialoguePresenter.SurfaceProfile(hud,LayoutProfile.hud(),DialogueTheme.neutral(),FontMetrics.defaults(),false),"npc",new DialoguePresenter.SurfaceProfile(npc,LayoutProfile.npc(),DialogueTheme.neutral(),FontMetrics.defaults(),false)),clock);var h=p.prepare(PresenterFixtures.request()).toCompletableFuture().join();h.replace(PresenterFixtures.view("Hello",5,"c1",1)).toCompletableFuture().join();var switchResult=h.reconfigure(new PresentationPreferences("npc",Duration.ZERO,true,Map.of()));clock.now=6_000_000_000L;gate.complete(null);assertTrue(switchResult.toCompletableFuture().isCompletedExceptionally());assertEquals(0,hud.closes);assertEquals(1,npc.closes);h.closeAsync().toCompletableFuture().join();}
- @Test void delayedFrameWritesAreSerialized(){var first=new CompletableFuture<Void>();var calls=new ArrayList<WidgetFrame>();var hud=new PresenterFixtures.Surface(){SurfaceHandle handle(){return new SurfaceHandle(){public CompletionStage<Void> replace(WidgetFrame frame){calls.add(frame);return calls.size()==1?first:CompletableFuture.completedFuture(null);}public CompletionStage<Void> closeAsync(){closes++;return CompletableFuture.completedFuture(null);}};}};var p=PresenterFixtures.presenter(hud,new PresenterFixtures.Surface());var h=p.prepare(PresenterFixtures.request()).toCompletableFuture().join();h.replace(PresenterFixtures.view("Hello",1,"c1",1));var next=h.replace(PresenterFixtures.view("Hello",5,"c2",2));assertEquals(1,calls.size());assertFalse(next.toCompletableFuture().isDone());first.complete(null);assertEquals(2,calls.size());assertEquals("c2",calls.getLast().semantic().selectedChoiceId());h.closeAsync().toCompletableFuture().join();}
+  @Test
+  void switchKeepsSemanticIdentityAndClosesOldSurface() {
+    var hud = new PresenterFixtures.Surface();
+    var npc = new PresenterFixtures.Surface();
+    var p = PresenterFixtures.presenter(hud, npc);
+    var h = p.prepare(PresenterFixtures.request()).toCompletableFuture().join();
+    var v = PresenterFixtures.view("Hello", 5, "leave", 1);
+    h.replace(v).toCompletableFuture().join();
+    h.reconfigure(new PresentationPreferences("npc", Duration.ofMillis(35), false, Map.of()))
+        .toCompletableFuture()
+        .join();
+    assertEquals(1, hud.closes);
+    assertEquals(1, npc.opens);
+    assertEquals(v.nodeVisitId(), npc.frames.getLast().semantic().nodeVisitId());
+    assertEquals("leave", npc.frames.getLast().semantic().selectedChoiceId());
+    h.closeAsync().toCompletableFuture().join();
+    assertEquals(1, npc.closes);
+    h.closeAsync().toCompletableFuture().join();
+    assertEquals(1, npc.closes);
+  }
+
+  @Test
+  void closeWhileNewSurfacePreparesDisposesLateHandle() {
+    var hud = new PresenterFixtures.Surface();
+    var npc = new PresenterFixtures.Surface();
+    npc.delayed = new CompletableFuture<>();
+    var p = PresenterFixtures.presenter(hud, npc);
+    var h = p.prepare(PresenterFixtures.request()).toCompletableFuture().join();
+    h.replace(PresenterFixtures.view("Hello", 5, "c1", 1));
+    var change =
+        h.reconfigure(new PresentationPreferences("npc", Duration.ofMillis(35), false, Map.of()));
+    assertFalse(change.toCompletableFuture().isDone());
+    var close = h.closeAsync();
+    assertFalse(close.toCompletableFuture().isDone());
+    npc.delayed.complete(npc.handle());
+    assertTrue(close.toCompletableFuture().isDone());
+    assertTrue(change.toCompletableFuture().isCompletedExceptionally());
+    assertEquals(1, npc.closes);
+    assertTrue(npc.frames.isEmpty());
+  }
+
+  @Test
+  void lateFirstFrameCannotActivateAfterItsDeadline() {
+    var hud = new PresenterFixtures.Surface();
+    var gate = new CompletableFuture<Void>();
+    var npc =
+        new PresenterFixtures.Surface() {
+          SurfaceHandle handle() {
+            return new SurfaceHandle() {
+              public CompletionStage<Void> replace(WidgetFrame frame) {
+                return gate;
+              }
+
+              public CompletionStage<Void> closeAsync() {
+                closes++;
+                return CompletableFuture.completedFuture(null);
+              }
+            };
+          }
+        };
+    var clock = new PresenterFixtures.Clock();
+    var p =
+        new DialoguePresenter(
+            Map.of(
+                "hud",
+                new DialoguePresenter.SurfaceProfile(
+                    hud,
+                    LayoutProfile.hud(),
+                    DialogueTheme.neutral(),
+                    FontMetrics.defaults(),
+                    false),
+                "npc",
+                new DialoguePresenter.SurfaceProfile(
+                    npc,
+                    LayoutProfile.npc(),
+                    DialogueTheme.neutral(),
+                    FontMetrics.defaults(),
+                    false)),
+            clock);
+    var h = p.prepare(PresenterFixtures.request()).toCompletableFuture().join();
+    h.replace(PresenterFixtures.view("Hello", 5, "c1", 1)).toCompletableFuture().join();
+    var switchResult =
+        h.reconfigure(new PresentationPreferences("npc", Duration.ZERO, true, Map.of()));
+    clock.now = 6_000_000_000L;
+    gate.complete(null);
+    assertTrue(switchResult.toCompletableFuture().isCompletedExceptionally());
+    assertEquals(0, hud.closes);
+    assertEquals(1, npc.closes);
+    h.closeAsync().toCompletableFuture().join();
+  }
+
+  @Test
+  void delayedFrameWritesAreSerialized() {
+    var first = new CompletableFuture<Void>();
+    var calls = new ArrayList<WidgetFrame>();
+    var hud =
+        new PresenterFixtures.Surface() {
+          SurfaceHandle handle() {
+            return new SurfaceHandle() {
+              public CompletionStage<Void> replace(WidgetFrame frame) {
+                calls.add(frame);
+                return calls.size() == 1 ? first : CompletableFuture.completedFuture(null);
+              }
+
+              public CompletionStage<Void> closeAsync() {
+                closes++;
+                return CompletableFuture.completedFuture(null);
+              }
+            };
+          }
+        };
+    var p = PresenterFixtures.presenter(hud, new PresenterFixtures.Surface());
+    var h = p.prepare(PresenterFixtures.request()).toCompletableFuture().join();
+    h.replace(PresenterFixtures.view("Hello", 1, "c1", 1));
+    var next = h.replace(PresenterFixtures.view("Hello", 5, "c2", 2));
+    assertEquals(1, calls.size());
+    assertFalse(next.toCompletableFuture().isDone());
+    first.complete(null);
+    assertEquals(2, calls.size());
+    assertEquals("c2", calls.getLast().semantic().selectedChoiceId());
+    h.closeAsync().toCompletableFuture().join();
+  }
 }

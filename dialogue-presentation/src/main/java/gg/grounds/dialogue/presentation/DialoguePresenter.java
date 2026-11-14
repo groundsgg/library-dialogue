@@ -1,45 +1,580 @@
 package gg.grounds.dialogue.presentation;
-import java.time.Duration;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Supplier;
+
 import gg.grounds.dialogue.core.internal.*;
 import gg.grounds.dialogue.core.port.*;
 import gg.grounds.dialogue.core.runtime.*;
 import gg.grounds.dialogue.core.text.*;
 import gg.grounds.dialogue.core.validation.ContentFingerprint;
 import gg.grounds.dialogue.presentation.WidgetFrame.*;
+import java.time.Duration;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
+
 /** Shared widget composition; does not own a second reveal clock or graph. */
 public final class DialoguePresenter implements DialogueRenderer {
- public record SurfaceProfile(DialogueSurface surface,LayoutProfile layout,DialogueTheme theme,FontMetrics metrics,boolean semanticOnly){public SurfaceProfile {Objects.requireNonNull(surface);if(!semanticOnly){Objects.requireNonNull(layout);Objects.requireNonNull(theme);Objects.requireNonNull(metrics);}}public static SurfaceProfile semantic(DialogueSurface surface){return new SurfaceProfile(surface,null,null,null,true);}}
- public enum ConfirmAction { ATTACK,USE,SWAP_HANDS }
- public record Controls(ConfirmAction confirm,boolean scroll){public Controls {Objects.requireNonNull(confirm);}public static Controls defaults(){return new Controls(ConfirmAction.SWAP_HANDS,true);}}
- public static final class FallbackRequired extends DialogueFailure {public FallbackRequired(String code){super(code,code);}}
- private final Map<String,SurfaceProfile> profiles;private final DialogueScheduler clock;private final Controls controls;
- public DialoguePresenter(Map<String,SurfaceProfile> profiles,DialogueScheduler scheduler){this(profiles,scheduler,Controls.defaults());}
- public DialoguePresenter(Map<String,SurfaceProfile> profiles,DialogueScheduler scheduler,Controls controls){this.profiles=Map.copyOf(profiles);clock=Objects.requireNonNull(scheduler);this.controls=Objects.requireNonNull(controls);}
- private SurfaceProfile profile(String key){var p=profiles.get(key);if(p==null)throw new FallbackRequired("MISSING_SURFACE");return p;}
- private static <T> CompletionStage<T> call(Supplier<CompletionStage<T>> supplier){try{return Objects.requireNonNull(supplier.get());}catch(Throwable e){return CompletableFuture.failedFuture(e);}}
- public WidgetFrame compose(DialogueView view,String key,PresentationPreferences preferences){var p=profile(key);if(p.semanticOnly())return new WidgetFrame(view,List.of(),"semantic","semantic");var l=p.layout();var metrics=p.metrics();var widgets=new ArrayList<Widget>();var text=new ResolvedText(view.text(),view.localeTag());var body=layout(text,metrics,l.width()-2*l.padding(),l.maxTextLines());double bodyHeight=body.height()+2*l.padding();widgets.add(widget("text",Kind.TEXT,new Rect(0,0,l.width(),bodyHeight),text,body,l.padding(),l.padding(),view.revealedGraphemes(),false,true,null,p,preferences));
-  var name=new ResolvedText(view.speaker(),view.localeTag());var nameLayout=layout(name,metrics,l.width()-2*l.padding(),1);double nameWidth=Math.max(nameLayout.width()+2*l.padding(),40);double nameHeight=metrics.lineHeight()+l.padding();double nameX=(l.width()-nameWidth)/2,nameY=-nameHeight-l.gap();widgets.add(widget("speaker",Kind.SPEAKER,new Rect(nameX,nameY,nameWidth,nameHeight),name,nameLayout,(nameWidth-nameLayout.width())/2,(nameHeight-nameLayout.height())/2,Graphemes.split(name.plain()).size(),false,true,null,p,preferences));
-  var window=new ChoiceViewport().window(view.choices(),view.selectedChoiceId(),l.choiceCapacity());var labels=window.choices().stream().map(c->new ResolvedText(c.label(),view.localeTag())).toList();var layouts=labels.stream().map(t->layout(t,metrics,l.choiceWidth()-2*l.padding(),l.maxChoiceLines())).toList();double cardHeight=layouts.stream().mapToDouble(TextLayout.TextLayoutResult::height).max().orElse(metrics.lineHeight())+2*l.padding();double x=l.placement()==LayoutProfile.ChoicePlacement.RIGHT?l.width()+l.gap():0;double y=l.placement()==LayoutProfile.ChoicePlacement.RIGHT?0:bodyHeight+l.gap();
-  for(int i=0;i<window.choices().size();i++){var c=window.choices().get(i);var bounds=new Rect(x,y+i*(cardHeight+l.gap()),l.choiceWidth(),cardHeight);widgets.add(widget("choice:"+c.id(),Kind.CHOICE,bounds,labels.get(i),layouts.get(i),l.padding(),(cardHeight-layouts.get(i).height())/2,Graphemes.split(c.label()).size(),c.id().equals(view.selectedChoiceId()),c.availability()==DialogueView.Availability.AVAILABLE,c.id(),p,preferences));}
-  String hint=hint(view,controls);var hintText=new ResolvedText(hint,view.localeTag());double hintWidth=l.placement()==LayoutProfile.ChoicePlacement.RIGHT?l.choiceWidth():l.width();var hintLayout=layout(hintText,metrics,hintWidth,2);double hintX=l.placement()==LayoutProfile.ChoicePlacement.RIGHT?x:0;double hintY=l.placement()==LayoutProfile.ChoicePlacement.RIGHT?-hintLayout.height()-l.gap():y+window.choices().size()*(cardHeight+l.gap())+l.gap();widgets.add(widget("hint",Kind.HINT,new Rect(hintX,hintY,hintWidth,hintLayout.height()),hintText,hintLayout,0,0,Graphemes.split(hint).size(),false,true,null,p,preferences));return new WidgetFrame(view,widgets,metrics.pin(),p.theme().id());
- }
- private static TextLayout.TextLayoutResult layout(ResolvedText text,FontMetrics metrics,double width,int lines){var result=new TextLayout().layout(text,metrics,new TextLayout.TextLimits(width,lines));if(!result.isValid())throw new FallbackRequired(result.problem());return result;}
- private static Widget widget(String id,Kind kind,Rect bounds,ResolvedText text,TextLayout.TextLayoutResult layout,double dx,double dy,int revealed,boolean selected,boolean enabled,String choiceId,SurfaceProfile p,PresentationPreferences preferences){return new Widget(id,kind,bounds,new Rect(bounds.x()+dx,bounds.y()+dy,layout.width(),layout.height()),text,layout,revealed,selected,enabled,selected?p.theme().selectedScale():1,preferences.reducedMotion()?Duration.ZERO:p.theme().transition(),choiceId);}
- private static String hint(DialogueView v,Controls c){boolean de=Locale.forLanguageTag(v.localeTag()).getLanguage().equals("de");String action=switch(c.confirm()){case ATTACK->de?"Angreifen":"Attack";case USE->de?"Benutzen":"Use";case SWAP_HANDS->de?"Offhandwechsel":"Swap hands";};String verb=switch(v.hint()){case REVEAL->de?"Text anzeigen":"Reveal text";case CHOOSE->de?"Auswählen":"Select";case CONTINUE->de?"Weiter":"Continue";case FINISH->de?"Beenden":"End";case BUSY->de?"Bitte warten":"Please wait";};return (c.scroll()&&v.hint()==DialogueView.HintPhase.CHOOSE?(de?"Scrollen · ":"Scroll · "):"")+action+" · "+verb;}
- public CompletionStage<PresentationHandle> prepare(PresentationRequest request){var session=new SurfaceSession(request);session.begin();return session.ready;}
- private final class SurfaceSession implements PresentationHandle {
-  final PresentationRequest request;final SerialCommandQueue queue;final OwnedScope scope;final CompletableFuture<PresentationHandle> ready=new CompletableFuture<>();final AtomicBoolean closed=new AtomicBoolean();final List<CompletableFuture<Void>> outstanding=new ArrayList<>();final List<PendingOperation<?>> waits=new ArrayList<>();CompletableFuture<Void> closeResult;Throwable preparationFailure;PresentationPreferences preferences;DialogueSurface.SurfaceHandle surface;String surfaceKey;DialogueView lastView;long generation,outputGeneration;boolean rendering;PendingFrame pending;
-  record PendingFrame(DialogueView view,CompletableFuture<Void> result) {}
-  SurfaceSession(PresentationRequest request){this.request=request;preferences=request.preferences();surfaceKey=preferences.surfaceKey();queue=new SerialCommandQueue(clock,e->{ready.completeExceptionally(e);closeAsync();});scope=new OwnedScope(queue,clock,Duration.ofSeconds(30));}
-  void begin(){queue.execute(()->{if(request.cancellation().isCancelled()){closeAsync();return;}scope.prepare(()->CompletableFuture.completedFuture(request.cancellation().onCancel(reason->closeAsync())));long gen=++generation;CompletionStage<DialogueSurface.SurfaceHandle> opened=open(surfaceKey,gen);waits.add(new PendingOperation<>(queue,clock,Duration.ofNanos(Math.max(1,request.deadlineNanos()-clock.nanoTime())),opened,(value,error)->{if(closed.get())return;if(error!=null){preparationFailure=error;closeAsync();}else{surface=value;ready.complete(this);}}));});}
-  CompletionStage<DialogueSurface.SurfaceHandle> open(String key,long gen){return scope.prepare(()->{var p=profile(key);String pin=p.semanticOnly()?"semantic":ContentFingerprint.hash(ContentFingerprint.canonicalBytes(Map.of("layout",p.layout().toString(),"theme",p.theme().toString(),"font",p.metrics().pin()))).sha256();return p.surface().open(new DialogueSurface.SurfaceContext(request.sessionId(),request.audienceId(),request.hostGeneration(),key,pin,request.cancellation(),gen,request.deadlineNanos()));});}
-  public CompletionStage<Void> replace(DialogueView view){var result=new CompletableFuture<Void>();queue.execute(()->{if(closed.get()){result.completeExceptionally(new CancellationException("Surface closed"));return;}if(!request.sessionId().equals(view.sessionId())){result.completeExceptionally(new IllegalArgumentException("Foreign session view"));return;}if(lastView!=null&&view.stateRevision()<lastView.stateRevision()){result.complete(null);return;}lastView=view;outstanding.removeIf(CompletableFuture::isDone);outstanding.add(result);if(pending!=null)pending.result().complete(null);pending=new PendingFrame(view,result);flush();});return result;}
-  void flush(){if(closed.get()||rendering||pending==null||surface==null)return;var frame=pending;pending=null;WidgetFrame widgets;try{widgets=compose(frame.view(),surfaceKey,preferences);}catch(Throwable e){frame.result().completeExceptionally(e);flush();return;}rendering=true;long gen=outputGeneration;var target=surface;call(()->target.replace(widgets)).whenComplete((v,error)->queue.execute(()->{if(error==null)frame.result().complete(null);else frame.result().completeExceptionally(error);if(gen==outputGeneration){rendering=false;flush();}}));}
-  public CompletionStage<Void> reconfigure(PresentationPreferences next){var result=new CompletableFuture<Void>();long deadline=clock.nanoTime()+Duration.ofSeconds(5).toNanos();queue.execute(()->{if(closed.get()){result.completeExceptionally(new CancellationException("Surface closed"));return;}outstanding.removeIf(CompletableFuture::isDone);outstanding.add(result);if(next.surfaceKey().equals(surfaceKey)){preferences=next;result.complete(null);return;}long gen=++generation;String targetKey=next.surfaceKey();var prepared=open(targetKey,gen);prepared.whenComplete((value,error)->queue.execute(()->{if(value!=null&&(closed.get()||gen!=generation||clock.nanoTime()>=deadline))scope.release(value);}));waits.removeIf(PendingOperation::isDone);waits.add(new PendingOperation<>(queue,clock,Duration.ofNanos(Math.max(1,deadline-clock.nanoTime())),prepared,(value,error)->{if(closed.get()||gen!=generation){result.completeExceptionally(new CancellationException("Superseded surface"));return;}if(error!=null||clock.nanoTime()>=deadline){generation++;result.completeExceptionally(new ReconfigurationRejected("SURFACE_PREPARE_FAILED",error==null?new DialogueFailure("PREPARE_TIMEOUT","Surface preparation expired"):error));return;}WidgetFrame initial;try{initial=lastView==null?null:compose(lastView,targetKey,next);}catch(Throwable e){scope.release(value).whenComplete((ignored,cleanup)->result.completeExceptionally(cleanup==null?new ReconfigurationRejected("SURFACE_LAYOUT_REJECTED",e):new DialogueFailure("SURFACE_CLEANUP_FAILED",cleanup)));return;}var first=initial==null?CompletableFuture.<Void>completedFuture(null):call(()->value.replace(initial));first.whenComplete((ignored,drawError)->queue.execute(()->{if(closed.get()||gen!=generation||clock.nanoTime()>=deadline){scope.release(value);result.completeExceptionally(new ReconfigurationRejected("SURFACE_SUPERSEDED",new CancellationException("Superseded surface")));return;}if(drawError!=null){scope.release(value).whenComplete((released,cleanup)->result.completeExceptionally(cleanup==null?new ReconfigurationRejected("SURFACE_DRAW_REJECTED",drawError):new DialogueFailure("SURFACE_CLEANUP_FAILED",cleanup)));return;}var old=surface;surface=value;surfaceKey=targetKey;preferences=next;outputGeneration++;rendering=false;scope.release(old).whenComplete((released,cleanup)->queue.execute(()->{if(cleanup!=null)result.completeExceptionally(new DialogueFailure("SURFACE_CLEANUP_FAILED",cleanup));else result.complete(null);if(lastView!=null){if(pending!=null)pending.result().complete(null);pending=new PendingFrame(lastView,new CompletableFuture<>());flush();}}));}));}));});return result;}
-  public CompletionStage<Void> closeAsync(){synchronized(this){if(closeResult!=null)return closeResult;closeResult=new CompletableFuture<>();closed.set(true);}queue.execute(()->{generation++;waits.forEach(PendingOperation::cancel);waits.clear();var error=new CancellationException("Surface closed");outstanding.forEach(f->f.completeExceptionally(error));outstanding.clear();if(pending!=null){pending.result().completeExceptionally(error);pending=null;}scope.closeAsync().whenComplete((v,e)->queue.execute(()->{surface=null;lastView=null;ready.completeExceptionally(preparationFailure==null?error:preparationFailure);if(e==null)closeResult.complete(null);else closeResult.completeExceptionally(e);}));});return closeResult;}
- }
+  public record SurfaceProfile(
+      DialogueSurface surface,
+      LayoutProfile layout,
+      DialogueTheme theme,
+      FontMetrics metrics,
+      boolean semanticOnly) {
+    public SurfaceProfile {
+      Objects.requireNonNull(surface);
+      if (!semanticOnly) {
+        Objects.requireNonNull(layout);
+        Objects.requireNonNull(theme);
+        Objects.requireNonNull(metrics);
+      }
+    }
+
+    public static SurfaceProfile semantic(DialogueSurface surface) {
+      return new SurfaceProfile(surface, null, null, null, true);
+    }
+  }
+
+  public enum ConfirmAction {
+    ATTACK,
+    USE,
+    SWAP_HANDS
+  }
+
+  public record Controls(ConfirmAction confirm, boolean scroll) {
+    public Controls {
+      Objects.requireNonNull(confirm);
+    }
+
+    public static Controls defaults() {
+      return new Controls(ConfirmAction.SWAP_HANDS, true);
+    }
+  }
+
+  public static final class FallbackRequired extends DialogueFailure {
+    public FallbackRequired(String code) {
+      super(code, code);
+    }
+  }
+
+  private final Map<String, SurfaceProfile> profiles;
+  private final DialogueScheduler clock;
+  private final Controls controls;
+
+  public DialoguePresenter(Map<String, SurfaceProfile> profiles, DialogueScheduler scheduler) {
+    this(profiles, scheduler, Controls.defaults());
+  }
+
+  public DialoguePresenter(
+      Map<String, SurfaceProfile> profiles, DialogueScheduler scheduler, Controls controls) {
+    this.profiles = Map.copyOf(profiles);
+    clock = Objects.requireNonNull(scheduler);
+    this.controls = Objects.requireNonNull(controls);
+  }
+
+  private SurfaceProfile profile(String key) {
+    var p = profiles.get(key);
+    if (p == null) throw new FallbackRequired("MISSING_SURFACE");
+    return p;
+  }
+
+  private static <T> CompletionStage<T> call(Supplier<CompletionStage<T>> supplier) {
+    try {
+      return Objects.requireNonNull(supplier.get());
+    } catch (Throwable e) {
+      return CompletableFuture.failedFuture(e);
+    }
+  }
+
+  public WidgetFrame compose(DialogueView view, String key, PresentationPreferences preferences) {
+    var p = profile(key);
+    if (p.semanticOnly()) return new WidgetFrame(view, List.of(), "semantic", "semantic");
+    var l = p.layout();
+    var metrics = p.metrics();
+    var widgets = new ArrayList<Widget>();
+    var text = new ResolvedText(view.text(), view.localeTag());
+    var body = layout(text, metrics, l.width() - 2 * l.padding(), l.maxTextLines());
+    double bodyHeight = body.height() + 2 * l.padding();
+    widgets.add(
+        widget(
+            "text",
+            Kind.TEXT,
+            new Rect(0, 0, l.width(), bodyHeight),
+            text,
+            body,
+            l.padding(),
+            l.padding(),
+            view.revealedGraphemes(),
+            false,
+            true,
+            null,
+            p,
+            preferences));
+    var name = new ResolvedText(view.speaker(), view.localeTag());
+    var nameLayout = layout(name, metrics, l.width() - 2 * l.padding(), 1);
+    double nameWidth = Math.max(nameLayout.width() + 2 * l.padding(), 40);
+    double nameHeight = metrics.lineHeight() + l.padding();
+    double nameX = (l.width() - nameWidth) / 2, nameY = -nameHeight - l.gap();
+    widgets.add(
+        widget(
+            "speaker",
+            Kind.SPEAKER,
+            new Rect(nameX, nameY, nameWidth, nameHeight),
+            name,
+            nameLayout,
+            (nameWidth - nameLayout.width()) / 2,
+            (nameHeight - nameLayout.height()) / 2,
+            Graphemes.split(name.plain()).size(),
+            false,
+            true,
+            null,
+            p,
+            preferences));
+    var window =
+        new ChoiceViewport().window(view.choices(), view.selectedChoiceId(), l.choiceCapacity());
+    var labels =
+        window.choices().stream().map(c -> new ResolvedText(c.label(), view.localeTag())).toList();
+    var layouts =
+        labels.stream()
+            .map(t -> layout(t, metrics, l.choiceWidth() - 2 * l.padding(), l.maxChoiceLines()))
+            .toList();
+    double cardHeight =
+        layouts.stream()
+                .mapToDouble(TextLayout.TextLayoutResult::height)
+                .max()
+                .orElse(metrics.lineHeight())
+            + 2 * l.padding();
+    double x = l.placement() == LayoutProfile.ChoicePlacement.RIGHT ? l.width() + l.gap() : 0;
+    double y = l.placement() == LayoutProfile.ChoicePlacement.RIGHT ? 0 : bodyHeight + l.gap();
+    for (int i = 0; i < window.choices().size(); i++) {
+      var c = window.choices().get(i);
+      var bounds = new Rect(x, y + i * (cardHeight + l.gap()), l.choiceWidth(), cardHeight);
+      widgets.add(
+          widget(
+              "choice:" + c.id(),
+              Kind.CHOICE,
+              bounds,
+              labels.get(i),
+              layouts.get(i),
+              l.padding(),
+              (cardHeight - layouts.get(i).height()) / 2,
+              Graphemes.split(c.label()).size(),
+              c.id().equals(view.selectedChoiceId()),
+              c.availability() == DialogueView.Availability.AVAILABLE,
+              c.id(),
+              p,
+              preferences));
+    }
+    String hint = hint(view, controls);
+    var hintText = new ResolvedText(hint, view.localeTag());
+    double hintWidth =
+        l.placement() == LayoutProfile.ChoicePlacement.RIGHT ? l.choiceWidth() : l.width();
+    var hintLayout = layout(hintText, metrics, hintWidth, 2);
+    double hintX = l.placement() == LayoutProfile.ChoicePlacement.RIGHT ? x : 0;
+    double hintY =
+        l.placement() == LayoutProfile.ChoicePlacement.RIGHT
+            ? -hintLayout.height() - l.gap()
+            : y + window.choices().size() * (cardHeight + l.gap()) + l.gap();
+    widgets.add(
+        widget(
+            "hint",
+            Kind.HINT,
+            new Rect(hintX, hintY, hintWidth, hintLayout.height()),
+            hintText,
+            hintLayout,
+            0,
+            0,
+            Graphemes.split(hint).size(),
+            false,
+            true,
+            null,
+            p,
+            preferences));
+    return new WidgetFrame(view, widgets, metrics.pin(), p.theme().id());
+  }
+
+  private static TextLayout.TextLayoutResult layout(
+      ResolvedText text, FontMetrics metrics, double width, int lines) {
+    var result = new TextLayout().layout(text, metrics, new TextLayout.TextLimits(width, lines));
+    if (!result.isValid()) throw new FallbackRequired(result.problem());
+    return result;
+  }
+
+  private static Widget widget(
+      String id,
+      Kind kind,
+      Rect bounds,
+      ResolvedText text,
+      TextLayout.TextLayoutResult layout,
+      double dx,
+      double dy,
+      int revealed,
+      boolean selected,
+      boolean enabled,
+      String choiceId,
+      SurfaceProfile p,
+      PresentationPreferences preferences) {
+    return new Widget(
+        id,
+        kind,
+        bounds,
+        new Rect(bounds.x() + dx, bounds.y() + dy, layout.width(), layout.height()),
+        text,
+        layout,
+        revealed,
+        selected,
+        enabled,
+        selected ? p.theme().selectedScale() : 1,
+        preferences.reducedMotion() ? Duration.ZERO : p.theme().transition(),
+        choiceId);
+  }
+
+  private static String hint(DialogueView v, Controls c) {
+    boolean de = Locale.forLanguageTag(v.localeTag()).getLanguage().equals("de");
+    String action =
+        switch (c.confirm()) {
+          case ATTACK -> de ? "Angreifen" : "Attack";
+          case USE -> de ? "Benutzen" : "Use";
+          case SWAP_HANDS -> de ? "Offhandwechsel" : "Swap hands";
+        };
+    String verb =
+        switch (v.hint()) {
+          case REVEAL -> de ? "Text anzeigen" : "Reveal text";
+          case CHOOSE -> de ? "Auswählen" : "Select";
+          case CONTINUE -> de ? "Weiter" : "Continue";
+          case FINISH -> de ? "Beenden" : "End";
+          case BUSY -> de ? "Bitte warten" : "Please wait";
+        };
+    return (c.scroll() && v.hint() == DialogueView.HintPhase.CHOOSE
+            ? (de ? "Scrollen · " : "Scroll · ")
+            : "")
+        + action
+        + " · "
+        + verb;
+  }
+
+  public CompletionStage<PresentationHandle> prepare(PresentationRequest request) {
+    var session = new SurfaceSession(request);
+    session.begin();
+    return session.ready;
+  }
+
+  private final class SurfaceSession implements PresentationHandle {
+    final PresentationRequest request;
+    final SerialCommandQueue queue;
+    final OwnedScope scope;
+    final CompletableFuture<PresentationHandle> ready = new CompletableFuture<>();
+    final AtomicBoolean closed = new AtomicBoolean();
+    final List<CompletableFuture<Void>> outstanding = new ArrayList<>();
+    final List<PendingOperation<?>> waits = new ArrayList<>();
+    CompletableFuture<Void> closeResult;
+    Throwable preparationFailure;
+    PresentationPreferences preferences;
+    DialogueSurface.SurfaceHandle surface;
+    String surfaceKey;
+    DialogueView lastView;
+    long generation, outputGeneration;
+    boolean rendering;
+    PendingFrame pending;
+
+    record PendingFrame(DialogueView view, CompletableFuture<Void> result) {}
+
+    SurfaceSession(PresentationRequest request) {
+      this.request = request;
+      preferences = request.preferences();
+      surfaceKey = preferences.surfaceKey();
+      queue =
+          new SerialCommandQueue(
+              clock,
+              e -> {
+                ready.completeExceptionally(e);
+                closeAsync();
+              });
+      scope = new OwnedScope(queue, clock, Duration.ofSeconds(30));
+    }
+
+    void begin() {
+      queue.execute(
+          () -> {
+            if (request.cancellation().isCancelled()) {
+              closeAsync();
+              return;
+            }
+            scope.prepare(
+                () ->
+                    CompletableFuture.completedFuture(
+                        request.cancellation().onCancel(reason -> closeAsync())));
+            long gen = ++generation;
+            CompletionStage<DialogueSurface.SurfaceHandle> opened = open(surfaceKey, gen);
+            waits.add(
+                new PendingOperation<>(
+                    queue,
+                    clock,
+                    Duration.ofNanos(Math.max(1, request.deadlineNanos() - clock.nanoTime())),
+                    opened,
+                    (value, error) -> {
+                      if (closed.get()) return;
+                      if (error != null) {
+                        preparationFailure = error;
+                        closeAsync();
+                      } else {
+                        surface = value;
+                        ready.complete(this);
+                      }
+                    }));
+          });
+    }
+
+    CompletionStage<DialogueSurface.SurfaceHandle> open(String key, long gen) {
+      return scope.prepare(
+          () -> {
+            var p = profile(key);
+            String pin =
+                p.semanticOnly()
+                    ? "semantic"
+                    : ContentFingerprint.hash(
+                            ContentFingerprint.canonicalBytes(
+                                Map.of(
+                                    "layout",
+                                    p.layout().toString(),
+                                    "theme",
+                                    p.theme().toString(),
+                                    "font",
+                                    p.metrics().pin())))
+                        .sha256();
+            return p.surface()
+                .open(
+                    new DialogueSurface.SurfaceContext(
+                        request.sessionId(),
+                        request.audienceId(),
+                        request.hostGeneration(),
+                        key,
+                        pin,
+                        request.cancellation(),
+                        gen,
+                        request.deadlineNanos()));
+          });
+    }
+
+    public CompletionStage<Void> replace(DialogueView view) {
+      var result = new CompletableFuture<Void>();
+      queue.execute(
+          () -> {
+            if (closed.get()) {
+              result.completeExceptionally(new CancellationException("Surface closed"));
+              return;
+            }
+            if (!request.sessionId().equals(view.sessionId())) {
+              result.completeExceptionally(new IllegalArgumentException("Foreign session view"));
+              return;
+            }
+            if (lastView != null && view.stateRevision() < lastView.stateRevision()) {
+              result.complete(null);
+              return;
+            }
+            lastView = view;
+            outstanding.removeIf(CompletableFuture::isDone);
+            outstanding.add(result);
+            if (pending != null) pending.result().complete(null);
+            pending = new PendingFrame(view, result);
+            flush();
+          });
+      return result;
+    }
+
+    void flush() {
+      if (closed.get() || rendering || pending == null || surface == null) return;
+      var frame = pending;
+      pending = null;
+      WidgetFrame widgets;
+      try {
+        widgets = compose(frame.view(), surfaceKey, preferences);
+      } catch (Throwable e) {
+        frame.result().completeExceptionally(e);
+        flush();
+        return;
+      }
+      rendering = true;
+      long gen = outputGeneration;
+      var target = surface;
+      call(() -> target.replace(widgets))
+          .whenComplete(
+              (v, error) ->
+                  queue.execute(
+                      () -> {
+                        if (error == null) frame.result().complete(null);
+                        else frame.result().completeExceptionally(error);
+                        if (gen == outputGeneration) {
+                          rendering = false;
+                          flush();
+                        }
+                      }));
+    }
+
+    public CompletionStage<Void> reconfigure(PresentationPreferences next) {
+      var result = new CompletableFuture<Void>();
+      long deadline = clock.nanoTime() + Duration.ofSeconds(5).toNanos();
+      queue.execute(
+          () -> {
+            if (closed.get()) {
+              result.completeExceptionally(new CancellationException("Surface closed"));
+              return;
+            }
+            outstanding.removeIf(CompletableFuture::isDone);
+            outstanding.add(result);
+            if (next.surfaceKey().equals(surfaceKey)) {
+              preferences = next;
+              result.complete(null);
+              return;
+            }
+            long gen = ++generation;
+            String targetKey = next.surfaceKey();
+            var prepared = open(targetKey, gen);
+            prepared.whenComplete(
+                (value, error) ->
+                    queue.execute(
+                        () -> {
+                          if (value != null
+                              && (closed.get()
+                                  || gen != generation
+                                  || clock.nanoTime() >= deadline)) scope.release(value);
+                        }));
+            waits.removeIf(PendingOperation::isDone);
+            waits.add(
+                new PendingOperation<>(
+                    queue,
+                    clock,
+                    Duration.ofNanos(Math.max(1, deadline - clock.nanoTime())),
+                    prepared,
+                    (value, error) -> {
+                      if (closed.get() || gen != generation) {
+                        result.completeExceptionally(
+                            new CancellationException("Superseded surface"));
+                        return;
+                      }
+                      if (error != null || clock.nanoTime() >= deadline) {
+                        generation++;
+                        result.completeExceptionally(
+                            new ReconfigurationRejected(
+                                "SURFACE_PREPARE_FAILED",
+                                error == null
+                                    ? new DialogueFailure(
+                                        "PREPARE_TIMEOUT", "Surface preparation expired")
+                                    : error));
+                        return;
+                      }
+                      WidgetFrame initial;
+                      try {
+                        initial = lastView == null ? null : compose(lastView, targetKey, next);
+                      } catch (Throwable e) {
+                        scope
+                            .release(value)
+                            .whenComplete(
+                                (ignored, cleanup) ->
+                                    result.completeExceptionally(
+                                        cleanup == null
+                                            ? new ReconfigurationRejected(
+                                                "SURFACE_LAYOUT_REJECTED", e)
+                                            : new DialogueFailure(
+                                                "SURFACE_CLEANUP_FAILED", cleanup)));
+                        return;
+                      }
+                      var first =
+                          initial == null
+                              ? CompletableFuture.<Void>completedFuture(null)
+                              : call(() -> value.replace(initial));
+                      first.whenComplete(
+                          (ignored, drawError) ->
+                              queue.execute(
+                                  () -> {
+                                    if (closed.get()
+                                        || gen != generation
+                                        || clock.nanoTime() >= deadline) {
+                                      scope.release(value);
+                                      result.completeExceptionally(
+                                          new ReconfigurationRejected(
+                                              "SURFACE_SUPERSEDED",
+                                              new CancellationException("Superseded surface")));
+                                      return;
+                                    }
+                                    if (drawError != null) {
+                                      scope
+                                          .release(value)
+                                          .whenComplete(
+                                              (released, cleanup) ->
+                                                  result.completeExceptionally(
+                                                      cleanup == null
+                                                          ? new ReconfigurationRejected(
+                                                              "SURFACE_DRAW_REJECTED", drawError)
+                                                          : new DialogueFailure(
+                                                              "SURFACE_CLEANUP_FAILED", cleanup)));
+                                      return;
+                                    }
+                                    var old = surface;
+                                    surface = value;
+                                    surfaceKey = targetKey;
+                                    preferences = next;
+                                    outputGeneration++;
+                                    rendering = false;
+                                    scope
+                                        .release(old)
+                                        .whenComplete(
+                                            (released, cleanup) ->
+                                                queue.execute(
+                                                    () -> {
+                                                      if (cleanup != null)
+                                                        result.completeExceptionally(
+                                                            new DialogueFailure(
+                                                                "SURFACE_CLEANUP_FAILED", cleanup));
+                                                      else result.complete(null);
+                                                      if (lastView != null) {
+                                                        if (pending != null)
+                                                          pending.result().complete(null);
+                                                        pending =
+                                                            new PendingFrame(
+                                                                lastView,
+                                                                new CompletableFuture<>());
+                                                        flush();
+                                                      }
+                                                    }));
+                                  }));
+                    }));
+          });
+      return result;
+    }
+
+    public CompletionStage<Void> closeAsync() {
+      synchronized (this) {
+        if (closeResult != null) return closeResult;
+        closeResult = new CompletableFuture<>();
+        closed.set(true);
+      }
+      queue.execute(
+          () -> {
+            generation++;
+            waits.forEach(PendingOperation::cancel);
+            waits.clear();
+            var error = new CancellationException("Surface closed");
+            outstanding.forEach(f -> f.completeExceptionally(error));
+            outstanding.clear();
+            if (pending != null) {
+              pending.result().completeExceptionally(error);
+              pending = null;
+            }
+            scope
+                .closeAsync()
+                .whenComplete(
+                    (v, e) ->
+                        queue.execute(
+                            () -> {
+                              surface = null;
+                              lastView = null;
+                              ready.completeExceptionally(
+                                  preparationFailure == null ? error : preparationFailure);
+                              if (e == null) closeResult.complete(null);
+                              else closeResult.completeExceptionally(e);
+                            }));
+          });
+      return closeResult;
+    }
+  }
 }

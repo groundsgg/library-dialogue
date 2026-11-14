@@ -4,3 +4,6 @@
 .superpowers/
 *.local
 .idea/
+__pycache__/
+*.pyc
+.kotlin/

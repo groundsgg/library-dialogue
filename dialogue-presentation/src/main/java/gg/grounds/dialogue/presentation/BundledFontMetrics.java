@@ -1,9 +1,58 @@
 package gg.grounds.dialogue.presentation;
-import java.util.*;
+
 import java.io.*;
+import java.util.*;
+
 final class BundledFontMetrics implements FontMetrics {
- static final BundledFontMetrics INSTANCE=new BundledFontMetrics();private final Map<Integer,Double> advances;private final String pin;private final double height;
- private BundledFontMetrics(){try(var in=getClass().getResourceAsStream("/default-theme/metrics.properties")){if(in==null)throw new IllegalStateException("Missing bundled metrics");byte[] metrics=in.readAllBytes();var p=new Properties();p.load(new ByteArrayInputStream(metrics));try(var font=getClass().getResourceAsStream("/default-theme/DejaVuSans.ttf")){if(font==null)throw new IllegalStateException("Missing bundled font");byte[] bytes=font.readAllBytes();if(!gg.grounds.dialogue.core.validation.ContentFingerprint.hash(bytes).sha256().equals(p.getProperty("fontSha256")))throw new IllegalStateException("Font/source pin mismatch");var combined=new ByteArrayOutputStream();combined.writeBytes(bytes);combined.writeBytes(metrics);pin=gg.grounds.dialogue.core.validation.ContentFingerprint.hash(combined.toByteArray()).sha256();}height=Double.parseDouble(p.getProperty("lineHeight"));var map=new HashMap<Integer,Double>();for(String key:p.stringPropertyNames())if(key.startsWith("glyph."))map.put(Integer.parseInt(key.substring(6)),Double.parseDouble(p.getProperty(key)));advances=Map.copyOf(map);}catch(IOException e){throw new UncheckedIOException(e);}}
- public double width(String grapheme){if(grapheme.codePointCount(0,grapheme.length())!=1)throw new IllegalArgumentException("MISSING_GLYPH");Double width=advances.get(grapheme.codePointAt(0));if(width==null)throw new IllegalArgumentException("MISSING_GLYPH");return width;}
- public double lineHeight(){return height;}public String pin(){return pin;}
+  static final BundledFontMetrics INSTANCE = new BundledFontMetrics();
+  private final Map<Integer, Double> advances;
+  private final String pin;
+  private final double height;
+
+  private BundledFontMetrics() {
+    try (var in = getClass().getResourceAsStream("/default-theme/metrics.properties")) {
+      if (in == null) throw new IllegalStateException("Missing bundled metrics");
+      byte[] metrics = in.readAllBytes();
+      var p = new Properties();
+      p.load(new ByteArrayInputStream(metrics));
+      try (var font = getClass().getResourceAsStream("/default-theme/DejaVuSans.ttf")) {
+        if (font == null) throw new IllegalStateException("Missing bundled font");
+        byte[] bytes = font.readAllBytes();
+        if (!gg.grounds.dialogue.core.validation.ContentFingerprint.hash(bytes)
+            .sha256()
+            .equals(p.getProperty("fontSha256")))
+          throw new IllegalStateException("Font/source pin mismatch");
+        var combined = new ByteArrayOutputStream();
+        combined.writeBytes(bytes);
+        combined.writeBytes(metrics);
+        pin =
+            gg.grounds.dialogue.core.validation.ContentFingerprint.hash(combined.toByteArray())
+                .sha256();
+      }
+      height = Double.parseDouble(p.getProperty("lineHeight"));
+      var map = new HashMap<Integer, Double>();
+      for (String key : p.stringPropertyNames())
+        if (key.startsWith("glyph."))
+          map.put(Integer.parseInt(key.substring(6)), Double.parseDouble(p.getProperty(key)));
+      advances = Map.copyOf(map);
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
+  }
+
+  public double width(String grapheme) {
+    if (grapheme.codePointCount(0, grapheme.length()) != 1)
+      throw new IllegalArgumentException("MISSING_GLYPH");
+    Double width = advances.get(grapheme.codePointAt(0));
+    if (width == null) throw new IllegalArgumentException("MISSING_GLYPH");
+    return width;
+  }
+
+  public double lineHeight() {
+    return height;
+  }
+
+  public String pin() {
+    return pin;
+  }
 }
