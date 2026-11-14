@@ -87,7 +87,7 @@ public final class HudDialogueSurface implements DialogueSurface {
                 context.cancellation().cancel(DialogueEndReason.FAILED);
                 closeAsync();
               });
-      scope = new OwnedScope(queue, clock, Duration.ofSeconds(30));
+      scope = new OwnedScope(queue, clock, context.cleanupBudget());
     }
 
     void begin() {

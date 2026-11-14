@@ -27,6 +27,9 @@ public final class MinestomDialogueSession {
   private volatile DialogueHandle handle;
   private volatile DialogueView view;
   private DialogueStartResult.Rejected rejection;
+  private MinestomSpeakerBinding lastSpeaker, sampledSpeaker;
+  private gg.grounds.dialogue.minestom.geometry.DialogueLeavePolicy leave;
+  private final java.time.Duration distanceGrace;
 
   public MinestomDialogueSession(
       MinestomDialogueRequest request,
@@ -44,6 +47,9 @@ public final class MinestomDialogueSession {
     this.ready = ready;
     this.closed = closed;
     this.scheduler = scheduler;
+    distanceGrace = options.distanceGrace();
+    lastSpeaker =
+        request.speakers().size() == 1 ? request.speakers().values().iterator().next() : null;
     runtime = DialogueRuntime.create(new RuntimeOptions(scheduler, options.budgets(), 65536, 256));
     impulse = new AtomicLong(request.openingImpulse());
     inputs =
@@ -95,7 +101,8 @@ public final class MinestomDialogueSession {
             },
             (from, to) ->
                 gg.grounds.dialogue.minestom.geometry.MinestomOcclusion.visible(
-                    request.player().getInstance(), from, to));
+                    request.player().getInstance(), from, to),
+            options.budgets());
   }
 
   public void begin() {
@@ -105,6 +112,16 @@ public final class MinestomDialogueSession {
       return;
     }
     var q = request;
+    try {
+      for (var binding : q.speakers().values())
+        if (binding.instance() != q.player().getInstance() || !binding.snapshot().get().valid()) {
+          cancel(DialogueEndReason.HOST_CHANGED);
+          return;
+        }
+    } catch (Throwable error) {
+      cancel(DialogueEndReason.HOST_CHANGED);
+      return;
+    }
     var services = q.services();
     DialogueRenderer decorated =
         prepare ->
@@ -195,17 +212,25 @@ public final class MinestomDialogueSession {
             });
   }
 
-  private boolean validAnchor() {
+  private MinestomSpeakerBinding currentBinding() {
     var q = request;
     var current = view;
-    if (q == null || current == null) return true;
-    var node = q.content().definition().nodes().get(current.nodeId());
-    if (!(node instanceof DialogueDefinition.Message message)) return true;
-    var binding = q.speakers().get(message.speaker());
+    if (q == null) return null;
+    if (current != null
+        && q.content().definition().nodes().get(current.nodeId())
+            instanceof DialogueDefinition.Message message)
+      lastSpeaker = q.speakers().get(message.speaker());
+    return lastSpeaker;
+  }
+
+  private boolean validAnchor() {
+    var q = request;
+    if (q == null) return true;
+    var binding = currentBinding();
     if (binding == null) return !q.preferences().surfaceKey().equals("npc");
     try {
       return binding.instance() == q.player().getInstance() && binding.snapshot().get().valid();
-    } catch (Throwable ignored) {
+    } catch (Throwable failure) {
       return false;
     }
   }
@@ -219,7 +244,59 @@ public final class MinestomDialogueSession {
   }
 
   public void checkConnection() {
-    if (!guard.isCurrent() || !validAnchor()) cancel(DialogueEndReason.HOST_CHANGED);
+    if (finishing.get()) return;
+    if (!guard.isCurrent() || !validAnchor()) {
+      cancel(DialogueEndReason.HOST_CHANGED);
+      return;
+    }
+    var q = request;
+    var binding = currentBinding();
+    if (q == null || binding == null) return;
+    try {
+      var anchor = binding.snapshot().get();
+      if (!anchor.valid()) {
+        cancel(DialogueEndReason.HOST_CHANGED);
+        return;
+      }
+      if (sampledSpeaker != binding) {
+        sampledSpeaker = binding;
+        leave =
+            new gg.grounds.dialogue.minestom.geometry.DialogueLeavePolicy(
+                q.content().definition().interaction(), distanceGrace);
+      }
+      var eye = q.player().getPosition().add(0, q.player().getEyeHeight(), 0);
+      var toward = anchor.lookOrigin().sub(eye).asVec();
+      double angle =
+          toward.lengthSquared() < 1e-12
+              ? 0
+              : Math.toDegrees(
+                  Math.acos(
+                      Math.clamp(
+                          q.player().getPosition().direction().dot(toward) / toward.length(),
+                          -1,
+                          1)));
+      double distance = q.player().getPosition().distance(anchor.feet());
+      boolean onFront = false;
+      if (renderer instanceof DialogueInputSource source) {
+        var geometry = source.npcGeometry();
+        var targets = source.targets();
+        if (geometry != null
+            && targets != null
+            && geometry.surfaceGeneration() == targets.surfaceGeneration())
+          onFront =
+              gg.grounds.dialogue.minestom.geometry.NpcHitTest.inDialogueZone(
+                  eye,
+                  q.player().getPosition().direction(),
+                  geometry.transform(),
+                  geometry.fronts(),
+                  (from, to) ->
+                      gg.grounds.dialogue.minestom.geometry.MinestomOcclusion.visible(
+                          q.player().getInstance(), from, to));
+      }
+      leave.observe(angle, distance, onFront, scheduler.nanoTime()).ifPresent(this::cancel);
+    } catch (Throwable error) {
+      cancel(DialogueEndReason.HOST_CHANGED);
+    }
   }
 
   public void cancel(DialogueEndReason reason) {
@@ -295,6 +372,9 @@ public final class MinestomDialogueSession {
                 renderer = null;
                 view = null;
                 handle = null;
+                lastSpeaker = null;
+                sampledSpeaker = null;
+                leave = null;
               }
               callback.accept(this, failure);
             });

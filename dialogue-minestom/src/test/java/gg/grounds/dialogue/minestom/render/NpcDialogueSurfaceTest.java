@@ -29,6 +29,8 @@ class NpcDialogueSurfaceTest {
   static class Fixture {
     final Player a, b;
     final SurfaceInputTargets targets = new SurfaceInputTargets();
+    final java.util.concurrent.atomic.AtomicReference<Vec> feet =
+        new java.util.concurrent.atomic.AtomicReference<>(new Vec(0, 42, 0));
     final NpcDialogueSurface surface;
 
     Fixture(Env env, CompletableFuture<Void> gate) {
@@ -45,7 +47,7 @@ class NpcDialogueSurfaceTest {
               instance,
               () ->
                   new MinestomSpeakerBinding.AnchorSnapshot(
-                      new Vec(0, 42, 0), 0, new Vec(0, 43.6, 0), true));
+                      feet.get(), 0, feet.get().add(0, 1.6, 0), true));
       surface =
           new NpcDialogueSurface(
               a,
@@ -186,6 +188,18 @@ class NpcDialogueSurfaceTest {
         frame.widgets().stream().filter(w -> "c4".equals(w.choiceId())).findFirst().orElseThrow();
     assertEquals(1.08, selected.visualScale());
     assertEquals(selected.bounds(), f.targets.current().choices().get("c4"));
+    done(env, h.closeAsync());
+  }
+
+  @Test
+  void movedAnchorIsAppliedBeforeFrameAcknowledgement(Env env) {
+    var f = new Fixture(env, CompletableFuture.completedFuture(null));
+    var h = f.open(env);
+    var frame = RenderFixtures.frame("npc", "Hello", 5);
+    done(env, h.replace(frame));
+    f.feet.set(new Vec(4, 42, 0));
+    done(env, h.replace(frame));
+    for (var display : f.displays()) assertEquals(4, display.getPosition().x(), 1e-6);
     done(env, h.closeAsync());
   }
 

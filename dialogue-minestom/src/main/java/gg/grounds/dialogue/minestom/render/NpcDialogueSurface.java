@@ -164,6 +164,7 @@ public final class NpcDialogueSurface implements DialogueSurface {
     OutputChannels.HudLease hud;
     OutputChannels.EffectLease effects;
     long epoch;
+    CompletionStage<Void> movement = CompletableFuture.completedFuture(null);
 
     Handle(SurfaceContext context) {
       this.context = context;
@@ -176,7 +177,7 @@ public final class NpcDialogueSurface implements DialogueSurface {
                 context.cancellation().cancel(DialogueEndReason.FAILED);
                 closeAsync();
               });
-      scope = new OwnedScope(queue, clock, Duration.ofSeconds(30));
+      scope = new OwnedScope(queue, clock, context.cleanupBudget());
     }
 
     public CompletionStage<Void> configure(PresentationPreferences value) {
@@ -251,6 +252,10 @@ public final class NpcDialogueSurface implements DialogueSurface {
               if (encoded.widgets().size() * 2 + (focus ? 1 : 0) > 32)
                 throw new DialogueFailure("DISPLAY_LIMIT", "NPC display budget exceeded");
               long operation = ++epoch;
+              if (follow != null) {
+                follow.cancel();
+                follow = null;
+              }
               targets.invalidateCurrent(context.generation());
               double height =
                   next.widgets().stream()
@@ -341,6 +346,9 @@ public final class NpcDialogueSurface implements DialogueSurface {
                                                 return;
                                               }
                                               var outputs = new ArrayList<CompletableFuture<?>>();
+                                              outputs.add(
+                                                  positionDisplays(transform.position())
+                                                      .toCompletableFuture());
                                               if (hud != null)
                                                 outputs.add(
                                                     hud.replace(
@@ -450,15 +458,57 @@ public final class NpcDialogueSurface implements DialogueSurface {
       geometry = new Geometry(transform, fronts, context.generation());
     }
 
+    CompletionStage<Void> positionDisplays(Pos position) {
+      var result = new CompletableFuture<Void>();
+      var previous = movement;
+      movement = result.minimalCompletionStage();
+      previous.whenComplete(
+          (v, oldError) ->
+              queue.execute(
+                  () -> {
+                    if (oldError != null) {
+                      result.completeExceptionally(oldError);
+                      return;
+                    }
+                    if (closed.get()
+                        || !guard.isCurrent()
+                        || context.cancellation().isCancelled()) {
+                      result.completeExceptionally(new CancellationException());
+                      return;
+                    }
+                    var moves = new ArrayList<CompletableFuture<?>>();
+                    try {
+                      for (var pair : panels.values())
+                        for (var d : pair)
+                          if (!d.entity.getPosition().equals(position))
+                            moves.add(d.entity.teleport(position));
+                      if (backdrop != null && !backdrop.entity.getPosition().equals(position))
+                        moves.add(backdrop.entity.teleport(position));
+                      CompletableFuture.allOf(moves.toArray(CompletableFuture[]::new))
+                          .whenComplete(
+                              (u, error) -> {
+                                if (error == null) result.complete(null);
+                                else result.completeExceptionally(error);
+                              });
+                    } catch (Throwable error) {
+                      result.completeExceptionally(error);
+                    }
+                  }));
+      return result.minimalCompletionStage();
+    }
+
     void startFollow() {
       if (follow != null) follow.cancel();
+      long followingEpoch = epoch;
       follow =
           clock.schedule(
               Duration.ofMillis(50),
               () ->
                   queue.execute(
                       () -> {
-                        if (closed.get() || context.cancellation().isCancelled()) return;
+                        if (closed.get()
+                            || context.cancellation().isCancelled()
+                            || followingEpoch != epoch) return;
                         try {
                           if (!guard.isCurrent()
                               || binding.instance() != player.getInstance()
@@ -466,19 +516,30 @@ public final class NpcDialogueSurface implements DialogueSurface {
                             context.cancellation().cancel(DialogueEndReason.HOST_CHANGED);
                             return;
                           }
-                          transform =
+                          var next =
                               NpcPanelTransform.from(binding.snapshot().get(), eye())
                                   .withSpeechHeight(transform.speechHeight());
-                          var pos = transform.position();
-                          for (var pair : panels.values())
-                            for (var d : pair)
-                              if (!d.entity.getPosition().equals(pos)) d.entity.teleport(pos);
-                          if (backdrop != null && !backdrop.entity.getPosition().equals(pos))
-                            backdrop.entity.teleport(pos);
-                          geometry =
-                              new Geometry(transform, geometry.fronts(), context.generation());
-                          startFollow();
-                        } catch (Throwable failure) {
+                          positionDisplays(next.position())
+                              .whenComplete(
+                                  (v, error) ->
+                                      queue.execute(
+                                          () -> {
+                                            if (closed.get() || followingEpoch != epoch) return;
+                                            if (error != null) {
+                                              context
+                                                  .cancellation()
+                                                  .cancel(DialogueEndReason.HOST_CHANGED);
+                                              return;
+                                            }
+                                            transform = next;
+                                            geometry =
+                                                new Geometry(
+                                                    transform,
+                                                    geometry.fronts(),
+                                                    context.generation());
+                                            startFollow();
+                                          }));
+                        } catch (Throwable error) {
                           context.cancellation().cancel(DialogueEndReason.HOST_CHANGED);
                         }
                       }));

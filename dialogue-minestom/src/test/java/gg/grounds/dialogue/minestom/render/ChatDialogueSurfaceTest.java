@@ -186,4 +186,69 @@ class ChatDialogueSurfaceTest {
     for (int i = 0; i < 7; i++) assertTrue(plain.contains("Choice " + i));
     h.closeAsync().toCompletableFuture().join();
   }
+
+  @Test
+  void sixtyFourChoicesFitTokenBudget(Env env) {
+    var p = env.createConnection().connect(env.createFlatInstance(), new Pos(0, 42, 0));
+    var targets = new SurfaceInputTargets();
+    var t = new ChatInputTokens(p, 1, targets, System::nanoTime);
+    var out = new ArrayList<Component>();
+    var s =
+        new ChatDialogueSurface(
+            new ConnectionGuard(p, 1, p.getInstance()),
+            targets,
+            t,
+            c -> {
+              out.add(c);
+              return CompletableFuture.completedFuture(null);
+            },
+            UiLabelSource.defaults(),
+            DialoguePresenter.Controls.defaults(),
+            "/testinput");
+    var h =
+        s.open(
+                new DialogueSurface.SurfaceContext(
+                    RenderFixtures.SESSION,
+                    p.getUuid().toString(),
+                    1,
+                    "chat",
+                    "semantic",
+                    new CancellationToken(),
+                    1,
+                    Long.MAX_VALUE))
+            .toCompletableFuture()
+            .join();
+    var v = RenderFixtures.view("Hello", 5);
+    var choices = new ArrayList<DialogueView.ChoiceView>();
+    for (int i = 0; i < 64; i++)
+      choices.add(
+          new DialogueView.ChoiceView(
+              "c" + i, "Choice " + i, DialogueView.Availability.AVAILABLE, ""));
+    var next =
+        new DialogueView(
+            v.sessionId(),
+            v.contentPin(),
+            v.nodeId(),
+            v.nodeVisitId(),
+            DialogueView.State.WAITING_FOR_INPUT,
+            2,
+            2,
+            v.localeTag(),
+            v.speaker(),
+            v.text(),
+            choices,
+            "c0",
+            5,
+            5,
+            DialogueView.HintPhase.CHOOSE,
+            "",
+            null);
+    h.replace(new WidgetFrame(next, List.of(), "semantic", "semantic"))
+        .toCompletableFuture()
+        .join();
+    assertEquals(64, targets.current().choices().size());
+    var plain = PlainTextComponentSerializer.plainText().serialize(out.getFirst());
+    for (int i = 0; i < 64; i++) assertTrue(plain.contains("Choice " + i));
+    h.closeAsync().toCompletableFuture().join();
+  }
 }

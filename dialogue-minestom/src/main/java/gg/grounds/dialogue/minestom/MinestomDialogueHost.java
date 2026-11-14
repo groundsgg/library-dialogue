@@ -154,6 +154,9 @@ public final class MinestomDialogueHost {
             targets,
             clock,
             diagnostics);
+    var lastSpeaker =
+        new java.util.concurrent.atomic.AtomicReference<MinestomSpeakerBinding>(
+            q.speakers().size() == 1 ? q.speakers().values().iterator().next() : null);
     var npc =
         new gg.grounds.dialogue.minestom.render.NpcDialogueSurface(
             q.player(),
@@ -166,10 +169,9 @@ public final class MinestomDialogueHost {
             clock,
             v -> {
               var node = q.content().definition().nodes().get(v.nodeId());
-              return node
-                      instanceof gg.grounds.dialogue.core.definition.DialogueDefinition.Message m
-                  ? q.speakers().get(m.speaker())
-                  : null;
+              if (node instanceof gg.grounds.dialogue.core.definition.DialogueDefinition.Message m)
+                lastSpeaker.set(q.speakers().get(m.speaker()));
+              return lastSpeaker.get();
             },
             diagnostics);
     return new gg.grounds.dialogue.minestom.render.MinestomDialogueRenderer(

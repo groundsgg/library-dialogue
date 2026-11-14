@@ -143,6 +143,46 @@ class InputSafetyTest {
   }
 
   @Test
+  void inputPreparationHasDeadlineAndOwnsLateCatcher(Env env) {
+    var f = new Fixture(env);
+    var clock = new MinestomDialogueScheduler(f.player.getInstance());
+    var guard = new ConnectionGuard(f.player, 1, f.player.getInstance());
+    var gate = new CompletableFuture<Void>();
+    var budget =
+        new RuntimeOptions.Budgets(
+            Duration.ofSeconds(2),
+            Duration.ofMillis(25),
+            Duration.ofSeconds(10),
+            Duration.ofSeconds(1));
+    var adapter =
+        new MinestomInputAdapter(
+            f.player,
+            1,
+            guard,
+            InputProfile.defaults(),
+            clock,
+            new CancellationToken(),
+            f,
+            (a, b) -> true,
+            budget,
+            () ->
+                PrivateInteractionCatcher.open(f.player, guard)
+                    .thenCompose(c -> gate.thenApply(v -> c)));
+    var active = adapter.activate();
+    assertTrue(env.tickWhile(() -> !active.toCompletableFuture().isDone(), Duration.ofSeconds(1)));
+    assertThrows(CompletionException.class, () -> active.toCompletableFuture().join());
+    var close = adapter.closeAsync();
+    env.tick();
+    assertFalse(close.toCompletableFuture().isDone());
+    gate.complete(null);
+    done(env, close);
+    assertTrue(
+        f.player.getInstance().getEntities().stream()
+            .noneMatch(e -> e.getEntityType() == EntityType.INTERACTION));
+    done(env, f.adapter.closeAsync());
+  }
+
+  @Test
   void queuedScrollWaitsForPublishedCoreSelection(Env env) {
     var f = new Fixture(env);
     done(env, f.adapter.activate());

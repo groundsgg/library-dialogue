@@ -62,6 +62,10 @@ public final class MinestomInputAdapter implements OwnedResource {
   private int followup;
   private PrivateInteractionCatcher catcher;
   private CompletableFuture<Void> preparing;
+  private final RuntimeOptions.Budgets budgets;
+  private final java.util.function.Supplier<CompletionStage<PrivateInteractionCatcher>>
+      catcherFactory;
+  private PendingOperation<PrivateInteractionCatcher> acquireWait;
   private String lastHover;
   private TargetSnapshot.Target observed;
 
@@ -74,6 +78,58 @@ public final class MinestomInputAdapter implements OwnedResource {
       CancellationToken cancellation,
       Target target,
       NpcHitTest.OcclusionTest occlusion) {
+    this(
+        player,
+        generation,
+        guard,
+        profile,
+        clock,
+        cancellation,
+        target,
+        occlusion,
+        new RuntimeOptions.Budgets(
+            Duration.ofSeconds(2),
+            Duration.ofSeconds(5),
+            Duration.ofSeconds(10),
+            Duration.ofSeconds(30)));
+  }
+
+  public MinestomInputAdapter(
+      Player player,
+      long generation,
+      ConnectionGuard guard,
+      InputProfile profile,
+      DialogueScheduler clock,
+      CancellationToken cancellation,
+      Target target,
+      NpcHitTest.OcclusionTest occlusion,
+      RuntimeOptions.Budgets budgets) {
+    this(
+        player,
+        generation,
+        guard,
+        profile,
+        clock,
+        cancellation,
+        target,
+        occlusion,
+        budgets,
+        () -> PrivateInteractionCatcher.open(player, guard));
+  }
+
+  MinestomInputAdapter(
+      Player player,
+      long generation,
+      ConnectionGuard guard,
+      InputProfile profile,
+      DialogueScheduler clock,
+      CancellationToken cancellation,
+      Target target,
+      NpcHitTest.OcclusionTest occlusion,
+      RuntimeOptions.Budgets budgets,
+      java.util.function.Supplier<CompletionStage<PrivateInteractionCatcher>> catcherFactory) {
+    this.budgets = Objects.requireNonNull(budgets);
+    this.catcherFactory = Objects.requireNonNull(catcherFactory);
     this.player = player;
     this.generation = generation;
     this.guard = guard;
@@ -92,7 +148,7 @@ public final class MinestomInputAdapter implements OwnedResource {
               cancellation.cancel(DialogueEndReason.FAILED);
               closeAsync();
             });
-    scope = new OwnedScope(queue, clock, Duration.ofSeconds(30));
+    scope = new OwnedScope(queue, clock, budgets.cleanup());
   }
 
   private boolean active() {
@@ -146,31 +202,32 @@ public final class MinestomInputAdapter implements OwnedResource {
     acquiring = true;
     preparing = new CompletableFuture<>();
     var promise = preparing;
-    scope
-        .prepare(() -> PrivateInteractionCatcher.open(player, guard))
-        .whenComplete(
-            (value, error) ->
-                queue.execute(
-                    () -> {
-                      acquiring = false;
-                      if (error != null) {
-                        promise.completeExceptionally(error);
-                        return;
-                      }
-                      if (!active() || !graphical()) {
-                        scope
-                            .release(value)
-                            .whenComplete(
-                                (v, e) -> {
-                                  if (e == null) promise.complete(null);
-                                  else promise.completeExceptionally(e);
-                                });
-                      } else {
-                        catcher = value;
-                        value.publish();
-                        promise.complete(null);
-                      }
-                    }));
+    acquireWait =
+        new PendingOperation<>(
+            queue,
+            clock,
+            budgets.prepare(),
+            scope.prepare(catcherFactory),
+            (value, error) -> {
+              acquiring = false;
+              if (error != null) {
+                promise.completeExceptionally(error);
+                return;
+              }
+              if (!active() || !graphical())
+                scope
+                    .release(value)
+                    .whenComplete(
+                        (v, e) -> {
+                          if (e == null) promise.complete(null);
+                          else promise.completeExceptionally(e);
+                        });
+              else {
+                catcher = value;
+                value.publish();
+                promise.complete(null);
+              }
+            });
     return promise.minimalCompletionStage();
   }
 
@@ -441,6 +498,9 @@ public final class MinestomInputAdapter implements OwnedResource {
       queue.execute(
           () -> {
             packets.clear();
+            if (acquireWait != null) acquireWait.cancel();
+            if (preparing != null && !preparing.isDone())
+              preparing.completeExceptionally(new CancellationException());
             if (scrolled && player.isOnline())
               player.sendPacket(new HeldItemChangePacket(player.getHeldSlot()));
             scope

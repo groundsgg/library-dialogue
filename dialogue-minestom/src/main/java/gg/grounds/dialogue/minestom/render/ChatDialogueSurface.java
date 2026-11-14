@@ -113,7 +113,7 @@ public final class ChatDialogueSurface implements DialogueSurface {
               out = out.appendNewline().append(row);
             }
             Component hint = Component.text(ui.hint(), NamedTextColor.GRAY);
-            if (v.hint() != DialogueView.HintPhase.BUSY)
+            if (v.hint() != DialogueView.HintPhase.BUSY && choices.isEmpty())
               hint =
                   hint.clickEvent(
                       ClickEvent.runCommand(route + " " + tokens.issue(null, snapshot)));
