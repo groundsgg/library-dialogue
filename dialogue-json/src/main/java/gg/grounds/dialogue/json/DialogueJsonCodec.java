@@ -65,6 +65,16 @@ public final class DialogueJsonCodec {
     }
   }
 
+  private static HostCatalog.Kind kind(String tag) {
+    return switch (tag) {
+      case "text" -> HostCatalog.Kind.TEXT;
+      case "number" -> HostCatalog.Kind.NUMBER;
+      case "boolean" -> HostCatalog.Kind.BOOLEAN;
+      case "null" -> HostCatalog.Kind.NULL;
+      default -> throw new IllegalArgumentException("Unknown argument type " + tag);
+    };
+  }
+
   public ContextResult prepareContext(Map<String, byte[]> texts, byte[] hostCatalog) {
     String file = "texts";
     try {
@@ -87,6 +97,8 @@ public final class DialogueJsonCodec {
       if (!problems.isEmpty()) return new ContextResult(problems, null);
       file = "context/host-catalog.json";
       var h = host(obj(parse(hostCatalog, limits.textPackageBytes(), file)));
+      var hostProblems = h.structuralProblems(limits);
+      if (!hostProblems.isEmpty()) return new ContextResult(hostProblems, null);
       return new ContextResult(List.of(), new PreparedContext(catalogue, h, limits));
     } catch (DecodeFailure e) {
       return new ContextResult(
@@ -156,6 +168,48 @@ public final class DialogueJsonCodec {
     return ContentFingerprint.definitionBytes(d);
   }
 
+  // Gson's long accumulator can misclassify valid large integers ending in zeros.
+  // Normalize only lexically valid JSON number tokens; strict structural parsing stays enabled.
+  private static String normalizeNumbers(String source, String file) {
+    var result = new StringBuilder(source.length());
+    boolean quoted = false, escaped = false;
+    for (int i = 0; i < source.length(); ) {
+      char c = source.charAt(i);
+      if (quoted) {
+        result.append(c);
+        i++;
+        if (escaped) escaped = false;
+        else if (c == '\\') escaped = true;
+        else if (c == '"') quoted = false;
+        continue;
+      }
+      if (c == '"') {
+        quoted = true;
+        result.append(c);
+        i++;
+        continue;
+      }
+      if (c == '-' || (c >= '0' && c <= '9')) {
+        int end = i + 1;
+        while (end < source.length() && " \t\r\n,]}:{".indexOf(source.charAt(end)) < 0) end++;
+        String token = source.substring(i, end);
+        if (token.length() > 440) throw fail("NUMBER_LIMIT", file, "/", "Oversized number token");
+        if (!token.matches("-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?"))
+          throw fail("JSON_INVALID", file, "/", "Invalid JSON number");
+        var number = new BigDecimal(token).stripTrailingZeros();
+        if (number.precision() > 128
+            || Math.abs((long) number.precision() - number.scale() - 1) > 308)
+          throw fail("NUMBER_LIMIT", file, "/", "Numeric precision/exponent exceeded");
+        result.append(number.toString());
+        i = end;
+      } else {
+        result.append(c);
+        i++;
+      }
+    }
+    return result.toString();
+  }
+
   private JsonElement parse(byte[] bytes, int max, String file) {
     if (bytes.length > max) throw fail("CONTENT_LIMIT", file, "/", "Input byte limit exceeded");
     try {
@@ -168,7 +222,7 @@ public final class DialogueJsonCodec {
               .toString();
       if (source.startsWith("\ufeff"))
         throw fail("UTF8_BOM", file, "/", "UTF-8 BOM is not accepted");
-      var reader = new JsonReader(new StringReader(source));
+      var reader = new JsonReader(new StringReader(normalizeNumbers(source, file)));
       reader.setStrictness(Strictness.STRICT);
       var result = read(reader, 0, file);
       if (reader.peek() != JsonToken.END_DOCUMENT)
@@ -216,7 +270,7 @@ public final class DialogueJsonCodec {
         String number = r.nextString();
         if (number.length() > 440)
           throw fail("NUMBER_LIMIT", file, r.getPath(), "Oversized number token");
-        var n = new BigDecimal(number);
+        var n = new BigDecimal(number).stripTrailingZeros();
         if (n.precision() > 128 || Math.abs((long) n.precision() - n.scale() - 1) > 308)
           throw fail("NUMBER_LIMIT", file, r.getPath(), "Numeric precision/exponent exceeded");
         yield new JsonPrimitive(n);
@@ -390,6 +444,12 @@ public final class DialogueJsonCodec {
     return switch (s(o, "type")) {
       case "message" -> {
         fields(o, "type", "speaker", "text", "presentation", "choices", "next");
+        if (o.has("choices") == o.has("next"))
+          throw fail(
+              "MESSAGE_SHAPE",
+              "dialogue.json",
+              "/nodes",
+              "Message requires exactly one of choices or next");
         String gesture = null;
         if (o.has("presentation")) {
           var p = obj(o.get("presentation"));
@@ -506,7 +566,7 @@ public final class DialogueJsonCodec {
                         args.put(
                             a.getKey(),
                             new HostCatalog.ArgumentSpec(
-                                HostCatalog.Kind.valueOf(s(shape, "type").toUpperCase(Locale.ROOT)),
+                                kind(s(shape, "type")),
                                 bool(shape, "required", false),
                                 bool(shape, "nullable", false)));
                       });

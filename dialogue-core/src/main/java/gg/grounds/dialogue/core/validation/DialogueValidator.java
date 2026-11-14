@@ -153,7 +153,7 @@ public final class DialogueValidator {
       id(d.id(), "/id", null);
       id(d.entry(), "/entry", null);
       if (d.contentVersion().isBlank()
-          || d.contentVersion().length() > 128
+          || d.contentVersion().codePointCount(0, d.contentVersion().length()) > 128
           || !validUnicode(d.contentVersion()))
         problem(
             "CONTENT_VERSION_INVALID",
@@ -180,6 +180,10 @@ public final class DialogueValidator {
         problem(
             "LOCALE_DEFAULT", "/locales", null, "Default must belong to bounded supported locales");
       problems.addAll(texts.structuralProblems(l));
+      problems.addAll(host.structuralProblems(l));
+      d.capabilities().required().forEach(v -> id(v, "/capabilities/required", null));
+      d.capabilities().optional().forEach(v -> id(v, "/capabilities/optional", null));
+      d.presentation().hideHud().forEach(v -> id(v, "/presentation/hideHud", null));
       for (String c : d.capabilities().required())
         if (!host.capabilities().contains(c))
           problem(

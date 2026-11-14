@@ -14,6 +14,7 @@ public sealed interface ArgumentValue {
   record Number(BigDecimal value) implements ArgumentValue {
     public Number {
       Objects.requireNonNull(value);
+      value = value.stripTrailingZeros();
     }
   }
 

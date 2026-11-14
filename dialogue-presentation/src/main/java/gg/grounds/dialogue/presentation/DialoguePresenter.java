@@ -189,7 +189,7 @@ public final class DialoguePresenter implements DialogueRenderer {
             null,
             p,
             preferences));
-    return new WidgetFrame(view, widgets, metrics.pin(), p.theme().id());
+    return new WidgetFrame(view, widgets, metrics.pin(), p.theme());
   }
 
   private static TextLayout.TextLayoutResult layout(
@@ -255,7 +255,41 @@ public final class DialoguePresenter implements DialogueRenderer {
   public CompletionStage<PresentationHandle> prepare(PresentationRequest request) {
     var session = new SurfaceSession(request);
     session.begin();
-    return session.ready;
+    return session.ready.minimalCompletionStage();
+  }
+
+  private static String profilePin(SurfaceProfile profile) {
+    if (profile.semanticOnly()) return "semantic";
+    var l = profile.layout();
+    var t = profile.theme();
+    var layout = new LinkedHashMap<String, Object>();
+    layout.put("key", l.key());
+    layout.put("width", l.width());
+    layout.put("choiceWidth", l.choiceWidth());
+    layout.put("padding", l.padding());
+    layout.put("maxTextLines", l.maxTextLines());
+    layout.put("choiceCapacity", l.choiceCapacity());
+    layout.put("maxChoiceLines", l.maxChoiceLines());
+    layout.put("placement", l.placement().name().toLowerCase(Locale.ROOT));
+    layout.put("gap", l.gap());
+    return ContentFingerprint.hash(
+            ContentFingerprint.canonicalBytes(
+                Map.of(
+                    "layout",
+                    layout,
+                    "theme",
+                    Map.of(
+                        "id",
+                        t.id(),
+                        "colours",
+                        t.colours(),
+                        "selectedScale",
+                        t.selectedScale(),
+                        "transitionNanos",
+                        t.transition().toNanos()),
+                    "font",
+                    profile.metrics().pin())))
+        .sha256();
   }
 
   private final class SurfaceSession implements PresentationHandle {
@@ -267,16 +301,41 @@ public final class DialoguePresenter implements DialogueRenderer {
     final List<CompletableFuture<Void>> outstanding = new ArrayList<>();
     final List<PendingOperation<?>> waits = new ArrayList<>();
     CompletableFuture<Void> closeResult;
+    CompletionStage<Void> closeView;
     Throwable preparationFailure;
     PresentationPreferences preferences;
     DialogueSurface.SurfaceHandle surface;
     String surfaceKey;
     DialogueView lastView;
-    long generation, outputGeneration;
-    boolean rendering;
-    PendingFrame pending;
+    long generation, outputGeneration, lastWritten = -1;
+    PendingFrame pending, inflight;
+    Switch changing;
 
-    record PendingFrame(DialogueView view, CompletableFuture<Void> result) {}
+    final class PendingFrame {
+      final DialogueView view;
+      final List<CompletableFuture<Void>> waiters = new ArrayList<>();
+
+      PendingFrame(DialogueView view) {
+        this.view = view;
+      }
+    }
+
+    final class Switch {
+      final long gen, deadline;
+      final PresentationPreferences next;
+      final CompletableFuture<Void> result;
+      final CompletableFuture<Void> work = new CompletableFuture<>();
+      DialogueSurface.SurfaceHandle candidate;
+      boolean committed;
+
+      Switch(
+          long gen, long deadline, PresentationPreferences next, CompletableFuture<Void> result) {
+        this.gen = gen;
+        this.deadline = deadline;
+        this.next = next;
+        this.result = result;
+      }
+    }
 
     SurfaceSession(PresentationRequest request) {
       this.request = request;
@@ -285,11 +344,19 @@ public final class DialoguePresenter implements DialogueRenderer {
       queue =
           new SerialCommandQueue(
               clock,
-              e -> {
-                ready.completeExceptionally(e);
+              error -> {
+                preparationFailure = error;
                 closeAsync();
               });
-      scope = new OwnedScope(queue, clock, Duration.ofSeconds(30));
+      scope = new OwnedScope(queue, clock, request.budgets().cleanup());
+    }
+
+    boolean valid(Switch op) {
+      return !closed.get()
+          && op == changing
+          && op.gen == generation
+          && !op.result.isDone()
+          && clock.nanoTime() < op.deadline;
     }
 
     void begin() {
@@ -303,13 +370,13 @@ public final class DialoguePresenter implements DialogueRenderer {
                 () ->
                     CompletableFuture.completedFuture(
                         request.cancellation().onCancel(reason -> closeAsync())));
-            long gen = ++generation;
-            CompletionStage<DialogueSurface.SurfaceHandle> opened = open(surfaceKey, gen);
+            if (closed.get()) return;
+            var opened = open(surfaceKey, ++generation, request.deadlineNanos());
             waits.add(
                 new PendingOperation<>(
                     queue,
                     clock,
-                    Duration.ofNanos(Math.max(1, request.deadlineNanos() - clock.nanoTime())),
+                    remaining(request.deadlineNanos()),
                     opened,
                     (value, error) -> {
                       if (closed.get()) return;
@@ -324,23 +391,14 @@ public final class DialoguePresenter implements DialogueRenderer {
           });
     }
 
-    CompletionStage<DialogueSurface.SurfaceHandle> open(String key, long gen) {
+    Duration remaining(long deadline) {
+      return Duration.ofNanos(Math.max(1, deadline - clock.nanoTime()));
+    }
+
+    CompletionStage<DialogueSurface.SurfaceHandle> open(String key, long gen, long deadline) {
       return scope.prepare(
           () -> {
             var p = profile(key);
-            String pin =
-                p.semanticOnly()
-                    ? "semantic"
-                    : ContentFingerprint.hash(
-                            ContentFingerprint.canonicalBytes(
-                                Map.of(
-                                    "layout",
-                                    p.layout().toString(),
-                                    "theme",
-                                    p.theme().toString(),
-                                    "font",
-                                    p.metrics().pin())))
-                        .sha256();
             return p.surface()
                 .open(
                     new DialogueSurface.SurfaceContext(
@@ -348,11 +406,16 @@ public final class DialoguePresenter implements DialogueRenderer {
                         request.audienceId(),
                         request.hostGeneration(),
                         key,
-                        pin,
+                        profilePin(p),
                         request.cancellation(),
                         gen,
-                        request.deadlineNanos()));
+                        deadline));
           });
+    }
+
+    void track(CompletableFuture<Void> result) {
+      outstanding.removeIf(CompletableFuture::isDone);
+      outstanding.add(result);
     }
 
     public CompletionStage<Void> replace(DialogueView view) {
@@ -367,33 +430,52 @@ public final class DialoguePresenter implements DialogueRenderer {
               result.completeExceptionally(new IllegalArgumentException("Foreign session view"));
               return;
             }
+            track(result);
             if (lastView != null && view.stateRevision() < lastView.stateRevision()) {
-              result.complete(null);
+              if (lastWritten >= view.stateRevision()) {
+                result.complete(null);
+                return;
+              }
+              if (pending != null) pending.waiters.add(result);
+              else if (inflight != null) inflight.waiters.add(result);
+              else enqueue(lastView, List.of(result));
               return;
             }
             lastView = view;
-            outstanding.removeIf(CompletableFuture::isDone);
-            outstanding.add(result);
-            if (pending != null) pending.result().complete(null);
-            pending = new PendingFrame(view, result);
-            flush();
+            enqueue(view, List.of(result));
           });
-      return result;
+      return result.minimalCompletionStage();
+    }
+
+    void enqueue(DialogueView view, List<CompletableFuture<Void>> waiters) {
+      var frame = new PendingFrame(view);
+      if (pending != null) frame.waiters.addAll(pending.waiters);
+      frame.waiters.addAll(waiters);
+      pending = frame;
+      flush();
+    }
+
+    void finishFrame(PendingFrame frame, Throwable error) {
+      for (var waiter : frame.waiters) {
+        if (error == null) waiter.complete(null);
+        else waiter.completeExceptionally(error);
+      }
+      frame.waiters.clear();
     }
 
     void flush() {
-      if (closed.get() || rendering || pending == null || surface == null) return;
+      if (closed.get() || inflight != null || pending == null || surface == null) return;
       var frame = pending;
       pending = null;
       WidgetFrame widgets;
       try {
-        widgets = compose(frame.view(), surfaceKey, preferences);
-      } catch (Throwable e) {
-        frame.result().completeExceptionally(e);
+        widgets = compose(frame.view, surfaceKey, preferences);
+      } catch (Throwable error) {
+        finishFrame(frame, error);
         flush();
         return;
       }
-      rendering = true;
+      inflight = frame;
       long gen = outputGeneration;
       var target = surface;
       call(() -> target.replace(widgets))
@@ -401,151 +483,184 @@ public final class DialoguePresenter implements DialogueRenderer {
               (v, error) ->
                   queue.execute(
                       () -> {
-                        if (error == null) frame.result().complete(null);
-                        else frame.result().completeExceptionally(error);
-                        if (gen == outputGeneration) {
-                          rendering = false;
-                          flush();
+                        if (gen != outputGeneration) return;
+                        if (error == null)
+                          lastWritten = Math.max(lastWritten, frame.view.stateRevision());
+                        finishFrame(frame, error);
+                        inflight = null;
+                        flush();
+                      }));
+    }
+
+    void releaseCandidate(DialogueSurface.SurfaceHandle value) {
+      if (value == null) return;
+      scope
+          .release(value)
+          .whenComplete(
+              (v, error) ->
+                  queue.execute(
+                      () -> {
+                        if (error != null) {
+                          preparationFailure = error;
+                          request.cancellation().cancel(DialogueEndReason.FAILED);
+                          closeAsync();
                         }
                       }));
     }
 
+    void reject(Switch op, String code, Throwable error) {
+      releaseCandidate(op.candidate);
+      op.work.completeExceptionally(new ReconfigurationRejected(code, error, preferences));
+    }
+
     public CompletionStage<Void> reconfigure(PresentationPreferences next) {
+      Objects.requireNonNull(next);
       var result = new CompletableFuture<Void>();
-      long deadline = clock.nanoTime() + Duration.ofSeconds(5).toNanos();
+      long deadline = clock.nanoTime() + request.budgets().prepare().toNanos();
       queue.execute(
           () -> {
             if (closed.get()) {
               result.completeExceptionally(new CancellationException("Surface closed"));
               return;
             }
-            outstanding.removeIf(CompletableFuture::isDone);
-            outstanding.add(result);
+            track(result);
+            generation++;
+            if (changing != null) {
+              changing.result.completeExceptionally(
+                  new ReconfigurationRejected(
+                      "SURFACE_SUPERSEDED",
+                      new CancellationException("Superseded surface"),
+                      preferences));
+              releaseCandidate(changing.committed ? null : changing.candidate);
+              changing.work.completeExceptionally(new CancellationException("Superseded surface"));
+              changing = null;
+            }
             if (next.surfaceKey().equals(surfaceKey)) {
               preferences = next;
               result.complete(null);
               return;
             }
-            long gen = ++generation;
-            String targetKey = next.surfaceKey();
-            var prepared = open(targetKey, gen);
-            prepared.whenComplete(
-                (value, error) ->
-                    queue.execute(
-                        () -> {
-                          if (value != null
-                              && (closed.get()
-                                  || gen != generation
-                                  || clock.nanoTime() >= deadline)) scope.release(value);
-                        }));
+            var op = new Switch(generation, deadline, next, result);
+            changing = op;
             waits.removeIf(PendingOperation::isDone);
             waits.add(
                 new PendingOperation<>(
                     queue,
                     clock,
-                    Duration.ofNanos(Math.max(1, deadline - clock.nanoTime())),
-                    prepared,
-                    (value, error) -> {
-                      if (closed.get() || gen != generation) {
-                        result.completeExceptionally(
-                            new CancellationException("Superseded surface"));
-                        return;
-                      }
-                      if (error != null || clock.nanoTime() >= deadline) {
-                        generation++;
-                        result.completeExceptionally(
-                            new ReconfigurationRejected(
-                                "SURFACE_PREPARE_FAILED",
-                                error == null
-                                    ? new DialogueFailure(
-                                        "PREPARE_TIMEOUT", "Surface preparation expired")
-                                    : error));
-                        return;
-                      }
-                      WidgetFrame initial;
-                      try {
-                        initial = lastView == null ? null : compose(lastView, targetKey, next);
-                      } catch (Throwable e) {
-                        scope
-                            .release(value)
-                            .whenComplete(
-                                (ignored, cleanup) ->
-                                    result.completeExceptionally(
-                                        cleanup == null
-                                            ? new ReconfigurationRejected(
-                                                "SURFACE_LAYOUT_REJECTED", e)
-                                            : new DialogueFailure(
-                                                "SURFACE_CLEANUP_FAILED", cleanup)));
-                        return;
-                      }
-                      var first =
-                          initial == null
-                              ? CompletableFuture.<Void>completedFuture(null)
-                              : call(() -> value.replace(initial));
-                      first.whenComplete(
-                          (ignored, drawError) ->
-                              queue.execute(
-                                  () -> {
-                                    if (closed.get()
-                                        || gen != generation
-                                        || clock.nanoTime() >= deadline) {
-                                      scope.release(value);
-                                      result.completeExceptionally(
-                                          new ReconfigurationRejected(
-                                              "SURFACE_SUPERSEDED",
-                                              new CancellationException("Superseded surface")));
-                                      return;
-                                    }
-                                    if (drawError != null) {
-                                      scope
-                                          .release(value)
-                                          .whenComplete(
-                                              (released, cleanup) ->
-                                                  result.completeExceptionally(
-                                                      cleanup == null
-                                                          ? new ReconfigurationRejected(
-                                                              "SURFACE_DRAW_REJECTED", drawError)
-                                                          : new DialogueFailure(
-                                                              "SURFACE_CLEANUP_FAILED", cleanup)));
-                                      return;
-                                    }
-                                    var old = surface;
-                                    surface = value;
-                                    surfaceKey = targetKey;
-                                    preferences = next;
-                                    outputGeneration++;
-                                    rendering = false;
-                                    scope
-                                        .release(old)
-                                        .whenComplete(
-                                            (released, cleanup) ->
-                                                queue.execute(
-                                                    () -> {
-                                                      if (cleanup != null)
-                                                        result.completeExceptionally(
-                                                            new DialogueFailure(
-                                                                "SURFACE_CLEANUP_FAILED", cleanup));
-                                                      else result.complete(null);
-                                                      if (lastView != null) {
-                                                        if (pending != null)
-                                                          pending.result().complete(null);
-                                                        pending =
-                                                            new PendingFrame(
-                                                                lastView,
-                                                                new CompletableFuture<>());
-                                                        flush();
-                                                      }
-                                                    }));
-                                  }));
+                    remaining(deadline),
+                    op.work,
+                    (v, error) -> {
+                      if (op != changing || closed.get()) return;
+                      changing = null;
+                      if (error != null) {
+                        if (!op.committed) releaseCandidate(op.candidate);
+                        Throwable cause = OwnedScope.unwrap(error);
+                        if (!op.committed && !(cause instanceof ReconfigurationRejected))
+                          cause =
+                              new ReconfigurationRejected(
+                                  "SURFACE_PREPARE_FAILED", cause, preferences);
+                        result.completeExceptionally(cause);
+                      } else result.complete(null);
                     }));
+            open(next.surfaceKey(), op.gen, deadline)
+                .whenComplete(
+                    (value, error) ->
+                        queue.execute(
+                            () -> {
+                              op.candidate = value;
+                              if (!valid(op)) {
+                                releaseCandidate(value);
+                                op.work.completeExceptionally(
+                                    new ReconfigurationRejected(
+                                        "SURFACE_EXPIRED",
+                                        new CancellationException("Surface request expired"),
+                                        preferences));
+                                return;
+                              }
+                              if (error != null) {
+                                reject(op, "SURFACE_PREPARE_FAILED", error);
+                                return;
+                              }
+                              WidgetFrame frame;
+                              try {
+                                frame =
+                                    lastView == null
+                                        ? null
+                                        : compose(lastView, next.surfaceKey(), next);
+                              } catch (Throwable e) {
+                                reject(op, "SURFACE_LAYOUT_REJECTED", e);
+                                return;
+                              }
+                              var first =
+                                  frame == null
+                                      ? CompletableFuture.<Void>completedFuture(null)
+                                      : call(() -> value.replace(frame));
+                              first.whenComplete(
+                                  (v, drawError) ->
+                                      queue.execute(
+                                          () -> {
+                                            if (!valid(op)) {
+                                              releaseCandidate(value);
+                                              op.work.completeExceptionally(
+                                                  new ReconfigurationRejected(
+                                                      "SURFACE_EXPIRED",
+                                                      new CancellationException(
+                                                          "Surface request expired"),
+                                                      preferences));
+                                              return;
+                                            }
+                                            if (drawError != null) {
+                                              reject(op, "SURFACE_DRAW_REJECTED", drawError);
+                                              return;
+                                            }
+                                            var old = surface;
+                                            surface = value;
+                                            surfaceKey = next.surfaceKey();
+                                            preferences = next;
+                                            op.committed = true;
+                                            outputGeneration++;
+                                            lastWritten =
+                                                frame == null
+                                                    ? -1
+                                                    : frame.semantic().stateRevision();
+                                            var transferred =
+                                                new ArrayList<CompletableFuture<Void>>();
+                                            if (inflight != null) {
+                                              transferred.addAll(inflight.waiters);
+                                              inflight.waiters.clear();
+                                              inflight = null;
+                                            }
+                                            if (lastView != null) enqueue(lastView, transferred);
+                                            scope
+                                                .release(old)
+                                                .whenComplete(
+                                                    (released, cleanup) ->
+                                                        queue.execute(
+                                                            () -> {
+                                                              if (cleanup != null) {
+                                                                preparationFailure = cleanup;
+                                                                op.work.completeExceptionally(
+                                                                    new DialogueFailure(
+                                                                        "SURFACE_CLEANUP_FAILED",
+                                                                        cleanup));
+                                                                request
+                                                                    .cancellation()
+                                                                    .cancel(
+                                                                        DialogueEndReason.FAILED);
+                                                                closeAsync();
+                                                              } else op.work.complete(null);
+                                                            }));
+                                          }));
+                            }));
           });
-      return result;
+      return result.minimalCompletionStage();
     }
 
     public CompletionStage<Void> closeAsync() {
       synchronized (this) {
-        if (closeResult != null) return closeResult;
+        if (closeResult != null) return closeView;
         closeResult = new CompletableFuture<>();
+        closeView = closeResult.minimalCompletionStage();
         closed.set(true);
       }
       queue.execute(
@@ -557,24 +672,32 @@ public final class DialoguePresenter implements DialogueRenderer {
             outstanding.forEach(f -> f.completeExceptionally(error));
             outstanding.clear();
             if (pending != null) {
-              pending.result().completeExceptionally(error);
+              finishFrame(pending, error);
               pending = null;
             }
+            if (inflight != null) {
+              finishFrame(inflight, error);
+              inflight = null;
+            }
+            changing = null;
             scope
                 .closeAsync()
                 .whenComplete(
-                    (v, e) ->
+                    (v, cleanup) ->
                         queue.execute(
                             () -> {
                               surface = null;
                               lastView = null;
-                              ready.completeExceptionally(
-                                  preparationFailure == null ? error : preparationFailure);
-                              if (e == null) closeResult.complete(null);
-                              else closeResult.completeExceptionally(e);
+                              Throwable failure =
+                                  cleanup == null
+                                      ? preparationFailure
+                                      : new OwnedResource.PreparationFailure(cleanup);
+                              ready.completeExceptionally(failure == null ? error : failure);
+                              if (cleanup == null) closeResult.complete(null);
+                              else closeResult.completeExceptionally(cleanup);
                             }));
           });
-      return closeResult;
+      return closeView;
     }
   }
 }

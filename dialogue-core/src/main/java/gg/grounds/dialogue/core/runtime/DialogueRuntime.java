@@ -11,9 +11,13 @@ public final class DialogueRuntime {
   private final Map<String, Entry> starts = new HashMap<>();
   private boolean closing;
   private CompletableFuture<Void> closed;
+  private CompletionStage<Void> closedView;
 
   private record Entry(
-      String identity, SessionDriver driver, CompletableFuture<DialogueStartResult> result) {}
+      String identity,
+      SessionDriver driver,
+      CompletableFuture<DialogueStartResult> result,
+      CompletionStage<DialogueStartResult> observation) {}
 
   private DialogueRuntime(RuntimeOptions options) {
     this.options = Objects.requireNonNull(options);
@@ -29,6 +33,8 @@ public final class DialogueRuntime {
     values.put("hostGeneration", s.hostGeneration());
     values.put("content", s.content().contentPin().sha256());
     values.put("bindings", s.bindings().generation());
+    values.put("authorGeneration", s.content().catalog().generation());
+    values.put("validationPolicy", s.content().limits().toString());
     values.put(
         "locale",
         Map.of(
@@ -69,13 +75,18 @@ public final class DialogueRuntime {
       else {
         var existing = starts.get(request.requestId());
         if (existing != null) {
-          if (existing.identity.equals(identity)) return existing.result;
+          if (existing.identity.equals(identity)) return existing.observation;
           rejection = "START_REQUEST_CONFLICT";
         } else if (starts.size() >= options.startRegisterLimit()) rejection = "START_REGISTER_FULL";
       }
       if (rejection == null) {
         var result = new CompletableFuture<DialogueStartResult>();
-        entry = new Entry(identity, new SessionDriver(request, options, result), result);
+        entry =
+            new Entry(
+                identity,
+                new SessionDriver(request, options, result),
+                result,
+                result.minimalCompletionStage());
         starts.put(request.requestId(), entry);
       } else entry = null;
     }
@@ -83,16 +94,17 @@ public final class DialogueRuntime {
       return CompletableFuture.completedFuture(
           new DialogueStartResult.Rejected(rejection, List.of()));
     entry.driver.begin();
-    return entry.result;
+    return entry.observation;
   }
 
   public CompletionStage<Void> closeAsync() {
     List<Entry> entries;
     CompletableFuture<Void> result;
     synchronized (lock) {
-      if (closed != null) return closed;
+      if (closed != null) return closedView;
       closing = true;
       closed = new CompletableFuture<>();
+      closedView = closed.minimalCompletionStage();
       result = closed;
       entries = List.copyOf(starts.values());
     }
@@ -109,6 +121,6 @@ public final class DialogueRuntime {
               if (e == null) result.complete(null);
               else result.completeExceptionally(e);
             });
-    return result;
+    return closedView;
   }
 }

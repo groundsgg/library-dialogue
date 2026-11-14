@@ -27,6 +27,8 @@ public final class SessionDriver implements DialogueHandle {
   private final OwnedScope scope;
   private final CompletableFuture<DialogueStartResult> started;
   private final CompletableFuture<DialogueEnd> ended = new CompletableFuture<>();
+  private final CompletionStage<DialogueEnd> endObservation = ended.minimalCompletionStage();
+  private final Object dispatchGate = new Object();
   private final AtomicReference<DialogueEndReason> stopping = new AtomicReference<>();
   private final AtomicInteger inputCount = new AtomicInteger();
   private final CancellationToken cancellation = new CancellationToken();
@@ -56,7 +58,8 @@ public final class SessionDriver implements DialogueHandle {
       textGeneration,
       lastImpulse,
       enteredNanos,
-      preferenceGeneration;
+      preferenceGeneration,
+      revealGeneration;
   private LocaleContext locale;
   private PresentationPreferences preferences;
   private DialogueScheduler.ScheduledTask revealTimer;
@@ -78,7 +81,11 @@ public final class SessionDriver implements DialogueHandle {
   }
 
   private boolean active() {
-    return stopping.get() == null && !ended.isDone();
+    return stopping.get() == null
+        && !ended.isDone()
+        && start != null
+        && !start.cancellation().isCancelled()
+        && !cancellation.isCancelled();
   }
 
   private void unexpected(Throwable error) {
@@ -100,6 +107,22 @@ public final class SessionDriver implements DialogueHandle {
       CompletionStage<T> stage, Duration budget, BiConsumer<T, Throwable> callback) {
     waits.removeIf(PendingOperation::isDone);
     waits.add(new PendingOperation<>(queue, options.scheduler(), budget, stage, callback));
+  }
+
+  private <T> void observeBounded(CompletionStage<T> stage, BiConsumer<T, Throwable> callback) {
+    stage.whenComplete((value, error) -> queue.execute(() -> callback.accept(value, error)));
+  }
+
+  private boolean admitEffect() {
+    synchronized (dispatchGate) {
+      return active();
+    }
+  }
+
+  private void cancelReveal() {
+    revealGeneration++;
+    if (revealTimer != null) revealTimer.cancel();
+    revealTimer = null;
   }
 
   private void fail(String code) {
@@ -168,8 +191,9 @@ public final class SessionDriver implements DialogueHandle {
           }
           if (e != null) {
             ack.completeExceptionally(e);
-            if (frame.renderRevision() == renderRevision
-                && frame.stateRevision() == view.stateRevision())
+            if (!started.isDone()
+                || (frame.renderRevision() == renderRevision
+                    && frame.stateRevision() == view.stateRevision()))
               fail(e instanceof DialogueFailure f ? f.code() : "RENDER_FAILED");
           } else {
             started.complete(new DialogueStartResult.Started(this));
@@ -182,16 +206,18 @@ public final class SessionDriver implements DialogueHandle {
   public void begin() {
     queue.execute(
         () -> {
+          if (start != null && start.cancellation().isCancelled()) {
+            stop(start.cancellation().reason());
+            return;
+          }
           if (!active()) {
             stopNow();
             return;
           }
-          if (start.cancellation().isCancelled()) {
-            stop(start.cancellation().reason());
-            return;
-          }
+          scope.prepare(() -> CompletableFuture.completedFuture(cancellation.onCancel(this::stop)));
           scope.prepare(
               () -> CompletableFuture.completedFuture(start.cancellation().onCancel(this::stop)));
+          if (!active()) return;
           if (!start
                   .bindings()
                   .capabilities()
@@ -215,7 +241,9 @@ public final class SessionDriver implements DialogueHandle {
                                   start.hostGeneration(),
                                   preferences,
                                   cancellation,
-                                  deadline)));
+                                  deadline,
+                                  options.budgets())));
+          if (!active()) return;
           await(
               presentation,
               options.budgets().prepare(),
@@ -268,6 +296,10 @@ public final class SessionDriver implements DialogueHandle {
                 (v, e) -> {
                   if (!active()) return;
                   if (e != null) {
+                    if (OwnedScope.unwrap(e) instanceof OwnedResource.PreparationFailure) {
+                      fail("ACTOR_CLEANUP_FAILED");
+                      return;
+                    }
                     if (start
                         .content()
                         .definition()
@@ -294,7 +326,7 @@ public final class SessionDriver implements DialogueHandle {
 
   private void enter(String target) {
     if (!active()) return;
-    if (revealTimer != null) revealTimer.cancel();
+    cancelReveal();
     nodeId = target;
     visit++;
     renderRevision++;
@@ -438,14 +470,20 @@ public final class SessionDriver implements DialogueHandle {
             start.hostGeneration(),
             id,
             visit);
-    pendingAction = ref;
-    pendingActions.put(ref.requestId(), ref);
     setView(State.WAITING_FOR_PROVIDER, "", "", List.of(), null, 0, HintPhase.BUSY, "");
     publish();
+    if (!admitEffect()) return;
+    pendingAction = ref;
+    pendingActions.put(ref.requestId(), ref);
     boolean durable = start.content().catalog().actions().get(a.key()).durable();
     var request = new ActionRequest(ref, a.key(), a.arguments(), durable);
+    var execution = call(() -> handler.execute(request));
+    if (!active()) return;
+    setView(State.WAITING_FOR_PROVIDER, "", "", List.of(), null, 0, HintPhase.BUSY, "");
+    publish();
+    if (!active()) return;
     await(
-        call(() -> handler.execute(request)),
+        execution,
         options.budgets().action(),
         (value, error) -> {
           if (!active() || visit != expectedVisit) return;
@@ -485,8 +523,11 @@ public final class SessionDriver implements DialogueHandle {
             visit,
             payloadHash(o.milestone(), Map.of()));
     publish();
+    if (!admitEffect()) return;
+    var delivery = call(() -> sink.deliver(event));
+    if (!active()) return;
     await(
-        call(() -> sink.deliver(event)),
+        delivery,
         options.budgets().action(),
         (value, error) -> {
           if (!active() || visit != expectedVisit) return;
@@ -511,8 +552,21 @@ public final class SessionDriver implements DialogueHandle {
     requests.add(text(m.text()));
     String speakerKey = "speaker." + m.speaker();
     boolean named =
-        start.content().texts().locales().values().stream()
-            .anyMatch(t -> t.containsKey(speakerKey));
+        new LinkedHashSet<>(
+                List.of(
+                    locale.tag(),
+                    Locale.forLanguageTag(locale.tag()).getLanguage(),
+                    locale.fallbackTag(),
+                    start.content().definition().locales().defaultTag()))
+            .stream()
+                .anyMatch(
+                    tag ->
+                        start
+                            .content()
+                            .texts()
+                            .locales()
+                            .getOrDefault(tag, Map.of())
+                            .containsKey(speakerKey));
     requests.add(
         named
             ? text(speakerKey)
@@ -532,9 +586,8 @@ public final class SessionDriver implements DialogueHandle {
             return;
           }
           var resolved = requests.stream().map(s -> s.toCompletableFuture().join()).toList();
-          await(
+          observeBounded(
               choices(m, resolved.subList(2, resolved.size())),
-              options.budgets().text(),
               (offers, choiceError) -> {
                 if (!active() || visit != nodeVisit || textGeneration != generation) return;
                 if (choiceError != null) {
@@ -617,8 +670,9 @@ public final class SessionDriver implements DialogueHandle {
   }
 
   private void scheduleReveal() {
-    if (revealTimer != null) revealTimer.cancel();
-    long expected = visit;
+    if (!active() || switching || translating || view.state() != State.REVEALING) return;
+    cancelReveal();
+    long expected = visit, expectedReveal = revealGeneration;
     revealTimer =
         options
             .scheduler()
@@ -629,6 +683,8 @@ public final class SessionDriver implements DialogueHandle {
                         () -> {
                           if (!active()
                               || visit != expected
+                              || revealGeneration != expectedReveal
+                              || switching
                               || view.state() != State.REVEALING
                               || translating) return;
                           long elapsed = options.scheduler().nanoTime() - enteredNanos;
@@ -636,7 +692,11 @@ public final class SessionDriver implements DialogueHandle {
                               (int)
                                   Math.min(
                                       view.totalGraphemes(),
-                                      Math.max(0, elapsed / preferences.graphemeDelay().toNanos()));
+                                      Math.max(
+                                          0,
+                                          (preferences.graphemeDelay().isZero()
+                                              ? view.totalGraphemes()
+                                              : elapsed / preferences.graphemeDelay().toNanos())));
                           boolean done = count >= view.totalGraphemes();
                           setView(
                               done ? State.WAITING_FOR_INPUT : State.REVEALING,
@@ -673,7 +733,7 @@ public final class SessionDriver implements DialogueHandle {
             unexpected(error);
           }
         });
-    return result;
+    return result.minimalCompletionStage();
   }
 
   private void handleInput(DialogueInput input, CompletableFuture<InputResult> result) {
@@ -729,7 +789,7 @@ public final class SessionDriver implements DialogueHandle {
       return;
     }
     if (view.state() == State.REVEALING) {
-      if (revealTimer != null) revealTimer.cancel();
+      cancelReveal();
       setView(
           State.WAITING_FOR_INPUT,
           view.speaker(),
@@ -782,9 +842,8 @@ public final class SessionDriver implements DialogueHandle {
         HintPhase.BUSY,
         "");
     publish();
-    await(
+    observeBounded(
         choices(m, labels),
-        options.budgets().text(),
         (offers, error) -> {
           if (!active()) {
             result.complete(InputResult.ENDED);
@@ -793,6 +852,21 @@ public final class SessionDriver implements DialogueHandle {
           confirming = false;
           pendingConfirm = null;
           if (visit != expectedVisit || renderRevision != expectedRender) {
+            if (visit == expectedVisit && !translating && offers != null) {
+              var refreshed = new ArrayList<ChoiceView>();
+              for (var offer : offers) {
+                var label = resolvedChoiceLabels.get(offer.id());
+                if (label != null)
+                  refreshed.add(
+                      new ChoiceView(
+                          offer.id(),
+                          label.plain(),
+                          offer.availability(),
+                          offer.unavailableReason()));
+              }
+              refreshOffers(m, refreshed, "CHOICES_CHANGED");
+            }
+            restoreMessageState();
             result.complete(InputResult.STALE);
             return;
           }
@@ -841,6 +915,48 @@ public final class SessionDriver implements DialogueHandle {
         });
   }
 
+  private void refreshOffers(Message message, List<ChoiceView> offers, String notice) {
+    String previousSelection = view.selectedChoiceId();
+    String selected = previousSelection;
+    if (offers.stream()
+        .noneMatch(
+            o -> o.id().equals(previousSelection) && o.availability() == Availability.AVAILABLE))
+      selected = initialSelection(message, offers);
+    renderRevision++;
+    boolean busy = translating || confirming || switching;
+    setView(
+        busy ? State.WAITING_FOR_PROVIDER : State.WAITING_FOR_INPUT,
+        view.speaker(),
+        view.text(),
+        offers,
+        selected,
+        view.totalGraphemes(),
+        busy ? HintPhase.BUSY : hint(message, offers),
+        notice);
+    publish();
+  }
+
+  private void restoreMessageState() {
+    if (!active()
+        || translating
+        || confirming
+        || switching
+        || !(current() instanceof Message message)) return;
+    if (view.state() == State.WAITING_FOR_PROVIDER) {
+      boolean reveal = view.revealedGraphemes() < view.totalGraphemes();
+      setView(
+          reveal ? State.REVEALING : State.WAITING_FOR_INPUT,
+          view.speaker(),
+          view.text(),
+          view.choices(),
+          view.selectedChoiceId(),
+          view.revealedGraphemes(),
+          reveal ? HintPhase.REVEAL : hint(message, view.choices()),
+          view.notice());
+      if (reveal) scheduleReveal();
+    }
+  }
+
   public CompletionStage<RefreshResult> refreshLocale(LocaleContext requested) {
     Objects.requireNonNull(requested);
     var result = new CompletableFuture<RefreshResult>();
@@ -858,7 +974,7 @@ public final class SessionDriver implements DialogueHandle {
           localePending = result;
           locale = effectiveLocale(requested);
           renderRevision++;
-          if (revealTimer != null) revealTimer.cancel();
+          cancelReveal();
           if (current() instanceof Message) resolveMessage(true, false, result);
           else {
             setView(
@@ -875,7 +991,7 @@ public final class SessionDriver implements DialogueHandle {
             localePending = null;
           }
         });
-    return result;
+    return result.minimalCompletionStage();
   }
 
   public CompletionStage<Void> updatePreferences(PresentationPreferences next) {
@@ -890,52 +1006,65 @@ public final class SessionDriver implements DialogueHandle {
           preferenceResults.removeIf(CompletableFuture::isDone);
           preferenceResults.add(result);
           var previous = preferences;
-          preferences = next;
           long gen = ++preferenceGeneration;
-          boolean changed = !previous.surfaceKey().equals(next.surfaceKey());
-          if (changed) {
-            switching = true;
-            renderRevision++;
-          }
+          switching = true;
+          renderRevision++;
+          cancelReveal();
           await(
               call(() -> renderer.reconfigure(next)),
               options.budgets().prepare(),
-              (v, e) -> {
+              (v, error) -> {
                 if (!active()) {
                   result.completeExceptionally(new DialogueFailure("ENDED", "Session ended"));
                   return;
                 }
                 if (gen != preferenceGeneration) {
-                  result.complete(null);
+                  result.completeExceptionally(new CancellationException("Superseded preferences"));
                   return;
                 }
                 switching = false;
-                if (e != null) {
-                  if (e instanceof DialogueRenderer.ReconfigurationRejected) preferences = previous;
-                  else {
-                    result.completeExceptionally(e);
-                    fail("PRESENTATION_HANDOFF_FAILED");
-                    return;
-                  }
-                }
-                if (view.state() == State.REVEALING) {
+                Throwable e = error == null ? null : OwnedScope.unwrap(error);
+                if (e instanceof DialogueRenderer.ReconfigurationRejected rejected) {
+                  preferences =
+                      rejected.activePreferences() == null
+                          ? previous
+                          : rejected.activePreferences();
+                } else if (e != null) {
+                  result.completeExceptionally(e);
+                  fail("PRESENTATION_HANDOFF_FAILED");
+                  return;
+                } else preferences = next;
+                if (current() instanceof Message message
+                    && !translating
+                    && view.revealedGraphemes() < view.totalGraphemes()) {
                   if (preferences.graphemeDelay().isZero()) {
                     setView(
-                        State.WAITING_FOR_INPUT,
+                        confirming ? State.WAITING_FOR_PROVIDER : State.WAITING_FOR_INPUT,
                         view.speaker(),
                         view.text(),
                         view.choices(),
                         view.selectedChoiceId(),
                         view.totalGraphemes(),
-                        hint((Message) current(), view.choices()),
+                        confirming ? HintPhase.BUSY : hint(message, view.choices()),
                         view.notice());
                   } else {
                     enteredNanos =
                         options.scheduler().nanoTime()
                             - view.revealedGraphemes() * preferences.graphemeDelay().toNanos();
+                    if (!confirming)
+                      setView(
+                          State.REVEALING,
+                          view.speaker(),
+                          view.text(),
+                          view.choices(),
+                          view.selectedChoiceId(),
+                          view.revealedGraphemes(),
+                          HintPhase.REVEAL,
+                          view.notice());
                     scheduleReveal();
                   }
                 }
+                restoreMessageState();
                 setView(
                     view.state(),
                     view.speaker(),
@@ -950,11 +1079,14 @@ public final class SessionDriver implements DialogueHandle {
                         (ignored, renderError) -> {
                           if (e != null) result.completeExceptionally(e);
                           else if (renderError != null) result.completeExceptionally(renderError);
+                          else if (gen != preferenceGeneration)
+                            result.completeExceptionally(
+                                new CancellationException("Superseded preferences"));
                           else result.complete(null);
                         });
               });
         });
-    return result;
+    return result.minimalCompletionStage();
   }
 
   public DialogueView snapshot() {
@@ -962,12 +1094,16 @@ public final class SessionDriver implements DialogueHandle {
   }
 
   public CompletionStage<DialogueEnd> completion() {
-    return ended;
+    return endObservation;
   }
 
   public CompletionStage<DialogueEnd> stop(DialogueEndReason reason) {
     Objects.requireNonNull(reason);
-    if (stopping.compareAndSet(null, reason)) {
+    boolean admitted;
+    synchronized (dispatchGate) {
+      admitted = stopping.compareAndSet(null, reason);
+    }
+    if (admitted) {
       Throwable failure = null;
       try {
         cancellation.cancel(reason);
@@ -982,7 +1118,7 @@ public final class SessionDriver implements DialogueHandle {
             stopNow();
           });
     }
-    return ended;
+    return endObservation;
   }
 
   private void stopNow() {
@@ -995,7 +1131,7 @@ public final class SessionDriver implements DialogueHandle {
     preferenceResults.clear();
     waits.forEach(PendingOperation::cancel);
     waits.clear();
-    if (revealTimer != null) revealTimer.cancel();
+    cancelReveal();
     if (localePending != null) {
       localePending.complete(RefreshResult.ENDED);
       localePending = null;

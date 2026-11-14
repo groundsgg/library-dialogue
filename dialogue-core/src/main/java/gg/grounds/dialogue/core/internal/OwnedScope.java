@@ -2,29 +2,60 @@ package gg.grounds.dialogue.core.internal;
 
 import gg.grounds.dialogue.core.port.*;
 import gg.grounds.dialogue.core.runtime.DialogueFailure;
+import java.lang.ref.*;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.Supplier;
 
-/** Queue-confined ownership; acquisitions register before invoking foreign code. */
+/** Queue-confined acquisition ownership; closed resources are weakly remembered, not retained. */
 public final class OwnedScope {
   private final SerialCommandQueue queue;
   private final DialogueScheduler clock;
   private final Duration budget;
   private final List<OwnedResource> resources = new ArrayList<>();
-  private final IdentityHashMap<OwnedResource, CompletableFuture<Void>> released =
-      new IdentityHashMap<>();
+  private final ReferenceQueue<OwnedResource> collected = new ReferenceQueue<>();
+  private final Map<IdentityKey, CompletionStage<Void>> released = new HashMap<>();
   private final CompletableFuture<Void> completion = new CompletableFuture<>();
+  private final CompletionStage<Void> observation = completion.minimalCompletionStage();
   private boolean closed;
   private int pending, cleaning;
   private Throwable failure;
   private DialogueScheduler.ScheduledTask timeout;
 
-  public OwnedScope(SerialCommandQueue q, DialogueScheduler c, Duration b) {
-    queue = q;
-    clock = c;
-    budget = b;
+  private static final class IdentityKey extends WeakReference<OwnedResource> {
+    final int hash;
+
+    IdentityKey(OwnedResource r, ReferenceQueue<OwnedResource> q) {
+      super(r, q);
+      hash = System.identityHashCode(r);
+    }
+
+    public int hashCode() {
+      return hash;
+    }
+
+    public boolean equals(Object o) {
+      return this == o || (o instanceof IdentityKey k && get() != null && get() == k.get());
+    }
+  }
+
+  public OwnedScope(SerialCommandQueue queue, DialogueScheduler clock, Duration budget) {
+    this.queue = queue;
+    this.clock = clock;
+    this.budget = budget;
+  }
+
+  public static Throwable unwrap(Throwable error) {
+    while ((error instanceof CompletionException || error instanceof ExecutionException)
+        && error.getCause() != null) error = error.getCause();
+    return error;
+  }
+
+  private void record(Throwable error) {
+    error = unwrap(error);
+    if (failure == null) failure = error;
+    else if (failure != error) failure.addSuppressed(error);
   }
 
   public <T extends OwnedResource> CompletionStage<T> prepare(
@@ -35,8 +66,8 @@ public final class OwnedScope {
     CompletionStage<T> stage;
     try {
       stage = Objects.requireNonNull(supplier.get());
-    } catch (Throwable e) {
-      stage = CompletableFuture.failedFuture(e);
+    } catch (Throwable error) {
+      stage = CompletableFuture.failedFuture(error);
     }
     stage.whenComplete(
         (value, error) ->
@@ -47,8 +78,10 @@ public final class OwnedScope {
                     if (closed) dispose(value);
                     else resources.add(value);
                   }
-                  if (error != null) result.completeExceptionally(error);
-                  else if (value == null)
+                  if (error != null) {
+                    if (unwrap(error) instanceof OwnedResource.PreparationFailure) record(error);
+                    result.completeExceptionally(error);
+                  } else if (value == null)
                     result.completeExceptionally(
                         new NullPointerException("Preparation returned null resource"));
                   else if (closed)
@@ -57,7 +90,7 @@ public final class OwnedScope {
                   else result.complete(value);
                   check();
                 }));
-    return result;
+    return result.minimalCompletionStage();
   }
 
   public CompletionStage<Void> release(OwnedResource resource) {
@@ -66,7 +99,7 @@ public final class OwnedScope {
   }
 
   public CompletionStage<Void> closeAsync() {
-    if (closed) return completion;
+    if (closed) return observation;
     closed = true;
     timeout =
         clock.schedule(
@@ -85,20 +118,25 @@ public final class OwnedScope {
     Collections.reverse(reverse);
     reverse.forEach(this::dispose);
     check();
-    return completion;
+    return observation;
   }
 
   private CompletionStage<Void> dispose(OwnedResource resource) {
-    var previous = released.get(resource);
+    Objects.requireNonNull(resource);
+    Reference<? extends OwnedResource> key;
+    while ((key = collected.poll()) != null) released.remove(key);
+    var lookup = new IdentityKey(resource, collected);
+    var previous = released.get(lookup);
     if (previous != null) return previous;
     var done = new CompletableFuture<Void>();
-    released.put(resource, done);
+    var view = done.minimalCompletionStage();
+    released.put(lookup, view);
     cleaning++;
     CompletionStage<Void> stage;
     try {
       stage = Objects.requireNonNull(resource.closeAsync());
-    } catch (Throwable e) {
-      stage = CompletableFuture.failedFuture(e);
+    } catch (Throwable error) {
+      stage = CompletableFuture.failedFuture(error);
     }
     stage.whenComplete(
         (v, error) ->
@@ -106,13 +144,12 @@ public final class OwnedScope {
                 () -> {
                   cleaning--;
                   if (error != null) {
-                    if (failure == null) failure = error;
-                    else if (failure != error) failure.addSuppressed(error);
+                    record(error);
                     done.completeExceptionally(error);
                   } else done.complete(null);
                   check();
                 }));
-    return done;
+    return view;
   }
 
   private void check() {

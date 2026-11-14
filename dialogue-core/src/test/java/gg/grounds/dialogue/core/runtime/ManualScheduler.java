@@ -56,4 +56,15 @@ final class ManualScheduler implements DialogueScheduler {
     now = target;
     drain();
   }
+
+  void advanceBatched(Duration duration) {
+    long target = Math.addExact(now, duration.toNanos());
+    drain();
+    now = target;
+    while (!jobs.isEmpty() && jobs.peek().at <= target) {
+      var job = jobs.remove();
+      if (!job.cancelled) job.run.run();
+    }
+    drain();
+  }
 }

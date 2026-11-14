@@ -226,7 +226,8 @@ public final class ContentFingerprint {
       return;
     }
     if (v instanceof java.lang.Number n) {
-      BigDecimal d = n instanceof BigDecimal x ? x : new BigDecimal(n.toString());
+      BigDecimal d =
+          (n instanceof BigDecimal x ? x : new BigDecimal(n.toString())).stripTrailingZeros();
       if (d.precision() > 128 || Math.abs((long) d.precision() - d.scale() - 1) > 308)
         throw new IllegalArgumentException("NUMBER_LIMIT");
       out.append(d.signum() == 0 ? "0" : d.stripTrailingZeros().toPlainString());

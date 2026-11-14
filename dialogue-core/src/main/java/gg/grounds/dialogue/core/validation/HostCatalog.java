@@ -19,6 +19,50 @@ public record HostCatalog(
     capabilities = Set.copyOf(capabilities);
   }
 
+  /** Shared validation includes declarations that no current dialogue references. */
+  public java.util.List<ValidationReport.Problem> structuralProblems(ValidationLimits limits) {
+    var problems = new java.util.ArrayList<ValidationReport.Problem>();
+    java.util.function.BiConsumer<String, String> id =
+        (value, path) -> {
+          if (value.isBlank()
+              || value.codePointCount(0, value.length()) > limits.idCodepoints()
+              || !value.matches("[a-zA-Z0-9_.:/-]+"))
+            problems.add(
+                new ValidationReport.Problem(
+                    "ID_INVALID",
+                    ValidationReport.Severity.ERROR,
+                    "context/host-catalog.json",
+                    path,
+                    null,
+                    "Invalid declaration identifier"));
+        };
+    if (generation.isBlank()
+        || generation.codePointCount(0, generation.length()) > limits.idCodepoints()
+        || !DialogueValidator.validUnicode(generation))
+      problems.add(
+          new ValidationReport.Problem(
+              "HOST_GENERATION_INVALID",
+              ValidationReport.Severity.ERROR,
+              "context/host-catalog.json",
+              "/generation",
+              null,
+              "Invalid host generation"));
+    speakers.forEach(v -> id.accept(v, "/speakers"));
+    gestures.forEach(v -> id.accept(v, "/gestures"));
+    capabilities.forEach(v -> id.accept(v, "/capabilities"));
+    java.util.Map.of("conditions", conditions, "actions", actions)
+        .forEach(
+            (group, providers) ->
+                providers.forEach(
+                    (key, spec) -> {
+                      id.accept(key, "/" + group);
+                      spec.arguments()
+                          .keySet()
+                          .forEach(v -> id.accept(v, "/" + group + "/" + key + "/arguments"));
+                    }));
+    return java.util.List.copyOf(problems);
+  }
+
   public enum Kind {
     TEXT,
     NUMBER,

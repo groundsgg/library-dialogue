@@ -7,10 +7,18 @@ import java.util.*;
 
 /** Explicit interaction metadata; visual scaling never mutates hit rectangles. */
 public record WidgetFrame(
-    DialogueView semantic, List<Widget> widgets, String fontPin, String themeId) {
+    DialogueView semantic, List<Widget> widgets, String fontPin, DialogueTheme theme) {
   public WidgetFrame {
     Objects.requireNonNull(semantic);
     widgets = List.copyOf(widgets);
+  }
+
+  public String themeId() {
+    return theme.id();
+  }
+
+  public WidgetFrame(DialogueView semantic, List<Widget> widgets, String fontPin, String themeId) {
+    this(semantic, widgets, fontPin, new DialogueTheme(themeId, Map.of(), 1, Duration.ZERO));
   }
 
   public enum Kind {
