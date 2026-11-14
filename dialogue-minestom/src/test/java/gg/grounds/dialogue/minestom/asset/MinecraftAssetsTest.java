@@ -9,6 +9,19 @@ import org.junit.jupiter.api.Test;
 
 class MinecraftAssetsTest {
   @Test
+  void nativeManifestDescribesActualRasterAndOptionalEffects() {
+    var publicBundle = AssetBundle.loadDefault(MinecraftPackProfile.public262());
+    var metadata =
+        com.google.gson.JsonParser.parseString(
+                new String(publicBundle.manifestBytes(), java.nio.charset.StandardCharsets.UTF_8))
+            .getAsJsonObject();
+    assertEquals(-64, metadata.get("minAscent").getAsInt());
+    var grounds = AssetBundle.loadDefault(MinecraftPackProfile.grounds263());
+    assertTrue(grounds.hasEntry("assets/dialogue/post_effect/vignette.json"));
+    assertTrue(grounds.hasEntry("assets/dialogue/shaders/post/vignette.fsh"));
+  }
+
+  @Test
   void bitmapAdvancesMatchFrozenAtlas() throws Exception {
     var bundle = AssetBundle.loadDefault(MinecraftPackProfile.grounds263());
     var image =

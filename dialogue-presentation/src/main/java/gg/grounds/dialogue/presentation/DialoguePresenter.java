@@ -398,7 +398,7 @@ public final class DialoguePresenter implements DialogueRenderer {
                     CompletableFuture.completedFuture(
                         request.cancellation().onCancel(reason -> closeAsync())));
             if (closed.get()) return;
-            var opened = open(surfaceKey, ++generation, request.deadlineNanos());
+            var opened = open(surfaceKey, ++generation, request.deadlineNanos(), preferences);
             waits.add(
                 new PendingOperation<>(
                     queue,
@@ -422,7 +422,8 @@ public final class DialoguePresenter implements DialogueRenderer {
       return Duration.ofNanos(Math.max(1, deadline - clock.nanoTime()));
     }
 
-    CompletionStage<DialogueSurface.SurfaceHandle> open(String key, long gen, long deadline) {
+    CompletionStage<DialogueSurface.SurfaceHandle> open(
+        String key, long gen, long deadline, PresentationPreferences openingPreferences) {
       return scope.prepare(
           () -> {
             var p = profile(key);
@@ -436,7 +437,8 @@ public final class DialoguePresenter implements DialogueRenderer {
                         profilePin(p),
                         request.cancellation(),
                         gen,
-                        deadline));
+                        deadline,
+                        openingPreferences));
           });
     }
 
@@ -563,8 +565,26 @@ public final class DialoguePresenter implements DialogueRenderer {
               changing = null;
             }
             if (next.surfaceKey().equals(surfaceKey)) {
-              preferences = next;
-              result.complete(null);
+              long configureGeneration = generation;
+              call(() -> surface.configure(next))
+                  .whenComplete(
+                      (v, error) ->
+                          queue.execute(
+                              () -> {
+                                if (closed.get() || configureGeneration != generation) {
+                                  result.completeExceptionally(
+                                      new ReconfigurationRejected(
+                                          "SURFACE_SUPERSEDED",
+                                          new CancellationException(),
+                                          preferences));
+                                  return;
+                                }
+                                if (error != null) result.completeExceptionally(error);
+                                else {
+                                  preferences = next;
+                                  result.complete(null);
+                                }
+                              }));
               return;
             }
             var op = new Switch(generation, deadline, next, result);
@@ -589,7 +609,7 @@ public final class DialoguePresenter implements DialogueRenderer {
                         result.completeExceptionally(cause);
                       } else result.complete(null);
                     }));
-            open(next.surfaceKey(), op.gen, deadline)
+            open(next.surfaceKey(), op.gen, deadline, next)
                 .whenComplete(
                     (value, error) ->
                         queue.execute(

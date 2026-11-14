@@ -16,10 +16,37 @@ public interface DialogueSurface {
       String profilePin,
       CancellationToken cancellation,
       long generation,
-      long deadlineNanos) {}
+      long deadlineNanos,
+      gg.grounds.dialogue.core.runtime.PresentationPreferences preferences) {
+    public SurfaceContext(
+        UUID sessionId,
+        String audienceId,
+        long hostGeneration,
+        String surfaceKey,
+        String profilePin,
+        CancellationToken cancellation,
+        long generation,
+        long deadlineNanos) {
+      this(
+          sessionId,
+          audienceId,
+          hostGeneration,
+          surfaceKey,
+          profilePin,
+          cancellation,
+          generation,
+          deadlineNanos,
+          gg.grounds.dialogue.core.runtime.PresentationPreferences.defaults());
+    }
+  }
 
   interface SurfaceHandle extends OwnedResource {
     CompletionStage<Void> replace(WidgetFrame frame);
+
+    default CompletionStage<Void> configure(
+        gg.grounds.dialogue.core.runtime.PresentationPreferences preferences) {
+      return java.util.concurrent.CompletableFuture.completedFuture(null);
+    }
   }
 
   CompletionStage<SurfaceHandle> open(SurfaceContext context);

@@ -117,7 +117,8 @@ public final class MinestomDialogueRenderer implements DialogueRenderer, Dialogu
                                     c.profilePin(),
                                     c.cancellation(),
                                     generation,
-                                    c.deadlineNanos()));
+                                    c.deadlineNanos(),
+                                    c.preferences()));
                       },
                       p.layout(),
                       p.theme(),
