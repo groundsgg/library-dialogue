@@ -20,7 +20,14 @@ public final class ConnectionGuard {
   }
 
   public boolean isCurrent() {
-    return valid.get() && player.isOnline() && player.getInstance() == instance;
+    return valid.get() && hasCurrentConnection();
+  }
+
+  /**
+   * Cleanup may repair current authoritative state after invalidation, within the same instance.
+   */
+  public boolean hasCurrentConnection() {
+    return player.isOnline() && player.getInstance() == instance;
   }
 
   public boolean matches(Player player, long generation) {

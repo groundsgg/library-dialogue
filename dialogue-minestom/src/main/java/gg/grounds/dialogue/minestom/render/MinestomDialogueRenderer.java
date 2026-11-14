@@ -123,6 +123,7 @@ public final class MinestomDialogueRenderer implements DialogueRenderer, Dialogu
     final AtomicLong surfaces = new AtomicLong();
     final CompletableFuture<PresentationHandle> ready = new CompletableFuture<>();
     final List<CompletableFuture<Void>> waiters = new ArrayList<>();
+    final List<CompletableFuture<Void>> configurations = new ArrayList<>();
     final List<PendingOperation<?>> waits = new ArrayList<>();
     CompletionStage<Void> closing;
     PresentationHandle delegate;
@@ -332,6 +333,8 @@ public final class MinestomDialogueRenderer implements DialogueRenderer, Dialogu
               result.completeExceptionally(new CancellationException());
               return;
             }
+            configurations.removeIf(CompletableFuture::isDone);
+            configurations.add(result);
             requested = preferences;
             diagnostic = "";
             switchOutput(
@@ -416,6 +419,8 @@ public final class MinestomDialogueRenderer implements DialogueRenderer, Dialogu
             var error = new CancellationException("Renderer closed");
             waiters.forEach(f -> f.completeExceptionally(error));
             waiters.clear();
+            configurations.forEach(f -> f.completeExceptionally(error));
+            configurations.clear();
             scope
                 .closeAsync()
                 .whenComplete(

@@ -123,8 +123,8 @@ def main():
         compiled = project / 'build/classes/java/groundsProfile'
         if not compiled.is_dir():
             raise ValueError('Compile the explicit Grounds demo profile first')
-        libraries = [p for p in libraries if p.name.startswith(('dialogue-', 'npc-', 'kotlin-stdlib-', 'gson-'))]
-        classpath = [compiled, project / 'build/resources/main', *runtime, *libraries]
+        libraries = [p for p in libraries if p.name.startswith(('dialogue-', 'npc-', 'kotlin-stdlib-'))]
+        classpath = [compiled, project / 'build/resources/groundsProfile', *runtime, *libraries]
         main_class = 'example.GroundsDialogueDemo' if args.consumer == 'basic' else 'example.GroundsPersonalDialogueDemo'
     else:
         classpath = libraries

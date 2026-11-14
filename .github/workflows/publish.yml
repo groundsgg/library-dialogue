@@ -33,3 +33,5 @@ jobs:
           repository="https://maven.pkg.github.com/groundsgg/library-dialogue"
           ./gradlew -p fixtures/java-consumer run -PdialogueVersion="$version" -PdialogueRepository="$repository"
           ./gradlew -p fixtures/kotlin-consumer run -PdialogueVersion="$version" -PdialogueRepository="$repository"
+          ./gradlew -p fixtures/minestom-consumer test run -PdialogueVersion="$version" -PdialogueRepository="$repository"
+          ./gradlew -p examples/standalone-minestom test run --args=--smoke -PdialogueVersion="$version" -PdialogueRepository="$repository"

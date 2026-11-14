@@ -271,6 +271,10 @@ public final class MinestomInputAdapter implements OwnedResource {
 
   private void pump() {
     if (dispatching || !active() || packets.isEmpty()) return;
+    // Core input acceptance can precede native output acknowledgement. Keep queued scroll intent.
+    if (target.view() != null
+        && current() == null
+        && !(packets.getFirst().packet() instanceof ClientPongPacket)) return;
     var packet = packets.removeFirst();
     dispatching = true;
     CompletionStage<InputResult> stage;
@@ -437,6 +441,7 @@ public final class MinestomInputAdapter implements OwnedResource {
               && !slots.awaiting()
               && slots.slot() != player.getHeldSlot()
               && ++followup >= 2) fence();
+          pump();
           if (dispatching || !packets.isEmpty()) return;
           var snapshot = current();
           if (snapshot == null) return;
@@ -497,11 +502,23 @@ public final class MinestomInputAdapter implements OwnedResource {
     if (closed.compareAndSet(false, true))
       queue.execute(
           () -> {
+            if (guard.hasCurrentConnection()) {
+              player.getInventory().update(player);
+              for (var pending : packets) {
+                var packet = pending.packet();
+                repair(packet);
+                if (packet instanceof ClientPlayerActionPacket action
+                    && action.status().name().contains("DIGGING")) {
+                  refreshBlock(action.blockPosition());
+                  player.sendPacket(new AcknowledgeBlockChangePacket(action.sequence()));
+                }
+              }
+            }
             packets.clear();
             if (acquireWait != null) acquireWait.cancel();
             if (preparing != null && !preparing.isDone())
               preparing.completeExceptionally(new CancellationException());
-            if (scrolled && player.isOnline())
+            if (scrolled && guard.hasCurrentConnection())
               player.sendPacket(new HeldItemChangePacket(player.getHeldSlot()));
             scope
                 .closeAsync()

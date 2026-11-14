@@ -119,7 +119,7 @@ public final class DialogueDemo {
     }
   }
 
-  private static CompletionStage<DemoNpc> nativeAnchor(Instance world) {
+  public static CompletionStage<DemoNpc> nativeAnchor(Instance world) {
     var entity = new Entity(EntityType.ARMOR_STAND);
     entity.setNoGravity(true);
     entity.setHasPhysics(false);

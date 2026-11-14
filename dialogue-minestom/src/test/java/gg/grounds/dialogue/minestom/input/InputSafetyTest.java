@@ -183,6 +183,58 @@ class InputSafetyTest {
   }
 
   @Test
+  void queuedScrollWaitsUntilTargetsCatchUpWithCoreView(Env env) {
+    var f = new Fixture(env);
+    done(env, f.adapter.activate());
+    f.packet(env, new ClientHeldItemChangePacket((short) 1));
+    var v = f.view;
+    f.view =
+        new DialogueView(
+            v.sessionId(),
+            v.contentPin(),
+            v.nodeId(),
+            v.nodeVisitId(),
+            v.state(),
+            2,
+            2,
+            v.localeTag(),
+            v.speaker(),
+            v.text(),
+            v.choices(),
+            "leave",
+            v.totalGraphemes(),
+            v.revealedGraphemes(),
+            v.hint(),
+            v.notice(),
+            v.pendingAction());
+    f.packet(env, new ClientHeldItemChangePacket((short) 2));
+    assertEquals(1, f.submitted.size());
+    f.targets = new TargetSnapshot(v.sessionId(), 2, v.nodeVisitId(), 1, f.targets.choices());
+    f.adapter.tick();
+    assertTrue(env.tickWhile(() -> f.submitted.size() < 2, Duration.ofSeconds(1)));
+    assertEquals("ask", ((DialogueInput.Select) f.submitted.getLast()).choiceId());
+    done(env, f.adapter.closeAsync());
+  }
+
+  @Test
+  void closeRepairsPredictionOfQueuedCancelledPlacement(Env env) {
+    var f = new Fixture(env);
+    done(env, f.adapter.activate());
+    var gate = new CompletableFuture<InputResult>();
+    f.submitGate = gate;
+    f.now.set(400_000_000);
+    var acks = f.connection.trackIncoming(AcknowledgeBlockChangePacket.class);
+    f.packet(env, new ClientUseItemPacket(PlayerHand.MAIN, 1, 0, 0));
+    f.packet(
+        env,
+        new ClientPlayerBlockPlacementPacket(
+            PlayerHand.MAIN, new Vec(0, 41, 0), BlockFace.TOP, .5f, 1, .5f, false, false, 2));
+    done(env, f.adapter.closeAsync());
+    assertTrue(acks.collect().stream().anyMatch(p -> p.sequence() == 2));
+    gate.complete(InputResult.ACCEPTED);
+  }
+
+  @Test
   void queuedScrollWaitsForPublishedCoreSelection(Env env) {
     var f = new Fixture(env);
     done(env, f.adapter.activate());
@@ -274,6 +326,24 @@ class InputSafetyTest {
     }
     assertTrue(pings.collect().isEmpty());
     assertEquals(0, f.player.getHeldSlot());
+    done(env, f.adapter.closeAsync());
+  }
+
+  @Test
+  void airCatcherConsumesNativeInteractionWithoutHandItems(Env env) {
+    var f = new Fixture(env);
+    done(env, f.adapter.activate());
+    var entities =
+        f.player.getInstance().getEntities().stream()
+            .filter(e -> e.getEntityType() == EntityType.INTERACTION)
+            .toList();
+    assertEquals(1, entities.size());
+    var meta =
+        (net.minestom.server.entity.metadata.other.InteractionMeta)
+            entities.getFirst().getEntityMeta();
+    assertTrue(meta.getResponse());
+    assertTrue(f.player.getItemInMainHand().isAir());
+    assertTrue(f.player.getItemInOffHand().isAir());
     done(env, f.adapter.closeAsync());
   }
 

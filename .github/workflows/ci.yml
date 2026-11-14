@@ -19,7 +19,35 @@ jobs:
       - run: ./gradlew check publishAllPublicationsToReviewRepository
       - run: python3 tools/verify_public_artifacts.py
       - run: python3 -m unittest discover -s tools -p '*_test.py'
-      - run: ./gradlew -p fixtures/java-consumer run "-PdialogueRepository=file:${GITHUB_WORKSPACE}/.evidence/maven"
-      - run: ./gradlew -p fixtures/kotlin-consumer run "-PdialogueRepository=file:${GITHUB_WORKSPACE}/.evidence/maven"
+      - name: Verify actual independent consumer JARs
+        run: |
+          ./gradlew -p fixtures/java-consumer run "-PdialogueRepository=file:${GITHUB_WORKSPACE}/.evidence/maven" > .evidence/java-consumer.log
+          ./gradlew -p fixtures/kotlin-consumer run "-PdialogueRepository=file:${GITHUB_WORKSPACE}/.evidence/maven" > .evidence/kotlin-consumer.log
+          ./gradlew -p fixtures/minestom-consumer test run "-PdialogueRepository=file:${GITHUB_WORKSPACE}/.evidence/maven" > .evidence/minestom-consumer.log
+          python3 tools/verify_consumer_origins.py --log .evidence/java-consumer.log --log .evidence/kotlin-consumer.log --log .evidence/minestom-consumer.log
+      - name: Run credential-free Minestom application and protocol smoke
+        run: |
+          ./gradlew -p examples/standalone-minestom test installDist run --args=--smoke "-PdialogueRepository=file:${GITHUB_WORKSPACE}/.evidence/maven"
+          python3 tools/minestom_smoke.py --profile public-26.2
       - run: ./gradlew :examples:headless-dialogue:run --args=--smoke
       - run: ./gradlew :examples:headless-dialogue:run --args=--presentation-smoke
+
+  personal-npc-consumer:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    env:
+      GITHUB_ACTOR: ${{ github.actor }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v6
+      - run: ./gradlew publishAllPublicationsToReviewRepository
+      - name: Test published NPC 0.2.0 integration with actual personal actors
+        run: ./gradlew -p fixtures/npc-dialogue-consumer test run --args=--smoke "-PdialogueRepository=file:${GITHUB_WORKSPACE}/.evidence/maven"

@@ -19,3 +19,4 @@ dependencies {
 application { mainClass.set("example.DialogueDemo") }
 tasks.test { useJUnitPlatform(); systemProperty("minestom.inside-test","true") }
 tasks.withType<JavaExec>().configureEach { systemProperty("java.net.preferIPv4Stack","true");providers.gradleProperty("dialoguePort").orNull?.let { systemProperty("dialogue.port",it) };providers.gradleProperty("dialoguePackPort").orNull?.let { systemProperty("dialogue.packPort",it) } }
+apply(from="../../gradle/minestom-demo-profile.gradle.kts")

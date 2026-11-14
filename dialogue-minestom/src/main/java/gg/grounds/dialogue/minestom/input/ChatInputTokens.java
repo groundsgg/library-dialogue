@@ -24,10 +24,17 @@ public final class ChatInputTokens {
     this.clock = Objects.requireNonNull(clock);
   }
 
-  public synchronized String issue(String choiceId, TargetSnapshot snapshot) {
+  public String issue(String choiceId, TargetSnapshot snapshot) {
+    long now = clock.getAsLong();
+    synchronized (this) {
+      return issueAt(choiceId, snapshot, now);
+    }
+  }
+
+  private String issueAt(String choiceId, TargetSnapshot snapshot, long now) {
     if (choiceId != null && !snapshot.choices().containsKey(choiceId))
       throw new IllegalArgumentException("UNISSUED_CHOICE");
-    tokens.values().removeIf(t -> t.expires() < clock.getAsLong());
+    tokens.values().removeIf(t -> t.expires() < now);
     if (tokens.size() >= 64) throw new IllegalStateException("CHAT_TOKEN_LIMIT");
     var bytes = new byte[16];
     String token;
@@ -44,18 +51,23 @@ public final class ChatInputTokens {
                 snapshot.nodeVisitId(),
                 snapshot.surfaceGeneration(),
                 choiceId),
-            clock.getAsLong() + 30_000_000_000L));
+            now + 30_000_000_000L));
     return token;
   }
 
-  public synchronized Optional<TargetSnapshot.Target> resolve(
-      Player player, long generation, String token) {
+  public Optional<TargetSnapshot.Target> resolve(Player player, long generation, String token) {
     if (this.player != player || this.generation != generation || !player.isOnline())
       return Optional.empty();
+    long now = clock.getAsLong();
+    synchronized (this) {
+      return resolveAt(token, now);
+    }
+  }
+
+  private Optional<TargetSnapshot.Target> resolveAt(String token, long now) {
     var issued = tokens.get(token);
     var current = targets.current();
-    if (issued == null || current == null || issued.expires() < clock.getAsLong())
-      return Optional.empty();
+    if (issued == null || current == null || issued.expires() < now) return Optional.empty();
     var t = issued.target();
     if (!t.sessionId().equals(current.sessionId())
         || t.nodeVisitId() != current.nodeVisitId()

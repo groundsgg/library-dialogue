@@ -137,6 +137,35 @@ class RendererFallbackTest {
   }
 
   @Test
+  void closeSettlesOutstandingDirectReconfiguration(Env env) {
+    var f = new Fixture(env);
+    var handle =
+        done(
+            env,
+            f.renderer.prepare(
+                new gg.grounds.dialogue.core.port.DialogueRenderer.PresentationRequest(
+                    RenderFixtures.SESSION,
+                    "player",
+                    1,
+                    new PresentationPreferences("hud", Duration.ZERO, false, Map.of()),
+                    new CancellationToken(),
+                    System.nanoTime() + 5_000_000_000L,
+                    budgets())));
+    done(env, handle.replace(RenderFixtures.view("Hello", 5)));
+    f.npc.gate = new CompletableFuture<>();
+    var change =
+        handle.reconfigure(new PresentationPreferences("npc", Duration.ZERO, false, Map.of()));
+    assertTrue(env.tickWhile(() -> f.npc.writes == 0, Duration.ofSeconds(2)));
+    var close = handle.closeAsync();
+    f.npc.gate.complete(null);
+    done(env, close);
+    assertTrue(
+        change.toCompletableFuture().isCompletedExceptionally(),
+        "Closing must settle the public operation");
+    done(env, f.core.closeAsync());
+  }
+
+  @Test
   void firstFrameMissingGlyphStartsInChat(Env env) {
     var f = new Fixture(env);
     f.chat.gate = new CompletableFuture<>();

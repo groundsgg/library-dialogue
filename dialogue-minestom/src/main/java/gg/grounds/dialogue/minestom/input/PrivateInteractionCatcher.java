@@ -22,9 +22,9 @@ public final class PrivateInteractionCatcher implements OwnedResource {
     entity.setNoGravity(true);
     entity.setHasPhysics(false);
     var meta = (InteractionMeta) entity.getEntityMeta();
-    meta.setWidth(1.6f);
-    meta.setHeight(2);
-    meta.setResponse(false);
+    meta.setWidth(32);
+    meta.setHeight(32);
+    meta.setResponse(true);
   }
 
   public static CompletionStage<PrivateInteractionCatcher> open(
@@ -55,8 +55,7 @@ public final class PrivateInteractionCatcher implements OwnedResource {
   }
 
   private Pos position() {
-    var eye = player.getPosition().add(0, player.getEyeHeight(), 0);
-    return eye.add(player.getPosition().direction().mul(.8)).sub(0, 1, 0).withView(0, 0);
+    return player.getPosition().sub(0, .5, 0).withView(0, 0);
   }
 
   public void publish() {

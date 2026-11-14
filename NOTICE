@@ -8,3 +8,14 @@ See default-theme/FONT-LICENSE.txt in dialogue-presentation. The font is not rel
 The optional Minestom adapter includes an unchanged DejaVu Sans font source and
 original generated glyph/skin assets. Font license and provenance are included
 in each default-minecraft profile under assets/dialogue/font-source/.
+
+The dialogue-minestom native glyph atlases and UI geometry are generated original
+sample assets using the same licensed DejaVu Sans source. Each frozen profile
+ships its source font and license under assets/dialogue/font-source and a verified
+manifest. The optional post-effect shader is original project code. Minecraft
+client metadata/bytecode was inspected locally for compatibility; no Minecraft
+client code or texture files are redistributed.
+
+The independent NPC dialogue example reuses the original neutral MIT example
+model/clip/JSON from groundsgg/library-npc, by the same project owner. Its JSON
+references vanilla texture identifiers without redistributing vanilla textures.
