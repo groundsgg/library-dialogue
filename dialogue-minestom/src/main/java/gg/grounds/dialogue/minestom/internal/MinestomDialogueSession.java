@@ -164,6 +164,29 @@ public final class MinestomDialogueSession {
     return view;
   }
 
+  public void chat(String value) {
+    var q = request;
+    var r = renderer;
+    var current = view;
+    if (q == null
+        || current == null
+        || !guard.isCurrent()
+        || !(r instanceof DialogueInputSource source)) return;
+    source
+        .resolveChat(q.player(), q.hostGeneration(), value)
+        .ifPresent(
+            target -> {
+              if (target.sessionId().equals(current.sessionId())
+                  && target.nodeVisitId() == current.nodeVisitId()
+                  && target.renderRevision() == current.renderRevision())
+                submit(
+                    new DialogueInput.Confirm(
+                        new DialogueInput.InputStamp(
+                            target.sessionId(), target.renderRevision(), nextImpulse()),
+                        target.choiceId()));
+            });
+  }
+
   public long nextImpulse() {
     return impulse.incrementAndGet();
   }

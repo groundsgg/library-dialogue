@@ -31,6 +31,18 @@ public final class MinestomDialogueHost {
   private final IdentityHashMap<Player, Ticket> active = new IdentityHashMap<>();
   private final List<MinestomDialogueSession> failedOwners = new ArrayList<>();
   private final EventNode<Event> events;
+  private final gg.grounds.dialogue.minestom.asset.PackStateTracker packs =
+      new gg.grounds.dialogue.minestom.asset.PackStateTracker();
+  private final net.minestom.server.command.builder.Command inputRoute;
+
+  public gg.grounds.dialogue.minestom.asset.PackStateTracker packState() {
+    return packs;
+  }
+
+  String inputRoute() {
+    return "/" + inputRoute.getName();
+  }
+
   private boolean closing;
   private CompletableFuture<Void> closed;
   private CompletionStage<Void> closeView;
@@ -39,10 +51,24 @@ public final class MinestomDialogueHost {
   MinestomDialogueHost(MinestomDialogueOptions options, RendererFactory renderers) {
     this.options = Objects.requireNonNull(options);
     this.renderers = Objects.requireNonNull(renderers);
+    inputRoute =
+        new net.minestom.server.command.builder.Command(
+            "dialogue_input_" + UUID.randomUUID().toString().replace("-", ""));
+    inputRoute.setDefaultExecutor(
+        (sender, context) -> {
+          if (!(sender instanceof Player player)) return;
+          String[] args = context.getInput().trim().split("\\s+");
+          if (args.length != 2 || !args[1].matches("[A-Za-z0-9_-]{22}")) return;
+          var ticket = current(player);
+          var session = ticket == null ? null : ticket.session;
+          if (session != null) session.chat(args[1]);
+        });
+    MinecraftServer.getCommandManager().register(inputRoute);
     events = EventNode.all("dialogue-" + UUID.randomUUID());
     events.addListener(
         PlayerDisconnectEvent.class,
         e -> {
+          packs.forget(e.getPlayer());
           var ticket = current(e.getPlayer());
           if (ticket != null) ticket.cancel(DialogueEndReason.DISCONNECTED);
         });
@@ -64,6 +90,9 @@ public final class MinestomDialogueHost {
             if (session != null) session.checkConnection();
           }
         });
+    events.addListener(
+        PlayerResourcePackStatusEvent.class,
+        e -> packs.observe(e.getPlayer(), e.getPackUuid(), e.getStatus()));
     MinecraftServer.getGlobalEventHandler().addChild(events);
   }
 
@@ -156,6 +185,8 @@ public final class MinestomDialogueHost {
       tickets = List.copyOf(starts.values());
     }
     MinecraftServer.getGlobalEventHandler().removeChild(events);
+    MinecraftServer.getCommandManager().unregister(inputRoute);
+    packs.clear();
     var pending =
         tickets.stream()
             .map(t -> t.cancel(DialogueEndReason.HOST_CLOSED).toCompletableFuture())

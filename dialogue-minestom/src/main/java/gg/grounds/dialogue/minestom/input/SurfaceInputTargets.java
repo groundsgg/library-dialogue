@@ -35,6 +35,11 @@ public final class SurfaceInputTargets {
     lastRender = frame.semantic().renderRevision();
   }
 
+  /** Invalidates interaction immediately without retiring a still-active surface. */
+  public synchronized void invalidateCurrent(long generation) {
+    if (current != null && current.surfaceGeneration() == generation) current = null;
+  }
+
   public synchronized void clear(long generation) {
     invalidThrough = Math.max(invalidThrough, generation);
     if (current != null && current.surfaceGeneration() <= generation) current = null;
