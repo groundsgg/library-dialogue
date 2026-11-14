@@ -28,4 +28,5 @@ class DialogueLifecycleTest {
   var r=new TestRig();renderer(r,req->CompletableFuture.completedFuture(new Surface()),req->CompletableFuture.failedFuture(new IllegalStateException("optional")));assertNotNull(r.start());
   var x=new TestRig();var late=new CompletableFuture<ActorPort.ActorHandle>();renderer(x,req->CompletableFuture.completedFuture(new Surface()),req->late);var f=x.runtime.start(x.request("optional"));x.scheduler.drain();x.scheduler.advance(Duration.ofSeconds(5));assertInstanceOf(DialogueStartResult.Started.class,TestRig.done(f));
  }
+ @Test void throwingCancellationListenerCannotSkipOwnedCleanup(){var r=new TestRig();var s=new Surface();renderer(r,req->{req.cancellation().onCancel(reason->{throw new IllegalStateException("listener");});return CompletableFuture.completedFuture(s);},null);var h=r.start();var end=assertDoesNotThrow(()->h.stop(DialogueEndReason.CANCELLED));r.scheduler.drain();assertEquals(DialogueEndReason.CANCELLED,TestRig.done(end).reason());assertEquals(1,s.closes);}
 }
