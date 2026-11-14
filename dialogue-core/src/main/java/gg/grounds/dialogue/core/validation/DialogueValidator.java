@@ -11,6 +11,7 @@ public final class DialogueValidator {
  public ValidationReport validate(DialogueDefinition d, TextCatalog texts, HostCatalog host, ValidationLimits limits) {
   Objects.requireNonNull(d);Objects.requireNonNull(texts);Objects.requireNonNull(host);Objects.requireNonNull(limits);
   var check=new Check(d,texts,host,limits);check.run();
+  if(check.problems.stream().noneMatch(p->p.severity()==Severity.ERROR) && ContentFingerprint.definitionBytes(d).length>limits.definitionBytes()) check.problem("CONTENT_LIMIT","/",null,"Definition exceeds byte budget");
   return new ValidationReport(check.problems,check.problems.stream().anyMatch(p->p.severity()==Severity.ERROR)?null:new ValidatedDialogue(d,texts,host,limits));
  }
  public static List<String> targets(Node n) {
