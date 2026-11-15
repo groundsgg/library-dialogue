@@ -9,6 +9,24 @@ matrix is **pending**. Earlier 25570/25572/25576 prototype feedback is design
 evidence, not acceptance of these new Maven artifacts. No merge/release claim may
 replace the rows below with headless, packet or source-inspection evidence.
 
+Latest targeted client result (2026-11-15): the user confirmed the fixed
+three-slot HUD card viewport on Grounds 26.3, build `70f7e67`. Only existing
+cards are painted, unused slots remain transparent, the scrollbar sits outside,
+and speech/footer positions stay fixed on the last page. Card text remains
+left-aligned and vertically centered. This accepts that targeted layout check;
+the full matrix below, including public 26.2 and GUI-scale/two-client cases,
+remains open. [CI for the tested build](https://github.com/groundsgg/library-dialogue/actions/runs/43741285806)
+passed both required jobs.
+
+Runtime evidence for that client result:
+
+| Artifact | SHA-256 |
+|---|---|
+| Grounds 26.3 pack | `a959fe0361131e898b62c0d4ea0deee5191bb8556cd2f36dfb3fbc4295c208ab` |
+| dialogue-core | `febb99136f126137de8c8852eeb5b5196c7aefd2dac335510162c06f75c145a9` |
+| dialogue-presentation | `6644449433312cce80eeb18382ace6826438cc190f1c090392f0e86a08d73b83` |
+| dialogue-minestom | `fe18909401cba1e2e1eefdd4b3400d236611d34d4e0ad08cfa94642316a73627` |
+
 The neutral personal-NPC demo uses loopback 25578, pack 25579 and the explicit
 Grounds 26.3 profile. The old prototype is unchanged. Run the candidate build only
 after current publication pins, independent consumers and the fork gate pass.
@@ -47,6 +65,11 @@ A new pack hash requires a fresh pack download/acceptance for that build. Openin
 the dialogue afterwards must not produce another pack prompt. Headless demo runs
 may mark a simulated connection's pack ready solely for server-side tests; they
 are never evidence that a real client downloaded or rendered it.
+
+## Earlier iteration history
+
+The entries below describe the check state at each earlier iteration; the latest
+targeted result above takes precedence for the fixed card viewport.
 
 2026-11-15 follow-up: the first real 26.3 client run reported graphical errors.
 The supplied NPC screenshot shows vertical stripes across panel fills and frames;
