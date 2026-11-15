@@ -114,6 +114,10 @@ class NativeReviewRegressionTest {
     }
 
     MinestomDialogueStart start(String surface, boolean hide) {
+      return start(surface, hide, InputProfile.defaults());
+    }
+
+    MinestomDialogueStart start(String surface, boolean hide, InputProfile controls) {
       var binding =
           new MinestomSpeakerBinding(
               "npc",
@@ -135,7 +139,7 @@ class NativeReviewRegressionTest {
                   surface, Duration.ZERO, false, Map.of("hideHud", Boolean.toString(hide))),
               Map.of("npc", binding),
               null,
-              InputProfile.defaults(),
+              controls,
               0));
     }
 

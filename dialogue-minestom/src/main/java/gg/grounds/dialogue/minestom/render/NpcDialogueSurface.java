@@ -512,7 +512,10 @@ public final class NpcDialogueSurface implements DialogueSurface {
         if (w.kind() == WidgetFrame.Kind.CHOICE && w.enabled())
           choices.put(w.choiceId(), w.hitRect());
       }
-      if (value.scrollbar() != null) fronts.add(value.scrollbar().track());
+      if (value.scrollbar() != null) {
+        fronts.add(value.scrollbar().track());
+        value.scrollbar().buttons().forEach(button -> fronts.add(button.bounds()));
+      }
       geometries.put(context.generation(), new Geometry(transform, fronts, context.generation()));
       targets.publish(value, context.generation(), choices, () -> !closed.get() && available());
     }

@@ -12,7 +12,37 @@ public record LayoutProfile(
     double gap,
     double choicePadding,
     Style style,
-    double columnGap) {
+    double columnGap,
+    boolean navigationButtons) {
+  public LayoutProfile(
+      String key,
+      double width,
+      double choiceWidth,
+      double padding,
+      int maxTextLines,
+      int choiceCapacity,
+      int maxChoiceLines,
+      ChoicePlacement placement,
+      double gap,
+      double choicePadding,
+      Style style,
+      double columnGap) {
+    this(
+        key,
+        width,
+        choiceWidth,
+        padding,
+        maxTextLines,
+        choiceCapacity,
+        maxChoiceLines,
+        placement,
+        gap,
+        choicePadding,
+        style,
+        columnGap,
+        false);
+  }
+
   public LayoutProfile(
       String key,
       double width,
@@ -146,6 +176,6 @@ public record LayoutProfile(
   /** Minimum clear column gap; the presenter additionally reserves selection growth. */
   public static LayoutProfile npc(double columnGap) {
     return new LayoutProfile(
-        "npc", 320, 240, 12, 3, 3, 2, ChoicePlacement.RIGHT, 6, 12, Style.PANELS, columnGap);
+        "npc", 320, 240, 12, 3, 3, 2, ChoicePlacement.RIGHT, 6, 12, Style.PANELS, columnGap, true);
   }
 }

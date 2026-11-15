@@ -70,6 +70,48 @@ class SurfaceInputTargetsTest {
   }
 
   @Test
+  void navigationDestinationsAreIssuedOffersAndDisabledButtonsStayScoped() {
+    var t = new SurfaceInputTargets();
+    var f = frame(1);
+    var track = new WidgetFrame.Rect(600, 0, 2, 132);
+    var up =
+        new WidgetFrame.NavigationButton(
+            WidgetFrame.NavigationDirection.PREVIOUS, new WidgetFrame.Rect(593, -20, 16, 16), null);
+    var forged =
+        new WidgetFrame.NavigationButton(
+            WidgetFrame.NavigationDirection.NEXT, new WidgetFrame.Rect(593, 136, 16, 16), "forged");
+    var bad =
+        new WidgetFrame(
+            f.semantic(),
+            f.widgets(),
+            f.fontPin(),
+            f.theme(),
+            null,
+            new WidgetFrame.Scrollbar(
+                track, new WidgetFrame.Rect(600, 0, 2, 56), List.of(up, forged)));
+    assertThrows(IllegalArgumentException.class, () -> t.publish(bad, 1, Map.of()));
+    var down = new WidgetFrame.NavigationButton(forged.direction(), forged.bounds(), "leave");
+    var good =
+        new WidgetFrame(
+            f.semantic(),
+            f.widgets(),
+            f.fontPin(),
+            f.theme(),
+            null,
+            new WidgetFrame.Scrollbar(
+                track, new WidgetFrame.Rect(600, 0, 2, 56), List.of(up, down)));
+    t.publish(good, 1, Map.of());
+    assertEquals(2, t.current().navigation().size());
+    assertFalse(t.current().navigation().get(WidgetFrame.NavigationDirection.PREVIOUS).enabled());
+    assertEquals(
+        "leave", t.current().navigation().get(WidgetFrame.NavigationDirection.NEXT).choiceId());
+    t.clear(1);
+    assertNull(t.current());
+    t.publish(good, 1, Map.of());
+    assertNull(t.current());
+  }
+
+  @Test
   void foreignChoiceCannotBecomeClickable() {
     var t = new SurfaceInputTargets();
     assertThrows(

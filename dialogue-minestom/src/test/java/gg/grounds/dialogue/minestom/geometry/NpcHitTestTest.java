@@ -86,6 +86,36 @@ class NpcHitTestTest {
   }
 
   @Test
+  void navigationHitConsumesDisabledBackAndOccludedButtonsWithoutActivation() {
+    var eye = new Vec(0, 2, 4);
+    var t = NpcPanelTransform.from(anchor, eye).withSpeechHeight(40).withChoiceFold(342, 12);
+    var rect = new WidgetFrame.Rect(593, 136, 16, 16);
+    var button =
+        new WidgetFrame.NavigationButton(WidgetFrame.NavigationDirection.NEXT, rect, "next");
+    var targets =
+        new TargetSnapshot(
+            UUID.randomUUID(), 1, 1, 1, Map.of(), 1, Map.of(button.direction(), button));
+    var point = t.widgetToWorld(601, 144);
+    var ray = point.sub(eye).asVec().normalize();
+    assertTrue(
+        NpcHitTest.navigationHit(eye, ray, t, targets, (a, b) -> true).orElseThrow().usable());
+    assertFalse(
+        NpcHitTest.navigationHit(eye, ray, t, targets, (a, b) -> false).orElseThrow().usable());
+    var plane = t.planeFor(rect);
+    assertFalse(
+        NpcHitTest.navigationHit(
+                point.sub(plane.normal().mul(2)), plane.normal(), t, targets, (a, b) -> true)
+            .orElseThrow()
+            .usable());
+    var disabled = new WidgetFrame.NavigationButton(button.direction(), rect, null);
+    var noNext =
+        new TargetSnapshot(
+            targets.sessionId(), 1, 1, 1, Map.of(), 1, Map.of(button.direction(), disabled));
+    assertFalse(
+        NpcHitTest.navigationHit(eye, ray, t, noNext, (a, b) -> true).orElseThrow().usable());
+  }
+
+  @Test
   void disabledFrontProtectsZoneButNeverSelects() {
     var eye = new Vec(0, 2, 4);
     var t = NpcPanelTransform.from(anchor, eye);

@@ -186,12 +186,27 @@ public final class DialoguePresenter implements DialogueRenderer {
                 t ->
                     layout(t, metrics, l.choiceWidth() - 2 * l.choicePadding(), l.maxChoiceLines()))
             .toList();
-    double cardHeight =
+    double maxLabelHeight =
         layouts.stream()
-                .mapToDouble(TextLayout.TextLayoutResult::height)
-                .max()
-                .orElse(metrics.lineHeight())
-            + 2 * l.choicePadding();
+            .mapToDouble(TextLayout.TextLayoutResult::height)
+            .max()
+            .orElse(metrics.lineHeight());
+    if (l.navigationButtons())
+      for (var choice : view.choices()) {
+        String reason =
+            choice.availability() == DialogueView.Availability.AVAILABLE
+                ? ""
+                : ui.choiceReasons().getOrDefault(choice.id(), "");
+        var label =
+            new ResolvedText(
+                choice.label() + (reason.isEmpty() ? "" : "\n" + reason), view.localeTag());
+        maxLabelHeight =
+            Math.max(
+                maxLabelHeight,
+                layout(label, metrics, l.choiceWidth() - 2 * l.choicePadding(), l.maxChoiceLines())
+                    .height());
+      }
+    double cardHeight = maxLabelHeight + 2 * l.choicePadding();
     double growth = Math.ceil(l.choiceWidth() * (p.theme().selectedScale() - 1) / 2);
     double columnGap = l.columnGap() + growth;
     double x =
@@ -277,6 +292,20 @@ public final class DialoguePresenter implements DialogueRenderer {
                     2,
                     l.choiceCapacity() * cardHeight + (l.choiceCapacity() - 1) * l.gap()))
             : null;
+    if (scroll != null && l.navigationButtons()) {
+      var track = scroll.track();
+      var buttons =
+          List.of(
+              new WidgetFrame.NavigationButton(
+                  WidgetFrame.NavigationDirection.PREVIOUS,
+                  new Rect(track.x() - 7, track.y() - 20, 16, 16),
+                  pageTarget(view.choices(), window.start(), l.choiceCapacity(), -1)),
+              new WidgetFrame.NavigationButton(
+                  WidgetFrame.NavigationDirection.NEXT,
+                  new Rect(track.x() - 7, track.y() + track.height() + 4, 16, 16),
+                  pageTarget(view.choices(), window.start(), l.choiceCapacity(), 1)));
+      scroll = new WidgetFrame.Scrollbar(track, scroll.thumb(), buttons);
+    }
     return new WidgetFrame(view, widgets, metrics.pin(), p.theme(), null, scroll);
   }
 
@@ -461,6 +490,18 @@ public final class DialoguePresenter implements DialogueRenderer {
     return new WidgetFrame(v, widgets, metrics.pin(), p.theme(), chrome, scrollbar);
   }
 
+  private static String pageTarget(
+      List<DialogueView.ChoiceView> choices, int start, int capacity, int direction) {
+    for (int page = start + direction * capacity;
+        page >= 0 && page < choices.size();
+        page += direction * capacity) {
+      for (int index = page; index < Math.min(choices.size(), page + capacity); index++)
+        if (choices.get(index).availability() == DialogueView.Availability.AVAILABLE)
+          return choices.get(index).id();
+    }
+    return null;
+  }
+
   private static WidgetFrame.Scrollbar scrollbar(ChoiceViewport.ChoiceWindow window, Rect track) {
     double thumbHeight =
         Math.max(6, Math.floor(track.height() * window.choices().size() / window.total()));
@@ -534,6 +575,7 @@ public final class DialoguePresenter implements DialogueRenderer {
     layout.put("placement", l.placement().name().toLowerCase(Locale.ROOT));
     layout.put("gap", l.gap());
     if (l.columnGap() != l.gap()) layout.put("columnGap", l.columnGap());
+    if (l.navigationButtons()) layout.put("navigationButtons", true);
     return ContentFingerprint.hash(
             ContentFingerprint.canonicalBytes(
                 Map.of(

@@ -69,10 +69,15 @@ are never evidence that a real client downloaded or rendered it.
 NPC follow-up: the user confirmed hover selection/growth and fixed placement
 while moving/off-screen on the accepted 70f7e67 demo. Highlighted cards still
 needed more space from the speech and lacked the overflow indicator. The user
-also requested a configurable inward angle. The next candidate adds highlight-safe
-spacing, a shared world scrollbar and a hinged answer column (default12 degrees,
-`/npcangle 0` for flat, `/npcgap 12` for the minimum visible gap). That changed
-NPC geometry requires a fresh client check; the confirmed HUD remains reference.
+also requested a configurable inward angle. On build `eb8cb5e`, the user
+confirmed the highlight-safe spacing, shared world scrollbar and hinged answer
+column (default12 degrees, `/npcangle 0` for flat, `/npcgap 12` for the minimum
+visible gap) as good. The same client run identified contention between wheel
+and hover and requested up/down page arrows. The next candidate adds arrow
+navigation using the configured confirmation input and keeps manual selection
+until deliberate gaze/eye movement. Arrow activation only selects a page; it
+never executes an answer. Disabled end arrows consume confirmation. This new
+navigation requires its own client check; the confirmed HUD remains reference.
 
 ## Earlier iteration history
 

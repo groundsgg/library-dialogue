@@ -36,9 +36,36 @@ public record WidgetFrame(
     }
   }
 
-  /** Non-interactive overflow indicator measured in the shared layout coordinate system. */
-  public record Scrollbar(Rect track, Rect thumb) {
+  public enum NavigationDirection {
+    PREVIOUS,
+    NEXT
+  }
+
+  /** Null choiceId means a visible but disabled page button. */
+  public record NavigationButton(NavigationDirection direction, Rect bounds, String choiceId) {
+    public NavigationButton {
+      Objects.requireNonNull(direction);
+      Objects.requireNonNull(bounds);
+      if (choiceId != null && choiceId.isBlank())
+        throw new IllegalArgumentException("Invalid navigation choice");
+    }
+
+    public boolean enabled() {
+      return choiceId != null;
+    }
+  }
+
+  /** Overflow indicator and optional page controls in the shared layout coordinate system. */
+  public record Scrollbar(Rect track, Rect thumb, List<NavigationButton> buttons) {
+    public Scrollbar(Rect track, Rect thumb) {
+      this(track, thumb, List.of());
+    }
+
     public Scrollbar {
+      buttons = List.copyOf(buttons);
+      if (buttons.size() > 2
+          || buttons.stream().map(NavigationButton::direction).distinct().count() != buttons.size())
+        throw new IllegalArgumentException("Duplicate navigation direction");
       Objects.requireNonNull(track);
       Objects.requireNonNull(thumb);
       if (track.width() <= 0
@@ -62,7 +89,10 @@ public record WidgetFrame(
     var rects = new ArrayList<Rect>();
     widgets.forEach(w -> rects.add(w.bounds()));
     if (chrome != null) rects.add(chrome.bounds());
-    if (scrollbar != null) rects.add(scrollbar.track());
+    if (scrollbar != null) {
+      rects.add(scrollbar.track());
+      scrollbar.buttons().forEach(b -> rects.add(b.bounds()));
+    }
     if (rects.isEmpty()) return new Rect(0, 0, 0, 0);
     double left = rects.stream().mapToDouble(Rect::x).min().orElse(0),
         top = rects.stream().mapToDouble(Rect::y).min().orElse(0);

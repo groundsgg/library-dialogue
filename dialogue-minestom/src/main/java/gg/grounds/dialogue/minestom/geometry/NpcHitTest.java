@@ -15,14 +15,42 @@ public final class NpcHitTest {
 
   private static Point intersection(
       Point eye, Vec direction, NpcPanelTransform transform, WidgetFrame.Rect bounds) {
+    return intersection(eye, direction, transform, bounds, true);
+  }
+
+  private static Point intersection(
+      Point eye,
+      Vec direction,
+      NpcPanelTransform transform,
+      WidgetFrame.Rect bounds,
+      boolean frontOnly) {
     var plane = transform.planeFor(bounds);
     double denominator = direction.dot(plane.normal());
-    if (denominator >= -1e-9) return null;
+    if (Math.abs(denominator) < 1e-9 || frontOnly && denominator >= -1e-9) return null;
     double distance = plane.origin().sub(eye).asVec().dot(plane.normal()) / denominator;
     if (!Double.isFinite(distance) || distance <= 0) return null;
     var world = eye.add(direction.mul(distance));
     var p = plane.worldToWidget(world);
     return bounds.contains(p.x(), p.y()) ? world : null;
+  }
+
+  public record NavigationHit(WidgetFrame.NavigationButton button, boolean usable) {}
+
+  /** A blocked/disabled/back button still consumes confirmation; it never confirms an answer. */
+  public static Optional<NavigationHit> navigationHit(
+      Point eye,
+      Vec direction,
+      NpcPanelTransform transform,
+      TargetSnapshot targets,
+      OcclusionTest occlusion) {
+    for (var button : targets.navigation().values()) {
+      var world = intersection(eye, direction, transform, button.bounds(), false);
+      if (world == null) continue;
+      boolean front = direction.dot(transform.planeFor(button.bounds()).normal()) < -1e-9;
+      return Optional.of(
+          new NavigationHit(button, front && button.enabled() && occlusion.visible(eye, world)));
+    }
+    return Optional.empty();
   }
 
   public static Optional<String> hit(

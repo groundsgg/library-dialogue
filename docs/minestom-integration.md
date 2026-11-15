@@ -117,8 +117,11 @@ surfaces. Ambiguous arm-animation packets are not treated as Attack. This
 public-base route still needs explicit 26.3 hand/held-button client acceptance.
 
 NPC hover uses the exact published world plane and original rectangles. A
-stationary hover does not undo manual scroll. A newly changed hover target selects
-at most and needs a fresh confirm impulse. Back faces and block-occluded fronts do
+stationary hover does not undo manual scroll, including during confirmation and
+page changes. After wheel or arrow selection, hover resumes when gaze moves at
+least1.5 degrees or the eye moves more than0.08 blocks; sub-threshold jitter
+keeps the manual selection. A newly changed hover target selects at most and
+needs a fresh confirm impulse. Back faces and block-occluded fronts do
 not hover. Native collision shapes include partial blocks. Default hit testing
 assumes first-person view; unregistered third-person cameras are not supported.
 
@@ -216,7 +219,15 @@ More than three answers use the same `WidgetFrame.Scrollbar` and `ChoiceViewport
 as the HUD. The native encoder provides one additional private front/back pair,
 using existing scroll glyphs and an explicit paint baseline. It adds no pack
 assets, clock or NPC-library dependency. Empty/fewer-choice nodes release that
-pair. The default native world scrollbar supports track heights up to192 GUI
+pair. NPC scrollbars include an up/down arrow on the same folded plane; each
+confirmation over an enabled arrow selects the first available answer on the
+adjacent three-answer page without confirming that answer or executing an
+action. Pages without available answers are skipped. Disabled end arrows are
+muted. Their hits, including blocked/back hits, consume confirmation without
+falling through to the current answer. Targets are stamped and validated against
+the current issued offers, state, visit and surface generation. Arrow glyphs use
+the existing font, appear on the front only and need no additional display pair.
+The default native world scrollbar supports track heights up to192 GUI
 pixels; unsupported custom geometry falls back intact to chat. All displays
 remain inside the shared per-connection32 budget, including pending/closing ones.
 

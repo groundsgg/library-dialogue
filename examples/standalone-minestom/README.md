@@ -26,7 +26,10 @@ The card viewport reserves three slots and its scrollbar gutter; unused cards
 remain transparent so the speech and footer do not move between pages.
 For NPC panels, `/npcangle 0..35` sets the inward column angle (default12) and
 `/npcgap 0..64` sets the minimum visible gap after hover growth (default12 GUI
-pixels). Both apply live. More than three NPC answers also show a private scrollbar.
+pixels). Both apply live. More than three NPC answers show a private scrollbar
+with up/down arrows. Aim at an arrow and use the configured confirm input to
+page by three answers; this never executes an answer. Wheel selection stays
+selected until you deliberately move your gaze, preventing hover from undoing it.
 The task choice waits two seconds as a local example action, without a quest service.
 
 `/confirm use|attack|swap` selects the next dialogue's confirm profile. Defaults

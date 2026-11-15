@@ -9,7 +9,25 @@ public record TargetSnapshot(
     long nodeVisitId,
     long surfaceGeneration,
     Map<String, WidgetFrame.Rect> choices,
-    long stateRevision) {
+    long stateRevision,
+    Map<WidgetFrame.NavigationDirection, WidgetFrame.NavigationButton> navigation) {
+  public TargetSnapshot(
+      UUID sessionId,
+      long renderRevision,
+      long nodeVisitId,
+      long surfaceGeneration,
+      Map<String, WidgetFrame.Rect> choices,
+      long stateRevision) {
+    this(
+        sessionId,
+        renderRevision,
+        nodeVisitId,
+        surfaceGeneration,
+        choices,
+        stateRevision,
+        Map.of());
+  }
+
   public TargetSnapshot(
       UUID sessionId,
       long renderRevision,
@@ -22,6 +40,7 @@ public record TargetSnapshot(
   public TargetSnapshot {
     Objects.requireNonNull(sessionId);
     choices = Map.copyOf(choices);
+    navigation = Map.copyOf(navigation);
   }
 
   public record Target(

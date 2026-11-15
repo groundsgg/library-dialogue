@@ -30,4 +30,45 @@ class NpcLayoutTest {
         selected.bounds().x() + selected.bounds().width() * (selected.visualScale() + 1) / 2;
     assertTrue(f.scrollbar().track().x() >= grownRight + 8);
   }
+
+  @Test
+  void pageButtonsUseRealOffersAndDisableAtTheEnds() {
+    var presenter =
+        PresenterFixtures.presenter(
+            new PresenterFixtures.Surface(), new PresenterFixtures.Surface());
+    var first =
+        presenter.compose(
+            PresenterFixtures.view("Hello", 5, "c1", 1), "npc", PresentationPreferences.defaults());
+    var last =
+        presenter.compose(
+            PresenterFixtures.view("Hello", 5, "leave", 2),
+            "npc",
+            PresentationPreferences.defaults());
+    var up =
+        first.scrollbar().buttons().stream()
+            .filter(b -> b.direction() == WidgetFrame.NavigationDirection.PREVIOUS)
+            .findFirst()
+            .orElseThrow();
+    var down =
+        first.scrollbar().buttons().stream()
+            .filter(b -> b.direction() == WidgetFrame.NavigationDirection.NEXT)
+            .findFirst()
+            .orElseThrow();
+    assertFalse(up.enabled());
+    assertEquals("c4", down.choiceId());
+    assertTrue(up.bounds().y() + up.bounds().height() < first.scrollbar().track().y());
+    assertTrue(
+        down.bounds().y() > first.scrollbar().track().y() + first.scrollbar().track().height());
+    assertTrue(
+        last.scrollbar().buttons().stream()
+            .filter(b -> b.direction() == WidgetFrame.NavigationDirection.NEXT)
+            .noneMatch(WidgetFrame.NavigationButton::enabled));
+    assertEquals(
+        "c4",
+        last.scrollbar().buttons().stream()
+            .filter(b -> b.direction() == WidgetFrame.NavigationDirection.PREVIOUS)
+            .findFirst()
+            .orElseThrow()
+            .choiceId());
+  }
 }

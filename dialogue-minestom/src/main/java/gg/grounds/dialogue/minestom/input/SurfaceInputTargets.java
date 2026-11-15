@@ -34,6 +34,15 @@ public final class SurfaceInputTargets {
         .forEach(c -> allowed.add(c.id()));
     if (!allowed.containsAll(choices.keySet()))
       throw new IllegalArgumentException("UNISSUED_CHOICE");
+    var navigation =
+        new EnumMap<WidgetFrame.NavigationDirection, WidgetFrame.NavigationButton>(
+            WidgetFrame.NavigationDirection.class);
+    if (frame.scrollbar() != null)
+      for (var button : frame.scrollbar().buttons()) {
+        if (button.enabled() && !allowed.contains(button.choiceId()))
+          throw new IllegalArgumentException("UNISSUED_NAVIGATION_CHOICE");
+        navigation.put(button.direction(), button);
+      }
     live.put(
         generation,
         new Published(
@@ -45,7 +54,8 @@ public final class SurfaceInputTargets {
                 v.nodeVisitId(),
                 generation,
                 choices,
-                v.stateRevision()),
+                v.stateRevision(),
+                navigation),
             Objects.requireNonNull(valid)));
     highWater = Math.max(highWater, generation);
   }

@@ -57,21 +57,39 @@ public final class MinecraftWidgetEncoder {
       validate(track);
       if (track.height() > 192) throw failure("UNSUPPORTED_RASTER");
       hud.scrollbar(frame.scrollbar(), bounds.x(), bottom, frame.theme());
-      var local = new Canvas(bundle, true);
-      local.scrollbar(frame.scrollbar(), track.x(), 192 + track.y(), frame.theme());
-      local.move(track.width());
+      hud.navigation(frame.scrollbar(), bounds.x(), bottom, frame.theme());
+      double left = track.x(),
+          top = track.y(),
+          right = track.x() + track.width(),
+          end = track.y() + track.height();
+      for (var button : frame.scrollbar().buttons()) {
+        left = Math.min(left, button.bounds().x());
+        top = Math.min(top, button.bounds().y());
+        right = Math.max(right, button.bounds().x() + button.bounds().width());
+        end = Math.max(end, button.bounds().y() + button.bounds().height());
+      }
+      var outer = new Rect(left, top, right - left, end - top);
+      validate(outer);
+      double paintBaseline = 192 + track.y() - outer.y();
+      var local = new Canvas(bundle, false);
+      var back = new Canvas(bundle, false);
+      local.scrollbar(frame.scrollbar(), left, paintBaseline + top, frame.theme());
+      local.navigation(frame.scrollbar(), left, paintBaseline + top, frame.theme());
+      back.scrollbar(frame.scrollbar(), left, paintBaseline + top, frame.theme());
+      local.move(outer.width());
+      back.move(outer.width());
       widgets.add(
           new EncodedFrame.EncodedWidget(
               "scrollbar",
               Kind.SCROLLBAR,
               local.component,
-              local.component,
-              track,
+              back.component,
+              outer,
               null,
               false,
               1,
               java.time.Duration.ZERO,
-              192));
+              paintBaseline));
     }
     if (widgets.size() > 32) throw failure("WIDGET_LIMIT");
     hud.move(width);
@@ -205,6 +223,21 @@ public final class MinecraftWidgetEncoder {
           track.y() + track.height() - thumb.y() - thumb.height(),
           baseline,
           0x52606d);
+    }
+
+    void navigation(
+        WidgetFrame.Scrollbar scrollbar, double left, double baseline, DialogueTheme theme) {
+      for (var button : scrollbar.buttons()) {
+        String glyph = button.direction() == NavigationDirection.PREVIOUS ? "↑" : "↓";
+        double advance = metrics.width(glyph);
+        draw(
+            button.bounds().x() - left + (button.bounds().width() - advance) / 2,
+            glyph,
+            font(baseline - button.bounds().y()),
+            advance,
+            button.enabled() ? colour(theme, "selected", 0xffcd75) : 0x52606d,
+            true);
+      }
     }
 
     void bar(double x, double y, double height, double baseline, int colour) {

@@ -68,6 +68,10 @@ public final class MinestomInputAdapter implements OwnedResource {
   private PendingOperation<PrivateInteractionCatcher> acquireWait;
   private String lastHover;
   private TargetSnapshot.Target observed;
+  private Vec manualDirection;
+  private Point manualEye;
+  private UUID manualSession;
+  private long manualVisit, manualSurface;
 
   public MinestomInputAdapter(
       Player player,
@@ -393,13 +397,41 @@ public final class MinestomInputAdapter implements OwnedResource {
     for (int i = 0; i < choices.size(); i++)
       if (choices.get(i).id().equals(view.selectedChoiceId())) selected = i;
     var id = choices.get(Math.floorMod(selected + direction, choices.size())).id();
+    manualSelection(snapshot);
     return target.submit(new DialogueInput.Select(stamp(snapshot), id));
+  }
+
+  private void manualSelection(TargetSnapshot snapshot) {
+    manualDirection = player.getPosition().direction();
+    manualEye = player.getPosition().add(0, player.getEyeHeight(), 0);
+    manualSession = snapshot.sessionId();
+    manualVisit = snapshot.nodeVisitId();
+    manualSurface = snapshot.surfaceGeneration();
+    lastHover = null;
+    observed = null;
+  }
+
+  private boolean manualHoverSuppressed(TargetSnapshot snapshot) {
+    if (manualDirection == null) return false;
+    var eye = player.getPosition().add(0, player.getEyeHeight(), 0);
+    boolean changed =
+        !snapshot.sessionId().equals(manualSession)
+            || snapshot.nodeVisitId() != manualVisit
+            || snapshot.surfaceGeneration() != manualSurface
+            || player.getPosition().direction().dot(manualDirection) < Math.cos(Math.toRadians(1.5))
+            || eye.distanceSquared(manualEye) > .08 * .08;
+    if (changed) {
+      manualDirection = null;
+      manualEye = null;
+    }
+    return !changed;
   }
 
   private Optional<String> hover(TargetSnapshot snapshot) {
     var geometry = target.npcGeometry();
     if (geometry == null || geometry.surfaceGeneration() != snapshot.surfaceGeneration())
       return Optional.empty();
+    if (manualHoverSuppressed(snapshot)) return Optional.empty();
     return NpcHitTest.hit(
         player.getPosition().add(0, player.getEyeHeight(), 0),
         player.getPosition().direction(),
@@ -421,6 +453,22 @@ public final class MinestomInputAdapter implements OwnedResource {
     var snapshot = current();
     var view = target.view();
     if (snapshot == null || view == null) return ignored();
+    var geometry = target.npcGeometry();
+    if (geometry != null && geometry.surfaceGeneration() == snapshot.surfaceGeneration()) {
+      var button =
+          NpcHitTest.navigationHit(
+              player.getPosition().add(0, player.getEyeHeight(), 0),
+              player.getPosition().direction(),
+              geometry.transform(),
+              snapshot,
+              occlusion);
+      if (button.isPresent()) {
+        if (!button.get().usable()) return ignored();
+        manualSelection(snapshot);
+        return target.submit(
+            new DialogueInput.Select(stamp(snapshot), button.get().button().choiceId()));
+      }
+    }
     var hovered = hover(snapshot).orElse(null);
     if (hovered != null
         && (!hovered.equals(view.selectedChoiceId())

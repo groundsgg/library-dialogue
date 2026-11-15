@@ -452,6 +452,97 @@ class InputSafetyTest {
   }
 
   @Test
+  void confirmingAfterWheelUsesManualSelectionInsteadOfStationaryHover(Env env) {
+    var f = new Fixture(env);
+    done(env, f.adapter.activate());
+    f.aim("ask");
+    f.adapter.tick();
+    env.tick();
+    env.tick();
+    f.packet(env, new ClientHeldItemChangePacket((short) 1));
+    var v = f.view;
+    f.view =
+        new DialogueView(
+            v.sessionId(),
+            v.contentPin(),
+            v.nodeId(),
+            v.nodeVisitId(),
+            v.state(),
+            2,
+            v.renderRevision(),
+            v.localeTag(),
+            v.speaker(),
+            v.text(),
+            v.choices(),
+            "leave",
+            v.totalGraphemes(),
+            v.revealedGraphemes(),
+            v.hint(),
+            v.notice(),
+            v.pendingAction());
+    f.targets =
+        new TargetSnapshot(
+            v.sessionId(), v.renderRevision(), v.nodeVisitId(), 1, f.targets.choices(), 2);
+    f.adapter.tick();
+    env.tick();
+    env.tick();
+    f.submitted.clear();
+    f.now.set(400_000_000);
+    f.packet(env, new ClientUseItemPacket(PlayerHand.MAIN, 1, 0, 0));
+    assertEquals(1, f.submitted.size());
+    var confirm = assertInstanceOf(DialogueInput.Confirm.class, f.submitted.getFirst());
+    assertEquals("leave", confirm.choiceId());
+    done(env, f.adapter.closeAsync());
+  }
+
+  @Test
+  void deliberateGazeMovementRestoresHoverAfterWheelSelection(Env env) {
+    var f = new Fixture(env);
+    done(env, f.adapter.activate());
+    f.aim("ask");
+    f.adapter.tick();
+    env.tick();
+    env.tick();
+    f.packet(env, new ClientHeldItemChangePacket((short) 1));
+    var v = f.view;
+    f.view =
+        new DialogueView(
+            v.sessionId(),
+            v.contentPin(),
+            v.nodeId(),
+            v.nodeVisitId(),
+            v.state(),
+            2,
+            v.renderRevision(),
+            v.localeTag(),
+            v.speaker(),
+            v.text(),
+            v.choices(),
+            "leave",
+            v.totalGraphemes(),
+            v.revealedGraphemes(),
+            v.hint(),
+            v.notice(),
+            v.pendingAction());
+    f.targets =
+        new TargetSnapshot(
+            v.sessionId(), v.renderRevision(), v.nodeVisitId(), 1, f.targets.choices(), 2);
+    f.submitted.clear();
+    f.aim("leave");
+    f.adapter.tick();
+    env.tick();
+    env.tick();
+    f.aim("ask");
+    f.adapter.tick();
+    env.tick();
+    env.tick();
+    assertEquals(1, f.submitted.size());
+    assertEquals(
+        "ask", assertInstanceOf(DialogueInput.Select.class, f.submitted.getFirst()).choiceId());
+    done(env, f.adapter.closeAsync());
+  }
+
+  @Test
   void changedHoverCannotConfirmReplacement(Env env) {
     var f = new Fixture(env);
     done(env, f.adapter.activate());
