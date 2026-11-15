@@ -219,8 +219,10 @@ rounded backgrounds; cards gives every visible answer its own compact background
 All three work below, left and right. `/hudstyle shared|split|cards` changes the
 current demo live, preserving selection, reveal and the current node. Separated
 below layouts leave a 6px gap after the speech; individual cards add 10px vertical
-padding and 3px gaps. Columns and bitmap text metrics stay the same. Every variant
-is a precomposed texture contribution, with real transparent gaps instead of
+padding and 3px gaps. Columns and bitmap text metrics stay the same. The individual-card variant
+centers its text horizontally and vertically; wrapped lines are individually
+centered in each card. Every background is a precomposed texture contribution,
+with real transparent gaps instead of
 layered coplanar rectangles. Unknown style values use the typed chat fallback.
 
 The framework-free presenter produces the same semantic widgets and choice IDs.

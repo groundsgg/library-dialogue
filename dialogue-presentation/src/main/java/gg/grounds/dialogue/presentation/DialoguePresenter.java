@@ -353,7 +353,10 @@ public final class DialoguePresenter implements DialogueRenderer {
     for (int n = 0; n < window.choices().size(); n++) {
       var c = window.choices().get(n);
       var text = labels.get(n);
-      var bounds = new Rect(x, y + n * step, l.choiceWidth(), rowHeight);
+      var bounds =
+          cards
+              ? new Rect(x - 9, y - 7 + n * step, l.choiceWidth() + 18, rowHeight + 10)
+              : new Rect(x, y + n * step, l.choiceWidth(), rowHeight);
       widgets.add(
           widget(
               "choice:" + c.id(),
@@ -361,8 +364,8 @@ public final class DialoguePresenter implements DialogueRenderer {
               bounds,
               text,
               lines.get(n),
-              0,
-              0,
+              cards ? (bounds.width() - lines.get(n).width()) / 2 : 0,
+              cards ? (bounds.height() - lines.get(n).height()) / 2 : 0,
               Graphemes.split(text.plain()).size(),
               c.id().equals(v.selectedChoiceId()),
               c.availability() == DialogueView.Availability.AVAILABLE,

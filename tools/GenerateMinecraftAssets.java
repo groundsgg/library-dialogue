@@ -148,6 +148,13 @@ class GenerateMinecraftAssets {
           for (int slot = 0; slot < 3; slot++)
             for (int line = 0; line < rowHeight / 10; line++)
               ascents.add(baseline - (below ? 61 : 7) - slot * step - line * 10);
+          if (cards) {
+            ascents.add(-5);
+            ascents.add(-15);
+            for (int slot = 0; slot < 3; slot++)
+              for (int line = 0; line < rowHeight / 10; line++)
+                ascents.add(baseline - (below ? 59 : 5) - slot * step - line * 10);
+          }
           String key = "hud_" + style + "_" + placement + "_" + rowHeight + "_3";
           var image = new BufferedImage(below ? 320 : 400, 256, BufferedImage.TYPE_INT_ARGB);
           var g = image.createGraphics();

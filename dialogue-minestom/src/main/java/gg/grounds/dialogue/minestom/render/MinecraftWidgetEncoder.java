@@ -14,6 +14,7 @@ import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
 public final class MinecraftWidgetEncoder {
   public EncodedFrame encode(WidgetFrame frame, AssetBundle bundle) {
     boolean prototype = frame.chrome() != null;
+    boolean centeredChoices = prototype && frame.chrome().key().startsWith("hud_cards_");
     if (!frame.fontPin().equals(prototype ? bundle.hudMetrics().pin() : bundle.pin()))
       throw failure("FONT_PIN_MISMATCH");
     if (frame.widgets().size() > 32) throw failure("WIDGET_LIMIT");
@@ -27,8 +28,8 @@ public final class MinecraftWidgetEncoder {
       validate(w.bounds());
       var front = new Canvas(bundle, prototype);
       var back = new Canvas(bundle, prototype);
-      draw(w, frame.theme(), front, 0, 0, 0, true, !prototype);
-      draw(w, frame.theme(), back, 0, 0, 0, false, !prototype);
+      draw(w, frame.theme(), front, 0, 0, 0, true, !prototype, centeredChoices);
+      draw(w, frame.theme(), back, 0, 0, 0, false, !prototype, centeredChoices);
       front.move(w.bounds().width());
       back.move(w.bounds().width());
       draw(
@@ -39,7 +40,8 @@ public final class MinecraftWidgetEncoder {
           w.bounds().y(),
           bottom,
           true,
-          !prototype);
+          !prototype,
+          centeredChoices);
       widgets.add(
           new EncodedFrame.EncodedWidget(
               w.id(),
@@ -91,7 +93,8 @@ public final class MinecraftWidgetEncoder {
       double oy,
       double baseline,
       boolean letters,
-      boolean panels) {
+      boolean panels,
+      boolean centeredChoices) {
     boolean panel = panels && w.kind() != Kind.HINT;
     double width = w.bounds().width(), height = w.bounds().height();
     if (panel) {
@@ -115,7 +118,7 @@ public final class MinecraftWidgetEncoder {
               .mapToDouble(Double::doubleValue)
               .sum();
       canvas.draw(
-          x,
+          x + (centeredChoices && w.kind() == Kind.CHOICE ? (w.layout().width() - advance) / 2 : 0),
           text,
           canvas.font(baseline - y - n * canvas.metrics.lineHeight()),
           advance,

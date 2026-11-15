@@ -79,3 +79,9 @@ individual answer cards. `hudStyle=shared|split|cards` is independent of
 `hudChoices=below|left|right`; all nine combinations need a fresh visual check.
 Use `/hudstyle` and `/hudchoices` in the current demo. The previous shared HUD is
 preserved as default; no broad visual acceptance is inferred from this request.
+
+On 54788db the user confirmed the three background variants, with one remaining
+visual defect: option-card text was not centered. The follow-up centers the text
+block within the full card and centers each wrapped line independently. Shared
+and split-list text alignment remain unchanged. This alignment correction awaits
+a fresh client check; the broader acceptance matrix remains pending.

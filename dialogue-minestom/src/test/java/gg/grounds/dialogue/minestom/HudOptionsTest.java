@@ -93,6 +93,14 @@ class HudOptionsTest {
                 json.contains("dialogue:" + prefix + position + (wrapped ? "_20_3" : "_10_3")),
                 json);
             assertEquals(position.equals("below") ? 240 : 300, inspector.width(frame), .001);
+            if (style.equals("cards")) {
+              double center =
+                  position.equals("below") ? 120 : position.equals("left") ? 67.5 : 232.5;
+              assertFalse(inspector.texts.isEmpty());
+              for (var text : inspector.texts)
+                if (text.text().contains("Choice") || text.text().contains("Details"))
+                  assertEquals(center, text.x() + text.width() / 2, .001, text.text());
+            }
             assertEquals(0, inspector.leftmostInk(frame), .001);
             assertEquals(visit, h.snapshot().nodeVisitId());
             assertEquals(selected, h.snapshot().selectedChoiceId());
@@ -110,6 +118,10 @@ class HudOptionsTest {
     final Map<String, JsonArray> fonts = new HashMap<>();
     final Map<String, java.awt.image.BufferedImage> images = new HashMap<>();
     final Map<String, double[]> glyphs = new HashMap<>();
+
+    record NativeText(String text, double x, double width) {}
+
+    final List<NativeText> texts = new ArrayList<>();
 
     NativeWidths(AssetBundle bundle) {
       files = bundle.entries();
@@ -171,17 +183,21 @@ class HudOptionsTest {
     double walk(Component c, double[] state) throws Exception {
       if (c instanceof TextComponent t && !t.content().isEmpty()) {
         String font = t.font().value();
+        double start = state[0];
         for (int cp : t.content().codePoints().toArray()) {
           var g = glyph(font, cp);
           if (g[1] > 0) state[1] = Math.min(state[1], state[0]);
           state[0] += g[0];
         }
+        if (t.content().codePoints().anyMatch(Character::isLetter))
+          texts.add(new NativeText(t.content(), start, state[0] - start));
       }
       for (var child : c.children()) walk(child, state);
       return state[0];
     }
 
     double width(Component c) throws Exception {
+      texts.clear();
       return walk(c, new double[] {0, Double.POSITIVE_INFINITY});
     }
 

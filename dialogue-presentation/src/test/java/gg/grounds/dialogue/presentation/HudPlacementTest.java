@@ -73,6 +73,40 @@ class HudPlacementTest {
   }
 
   @Test
+  void individualCardsCenterTheTextBlockInsideTheWholeCard() {
+    for (var position : LayoutProfile.ChoicePlacement.values()) {
+      var p =
+          new DialoguePresenter(
+              Map.of(
+                  "hud",
+                  new DialoguePresenter.SurfaceProfile(
+                      new PresenterFixtures.Surface(),
+                      LayoutProfile.compactHud(position, LayoutProfile.Style.HUD_CARDS),
+                      DialogueTheme.hudPrototype(),
+                      hudMetrics(),
+                      false)),
+              new PresenterFixtures.Clock());
+      var frame =
+          p.compose(
+              PresenterFixtures.view("Hello", 5, "c1", 1),
+              "hud",
+              PresentationPreferences.defaults());
+      for (var w : frame.widgets())
+        if (w.kind() == WidgetFrame.Kind.CHOICE) {
+          assertEquals(20, w.bounds().height());
+          assertEquals(
+              w.bounds().x() + w.bounds().width() / 2,
+              w.textBounds().x() + w.textBounds().width() / 2,
+              .001);
+          assertEquals(
+              w.bounds().y() + w.bounds().height() / 2,
+              w.textBounds().y() + w.textBounds().height() / 2,
+              .001);
+        }
+    }
+  }
+
+  @Test
   void preparationPinIdentifiesTheResolvedLayout() {
     var pins = new ArrayList<String>();
     DialogueSurface surface =
