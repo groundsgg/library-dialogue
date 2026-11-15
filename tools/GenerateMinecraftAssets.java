@@ -84,9 +84,6 @@ class GenerateMinecraftAssets {
     files.put(
         "assets/dialogue/font-source/prototype_hud_panel.png",
         Files.readAllBytes(source.resolve("panel.png")));
-    files.put(
-        "assets/dialogue/hud_metrics.properties",
-        properties.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
     var spaces = new TreeMap<String, Object>(baseSpaces);
     spaces.put(" ", 3);
     spaces.put("\u00a0", 3);
@@ -126,25 +123,15 @@ class GenerateMinecraftAssets {
           g.fillRoundRect(answers + 6, 7, 168, height - 16, 6, 6);
           g.dispose();
         }
-        files.put("assets/dialogue/textures/font/" + key + ".png", png(image));
-        put(
-            files,
-            "assets/dialogue/font/" + key + ".json",
-            Map.of(
-                "providers",
-                List.of(
-                    bitmap("dialogue:font/" + key + ".png", 192, baseline, List.of("\ue600\ue601")),
-                    spacing)));
+        hudBackdrop(files, key, image, baseline, spacing, properties);
       }
     for (String style : List.of("split", "cards"))
       for (String placement : List.of("below", "left", "right"))
         for (int rowHeight : List.of(10, 20))
           for (int count : style.equals("cards") ? List.of(0, 1, 2, 3) : List.of(3)) {
             boolean below = placement.equals("below"), cards = style.equals("cards");
-            int answerHeight =
-                cards ? count * (rowHeight + 10) + Math.max(0, count - 1) * 3 : 3 * rowHeight + 14;
-            int logicalHeight =
-                cards && count == 0 ? 48 : below ? 54 + answerHeight : Math.max(48, answerHeight);
+            int answerHeight = cards ? 3 * (rowHeight + 10) + 6 : 3 * rowHeight + 14;
+            int logicalHeight = below ? 54 + answerHeight : Math.max(48, answerHeight);
             int baseline = logicalHeight + 10, step = cards ? rowHeight + 13 : rowHeight;
             ascents.add(baseline - 7);
             for (int line = 0; line < 3; line++) ascents.add(baseline - 17 - line * 10);
@@ -155,19 +142,19 @@ class GenerateMinecraftAssets {
               ascents.add(-5);
               ascents.add(-15);
               for (int slot = 0; slot < count; slot++)
-                for (int line = 0; line < rowHeight / 10; line++)
-                  ascents.add(baseline - (below ? 59 : 5) - slot * step - line * 10);
+                for (int lines = 1; lines <= rowHeight / 10; lines++) {
+                  int inset = (rowHeight + 10 - lines * 10) / 2;
+                  for (int line = 0; line < lines; line++)
+                    ascents.add(baseline - (below ? 54 : 0) - slot * step - inset - line * 10);
+                }
             }
             String key = "hud_" + style + "_" + placement + "_" + rowHeight + "_" + count;
             int width =
-                below
-                    ? 320
-                    : cards && count == 0 ? 216 : cards && placement.equals("left") ? 416 : 400;
+                cards ? (below ? 332 : placement.equals("left") ? 416 : 412) : (below ? 320 : 400);
             var image = new BufferedImage(width, 256, BufferedImage.TYPE_INT_ARGB);
             var g = image.createGraphics();
             g.scale(4d / 3, 4d / 3);
-            double speechX =
-                placement.equals("left") && (!cards || count > 0) ? (cards ? 150 : 138) : 0;
+            double speechX = placement.equals("left") ? (cards ? 150 : 138) : 0;
             double answerX = below ? 0 : placement.equals("left") ? 0 : 165;
             double answerY = below ? 54 : 0;
             hudRegion(g, speechX, 0, below ? 240 : 162, 48, false);
@@ -177,19 +164,7 @@ class GenerateMinecraftAssets {
                     g, answerX, answerY + slot * step, below ? 240 : 135, rowHeight + 10, true);
             } else hudRegion(g, answerX, answerY, below ? 240 : 135, answerHeight, true);
             g.dispose();
-            files.put("assets/dialogue/textures/font/" + key + ".png", png(image));
-            put(
-                files,
-                "assets/dialogue/font/" + key + ".json",
-                Map.of(
-                    "providers",
-                    List.of(
-                        bitmap(
-                            "dialogue:font/" + key + ".png",
-                            192,
-                            baseline,
-                            List.of("\ue600\ue601")),
-                        spacing)));
+            hudBackdrop(files, key, image, baseline, spacing, properties);
           }
     for (int ascent : ascents)
       put(
@@ -218,7 +193,45 @@ class GenerateMinecraftAssets {
                       192,
                       ascent,
                       List.of(barChars.toString())))));
+    files.put(
+        "assets/dialogue/hud_metrics.properties",
+        properties.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
     System.out.println("Frozen prototype HUD fonts=" + ascents.size());
+  }
+
+  static void hudBackdrop(
+      Map<String, byte[]> files,
+      String key,
+      BufferedImage image,
+      int baseline,
+      Object spacing,
+      StringBuilder metrics)
+      throws Exception {
+    files.put("assets/dialogue/textures/font/" + key + ".png", png(image));
+    put(
+        files,
+        "assets/dialogue/font/" + key + ".json",
+        Map.of(
+            "providers",
+            List.of(
+                bitmap("dialogue:font/" + key + ".png", 192, baseline, List.of("\ue600\ue601")),
+                spacing)));
+    int cellWidth = image.getWidth() / 2;
+    for (int half = 0; half < 2; half++) {
+      int right = -1;
+      for (int x = 0; x < cellWidth; x++)
+        for (int y = 0; y < image.getHeight(); y++)
+          if ((image.getRGB(half * cellWidth + x, y) >>> 24) != 0) right = Math.max(right, x);
+      int advance = Math.round((right + 1) * (192f / image.getHeight())) + 1;
+      metrics
+          .append("backdrop.")
+          .append(key)
+          .append('.')
+          .append(half)
+          .append('=')
+          .append(advance)
+          .append('\n');
+    }
   }
 
   static void hudRegion(Graphics2D g, double x, double y, double w, double h, boolean answer) {
@@ -434,6 +447,14 @@ class GenerateMinecraftAssets {
               "maxRectangleHeight",
               256);
       Path root = output.resolve(profile);
+      Path hudFonts = root.resolve("assets/dialogue/font");
+      if (Files.isDirectory(hudFonts))
+        try (var existing = Files.list(hudFonts)) {
+          for (var path : existing.toList())
+            if (path.getFileName().toString().matches("hud_a_-?[0-9]+\\.json")
+                && !files.containsKey("assets/dialogue/font/" + path.getFileName()))
+              Files.delete(path);
+        }
       for (var entry : files.entrySet()) {
         Path target = root.resolve(entry.getKey());
         Files.createDirectories(target.getParent());

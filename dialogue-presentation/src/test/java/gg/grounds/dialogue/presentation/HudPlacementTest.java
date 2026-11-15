@@ -157,7 +157,7 @@ class HudPlacementTest {
   }
 
   @Test
-  void cardsChooseOnlyTheActuallyVisibleBackgroundCountIncludingNoAnswers() {
+  void cardsKeepAStableThreeSlotViewportWithoutPaintingMissingAnswers() {
     for (var position : LayoutProfile.ChoicePlacement.values()) {
       var p =
           new DialoguePresenter(
@@ -197,9 +197,68 @@ class HudPlacementTest {
             frame.widgets().stream().filter(w -> w.kind() == WidgetFrame.Kind.CHOICE).count());
         assertTrue(frame.chrome().key().endsWith("_" + count));
         assertNull(frame.scrollbar());
-        if (count == 0) assertEquals(48, frame.chrome().bounds().height());
+        assertEquals(
+            position == LayoutProfile.ChoicePlacement.BELOW ? 120 : 66,
+            frame.chrome().bounds().height());
+        assertEquals(
+            position == LayoutProfile.ChoicePlacement.BELOW
+                ? 249
+                : position == LayoutProfile.ChoicePlacement.LEFT ? 312 : 309,
+            frame.canvasBounds().width());
       }
     }
+  }
+
+  @Test
+  void aWrappedAnswerOnAnotherPageStillReservesTheSameCardHeight() {
+    var p =
+        new DialoguePresenter(
+            Map.of(
+                "hud",
+                new DialoguePresenter.SurfaceProfile(
+                    new PresenterFixtures.Surface(),
+                    LayoutProfile.compactHud(
+                        LayoutProfile.ChoicePlacement.BELOW, LayoutProfile.Style.HUD_CARDS),
+                    DialogueTheme.hudPrototype(),
+                    hudMetrics(),
+                    false)),
+            new PresenterFixtures.Clock());
+    var frames = new ArrayList<WidgetFrame>();
+    for (String selected : List.of("c1", "leave")) {
+      var v = PresenterFixtures.view("Hello", 5, selected, 1);
+      var choices =
+          v.choices().stream()
+              .map(
+                  c ->
+                      new gg.grounds.dialogue.core.runtime.DialogueView.ChoiceView(
+                          c.id(),
+                          c.id().equals("c2") ? "First\nSecond" : c.label(),
+                          c.availability(),
+                          c.unavailableReason()))
+              .toList();
+      var view =
+          new gg.grounds.dialogue.core.runtime.DialogueView(
+              v.sessionId(),
+              v.contentPin(),
+              v.nodeId(),
+              v.nodeVisitId(),
+              v.state(),
+              v.stateRevision(),
+              v.renderRevision(),
+              v.localeTag(),
+              v.speaker(),
+              v.text(),
+              choices,
+              selected,
+              v.totalGraphemes(),
+              v.revealedGraphemes(),
+              v.hint(),
+              v.notice(),
+              v.pendingAction());
+      frames.add(p.compose(view, "hud", PresentationPreferences.defaults()));
+    }
+    assertEquals(frames.get(0).chrome().bounds(), frames.get(1).chrome().bounds());
+    assertEquals(frames.get(0).chrome().baseline(), frames.get(1).chrome().baseline());
   }
 
   @Test

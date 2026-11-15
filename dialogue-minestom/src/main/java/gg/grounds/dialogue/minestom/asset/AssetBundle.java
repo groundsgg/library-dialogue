@@ -16,6 +16,7 @@ public final class AssetBundle {
   private final Map<Integer, Glyph> glyphs;
   private final MinecraftFontMetrics metrics, hudMetrics;
   private final String pin;
+  private final Map<String, Integer> hudBackdropAdvances;
 
   private AssetBundle(
       MinecraftPackProfile profile,
@@ -35,6 +36,7 @@ public final class AssetBundle {
     advances.put(32, 4);
     advances.put(160, 4);
     metrics = new MinecraftFontMetrics(pin, advances);
+    var backdropAdvances = new HashMap<String, Integer>();
     var hud = files.get("assets/dialogue/hud_metrics.properties");
     if (hud == null) hudMetrics = metrics;
     else {
@@ -53,6 +55,14 @@ public final class AssetBundle {
           if (!Character.isValidCodePoint(cp) || width < 1 || width > 17 || widths.size() >= 512)
             throw new IllegalArgumentException("HUD_METRICS");
           widths.put(cp, width);
+        } else if (k.startsWith("backdrop.")) {
+          int width = Integer.parseInt(properties.getProperty(k));
+          if (!k.matches("backdrop\\.[a-z0-9_]+\\.[01]")
+              || width < 1
+              || width > 257
+              || backdropAdvances.size() >= 512)
+            throw new IllegalArgumentException("HUD_BACKDROP_METRICS");
+          backdropAdvances.put(k.substring(9), width);
         }
       if (!properties.getProperty("lineHeight", "").equals("10"))
         throw new IllegalArgumentException("HUD_METRICS");
@@ -62,6 +72,7 @@ public final class AssetBundle {
               widths,
               10);
     }
+    hudBackdropAdvances = Map.copyOf(backdropAdvances);
   }
 
   public static AssetBundle loadDefault(MinecraftPackProfile profile) {
@@ -159,6 +170,13 @@ public final class AssetBundle {
 
   public MinecraftFontMetrics metrics() {
     return metrics;
+  }
+
+  /** Frozen native bitmap advances, including transparent viewport gutters. */
+  public OptionalInt hudBackdropAdvance(String key, int half) {
+    if (half < 0 || half > 1) throw new IllegalArgumentException("Invalid backdrop half");
+    var width = hudBackdropAdvances.get(key + "." + half);
+    return width == null ? OptionalInt.empty() : OptionalInt.of(width);
   }
 
   public MinecraftFontMetrics hudMetrics() {

@@ -227,10 +227,13 @@ layered coplanar rectangles. Unknown style values use the typed chat fallback.
 
 Card backgrounds are generated for exactly zero, one, two or three visible
 answers. Unused cards are absent, including the final message without answers.
-The card stack and footer shrink to the occupied height. A card scrollbar sits
+The viewport always reserves three slots; missing cards are transparent, and the
+speech/footer anchors stay fixed across pages. The largest offered answer
+(including its selected marker) determines the common row height. A card scrollbar sits
 5px outside the cards; the left layout reserves a 15px gap to the speech so it
-fits between them. With overflow, complete card canvases are 247px below, 307px
-on the right and 312px on the left. Without overflow, the bar adds no outer width.
+fits between them. Card canvases reserve the indicator gutter even without overflow: 249px below,
+309px on the right and 312px on the left. Native background advances are frozen
+from actual PNG ink, so transparent slots/gutters do not change centering.
 
 When more than three answers exist, a narrow scrollbar appears at the right edge
 of the answer region in every HUD style/placement. Its gold thumb represents the

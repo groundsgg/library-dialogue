@@ -335,19 +335,30 @@ public final class DialoguePresenter implements DialogueRenderer {
     boolean shared = l.style() == LayoutProfile.Style.HUD;
     boolean cards = l.style() == LayoutProfile.Style.HUD_CARDS;
     int count = window.choices().size();
-    boolean hasColumn = !cards || count > 0;
+    if (cards) {
+      // Reserve the largest offered answer, including its selection marker, across all pages.
+      for (var c : v.choices()) {
+        String reason =
+            c.availability() == DialogueView.Availability.AVAILABLE
+                ? ""
+                : ui.choiceReasons().getOrDefault(c.id(), "");
+        var label =
+            new ResolvedText(
+                "> " + c.label() + (reason.isEmpty() ? "" : "\n  " + reason), v.localeTag());
+        rowHeight = Math.max(rowHeight, layout(label, metrics, l.choiceWidth(), 2).height());
+      }
+    }
     double gap = cards && l.placement() == LayoutProfile.ChoicePlacement.LEFT ? 15 : l.gap();
     double columnWidth = l.choiceWidth() + 18;
-    double left =
-        hasColumn && l.placement() == LayoutProfile.ChoicePlacement.LEFT ? -columnWidth - gap : 0;
-    double width = below || !hasColumn ? l.width() : l.width() + gap + columnWidth;
+    double left = l.placement() == LayoutProfile.ChoicePlacement.LEFT ? -columnWidth - gap : 0;
+    double width = below ? l.width() : l.width() + gap + columnWidth;
+    if (cards && l.placement() != LayoutProfile.ChoicePlacement.LEFT) width += 9;
     double step = cards ? rowHeight + 13 : rowHeight;
-    double answerHeight =
-        cards ? count * (rowHeight + 10) + Math.max(0, count - 1) * 3 : 3 * rowHeight + 14;
+    double answerHeight = cards ? 3 * (rowHeight + 10) + 6 : 3 * rowHeight + 14;
     double height =
         shared
             ? (below ? 84 + 3 * (rowHeight - 10) : rowHeight == 10 ? 51 : 75)
-            : cards && count == 0 ? 48 : below ? 54 + answerHeight : Math.max(48, answerHeight);
+            : below ? 54 + answerHeight : Math.max(48, answerHeight);
     double x =
         switch (l.placement()) {
           case BELOW -> 9;

@@ -152,8 +152,21 @@ public final class MinecraftWidgetEncoder {
       String key = chrome.key();
       if (!assets.hasEntry("assets/dialogue/font/" + key + ".json")) throw failure("MISSING_GLYPH");
       double width = chrome.bounds().width() / 2, x = chrome.bounds().x() - left;
-      draw(x, "\ue600", Key.key("dialogue:" + key), width + 1, 0xffffff, false);
-      draw(x + width, "\ue601", Key.key("dialogue:" + key), width + 1, 0xffffff, false);
+      int fallbackAdvance = (int) Math.round(width) + 1;
+      draw(
+          x,
+          "\ue600",
+          Key.key("dialogue:" + key),
+          assets.hudBackdropAdvance(key, 0).orElse(fallbackAdvance),
+          0xffffff,
+          false);
+      draw(
+          x + width,
+          "\ue601",
+          Key.key("dialogue:" + key),
+          assets.hudBackdropAdvance(key, 1).orElse(fallbackAdvance),
+          0xffffff,
+          false);
     }
 
     void scrollbar(

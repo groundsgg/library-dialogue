@@ -104,3 +104,18 @@ the indicator 5px outside it. Left placement reserves a wider gap to the speech.
 The edeb89f head CI completed successfully. The older 5f30730 consumer failure
 was not reproduced locally or on edeb89f; detailed diagnostics remain enabled.
 The count/outer-scrollbar refinement still requires its own visual check.
+
+The user then clarified the viewport must retain space for three options even
+when only one exists. The follow-up keeps the three-slot height and indicator
+gutter reserved, paints only existing cards, and leaves speech/footer anchors
+fixed across pages. It reserves the largest offered answer height even when that
+answer is off-page. Tests cover a wrapped answer on another page, actual native
+width with transparent gutters, and final messages without any options. The
+fixed-viewport candidate still needs its own visual check.
+
+The 6e0b4b1 CI diagnostics identified the intermittent independent-consumer
+failure: Minestom Player.setInstance().join() processes the scheduler itself,
+then asserts completion, racing the already running ticker. The fixture now
+uses bounded Future.get() to await actual spawn completion; the standalone
+headless smoke uses the same correction. The runtime library/fork is unchanged.
+A new-head CI run is required to confirm the correction.

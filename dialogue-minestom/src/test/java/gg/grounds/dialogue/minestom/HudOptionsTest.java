@@ -91,10 +91,10 @@ class HudOptionsTest {
             String prefix = style.equals("shared") ? "hud_" : "hud_" + style + "_";
             assertTrue(
                 json.contains("dialogue:" + prefix + position + (wrapped ? "_20_3" : "_10_3")),
-                json);
+                style + "/" + position + "/wrapped=" + wrapped + " " + json);
             double expectedWidth =
                 style.equals("cards")
-                    ? position.equals("below") ? 247 : position.equals("left") ? 312 : 307
+                    ? position.equals("below") ? 249 : position.equals("left") ? 312 : 309
                     : position.equals("below") ? 240 : 300;
             assertEquals(expectedWidth, inspector.width(frame), .001);
             if (style.equals("cards")) {
@@ -132,7 +132,9 @@ class HudOptionsTest {
                   .serialize(f.hudFrames.getLast());
           assertTrue(json.contains("dialogue:hud_cards_" + position + "_10_0"), json);
           assertEquals(
-              position.equals("below") ? 240 : 162, inspector.width(f.hudFrames.getLast()), .001);
+              position.equals("below") ? 249 : position.equals("left") ? 312 : 309,
+              inspector.width(f.hudFrames.getLast()),
+              .001);
           assertEquals("hud", ticket.status().effectiveSurface());
         }
       }
