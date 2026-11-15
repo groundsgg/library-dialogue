@@ -514,7 +514,7 @@ public final class DialogueDemo {
     }
   }
 
-  private static Player smokePlayer(Instance world) {
+  private static Player smokePlayer(Instance world) throws Exception {
     var connection =
         new net.minestom.server.network.player.PlayerConnection() {
           public void sendPacket(net.minestom.server.network.packet.server.SendablePacket packet) {}
@@ -527,7 +527,8 @@ public final class DialogueDemo {
         new Player(
             connection,
             new net.minestom.server.network.player.GameProfile(UUID.randomUUID(), "smoke"));
-    p.setInstance(world, new Pos(0, 40, 4, 180, 0)).join();
+    // Await the live tick loop rather than entering Player.join()'s scheduler-draining path.
+    p.setInstance(world, new Pos(0, 40, 4, 180, 0)).get(5, TimeUnit.SECONDS);
     return p;
   }
 }

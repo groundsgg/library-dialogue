@@ -73,7 +73,8 @@ public final class Consumer {
             }
           };
       player = new Player(connection, new GameProfile(UUID.randomUUID(), "consumer"));
-      player.setInstance(world, new Pos(0, 42, 0)).join();
+      // The live tick loop owns scheduler processing; Player.join() also drains it and can race.
+      player.setInstance(world, new Pos(0, 42, 0)).get(5, TimeUnit.SECONDS);
       var texts = new TextCatalog(Map.of("en", Map.of("line", "Hello native consumer")));
       var definition =
           DialogueBuilder.dialogue("consumer:minestom")
