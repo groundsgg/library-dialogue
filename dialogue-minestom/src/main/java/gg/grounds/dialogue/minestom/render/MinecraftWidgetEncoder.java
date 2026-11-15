@@ -20,6 +20,10 @@ public final class MinecraftWidgetEncoder {
     var bounds = frame.canvasBounds();
     double bottom = prototype ? frame.chrome().baseline() : bounds.y() + bounds.height(),
         width = bounds.width();
+    // A tall answer column still needs an encodable composite baseline, even
+    // though world panels are drawn from their independent local components.
+    if (!prototype && frame.scrollbar() != null && !frame.scrollbar().buttons().isEmpty())
+      bottom = Math.min(bottom, Math.min(192, bounds.y() + 256));
     var hud = new Canvas(bundle, prototype);
     if (prototype) hud.chrome(frame.chrome(), bounds.x());
     var widgets = new ArrayList<EncodedFrame.EncodedWidget>();
@@ -228,12 +232,12 @@ public final class MinecraftWidgetEncoder {
     void navigation(
         WidgetFrame.Scrollbar scrollbar, double left, double baseline, DialogueTheme theme) {
       for (var button : scrollbar.buttons()) {
-        String glyph = button.direction() == NavigationDirection.PREVIOUS ? "↑" : "↓";
-        double advance = metrics.width(glyph);
+        String glyph = button.direction() == NavigationDirection.PREVIOUS ? "\ue780" : "\ue781";
+        double advance = 17; // 16 ink pixels plus BitmapProvider's native spacing.
         draw(
-            button.bounds().x() - left + (button.bounds().width() - advance) / 2,
+            button.bounds().x() - left + (button.bounds().width() - 16) / 2,
             glyph,
-            font(baseline - button.bounds().y()),
+            font(baseline - button.bounds().y() - (button.bounds().height() - 8) / 2),
             advance,
             button.enabled() ? colour(theme, "selected", 0xffcd75) : 0x52606d,
             true);

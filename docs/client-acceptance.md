@@ -73,11 +73,15 @@ also requested a configurable inward angle. On build `eb8cb5e`, the user
 confirmed the highlight-safe spacing, shared world scrollbar and hinged answer
 column (default12 degrees, `/npcangle 0` for flat, `/npcgap 12` for the minimum
 visible gap) as good. The same client run identified contention between wheel
-and hover and requested up/down page arrows. The next candidate adds arrow
-navigation using the configured confirmation input and keeps manual selection
-until deliberate gaze/eye movement. Arrow activation only selects a page; it
-never executes an answer. Disabled end arrows consume confirmation. This new
-navigation requires its own client check; the confirmed HUD remains reference.
+and hover and requested up/down page arrows. Build72daede added navigation via
+the configured confirmation input and manual-selection priority. The user found
+the small targets beside the scrollbar fiddly and requested centered drawn
+controls. The next candidate places small pixel chevrons centered above/below
+the options with larger64×24 hit areas; the scrollbar remains an indicator.
+Hints reserve separate space above the upper control. Arrow activation only
+selects a page and never executes an answer. Disabled end arrows consume
+confirmation. This refined navigation still requires its own client check;
+the confirmed HUD remains reference.
 
 ## Earlier iteration history
 
@@ -155,3 +159,12 @@ then asserts completion, racing the already running ticker. The fixture now
 uses bounded Future.get() to await actual spawn completion; the standalone
 headless smoke uses the same correction. The runtime library/fork is unchanged.
 A new-head CI run is required to confirm the correction.
+
+## Demo shutdown observation
+
+Stopping the72daede preview with SIGTERM logged a demo cleanup timeout after
+Minestom's shutdown started. The process exited, but that is not proof of
+successful asynchronous host cleanup. Preserve this as an open example-shutdown
+lifecycle check alongside the still-pending disconnect/instance-change matrix;
+normal smoke teardown and automated library checks do not resolve this actual
+process-shutdown observation.

@@ -92,47 +92,50 @@ class NpcNavigationTest {
 
   @Test
   void arrowsOnlyPageAndDisabledEndCannotConfirmAnAnswer(Env env) throws Exception {
-    try (var f = new NativeReviewRegressionTest.F(env, 7)) {
-      f.player.setNoGravity(true);
-      var ticket = f.start("npc", false, controls());
-      var h =
-          ((DialogueStartResult.Started) NativeReviewRegressionTest.done(env, ticket.result()))
-              .handle();
-      assertTrue(
-          f.player.getInstance().getEntities().stream()
-              .filter(e -> e.getEntityType() == EntityType.TEXT_DISPLAY)
-              .map(
-                  e ->
-                      PlainTextComponentSerializer.plainText()
-                          .serialize(((TextDisplayMeta) e.getEntityMeta()).getText()))
-              .anyMatch(t -> t.contains("↑") && t.contains("↓")));
-      long visit = h.snapshot().nodeVisitId();
-      for (int page = 1; page <= 2; page++) {
-        var frame = frame(f, h);
-        var down =
-            frame.scrollbar().buttons().stream()
-                .filter(b -> b.direction() == WidgetFrame.NavigationDirection.NEXT)
+    for (boolean wrapped : List.of(false, true))
+      try (var f = new NativeReviewRegressionTest.F(env, 7, wrapped)) {
+        f.player.setNoGravity(true);
+        var ticket = f.start("npc", false, controls());
+        var h =
+            ((DialogueStartResult.Started) NativeReviewRegressionTest.done(env, ticket.result()))
+                .handle();
+        assertTrue(
+            f.player.getInstance().getEntities().stream()
+                .filter(e -> e.getEntityType() == EntityType.TEXT_DISPLAY)
+                .map(
+                    e ->
+                        PlainTextComponentSerializer.plainText()
+                            .serialize(((TextDisplayMeta) e.getEntityMeta()).getText()))
+                .anyMatch(t -> t.contains("\ue780") && t.contains("\ue781")));
+        long visit = h.snapshot().nodeVisitId();
+        for (int page = 1; page <= 2; page++) {
+          var frame = frame(f, h);
+          var down =
+              frame.scrollbar().buttons().stream()
+                  .filter(b -> b.direction() == WidgetFrame.NavigationDirection.NEXT)
+                  .findFirst()
+                  .orElseThrow();
+          // Hit the generous target outside the much smaller painted chevron.
+          var target = down.bounds();
+          aim(env, f, frame, new WidgetFrame.Rect(target.x() + 3, target.y() + 3, 2, 2));
+          click(env, f, page);
+          assertEquals("c" + (page * 3), h.snapshot().selectedChoiceId());
+          assertEquals(visit, h.snapshot().nodeVisitId());
+        }
+        click(env, f, 3);
+        assertEquals("c6", h.snapshot().selectedChoiceId());
+        assertEquals(visit, h.snapshot().nodeVisitId());
+        var last = frame(f, h);
+        var up =
+            last.scrollbar().buttons().stream()
+                .filter(b -> b.direction() == WidgetFrame.NavigationDirection.PREVIOUS)
                 .findFirst()
                 .orElseThrow();
-        aim(env, f, frame, down.bounds());
-        click(env, f, page);
-        assertEquals("c" + (page * 3), h.snapshot().selectedChoiceId());
+        aim(env, f, last, up.bounds());
+        click(env, f, 4);
+        assertEquals("c3", h.snapshot().selectedChoiceId());
         assertEquals(visit, h.snapshot().nodeVisitId());
       }
-      click(env, f, 3);
-      assertEquals("c6", h.snapshot().selectedChoiceId());
-      assertEquals(visit, h.snapshot().nodeVisitId());
-      var last = frame(f, h);
-      var up =
-          last.scrollbar().buttons().stream()
-              .filter(b -> b.direction() == WidgetFrame.NavigationDirection.PREVIOUS)
-              .findFirst()
-              .orElseThrow();
-      aim(env, f, last, up.bounds());
-      click(env, f, 4);
-      assertEquals("c3", h.snapshot().selectedChoiceId());
-      assertEquals(visit, h.snapshot().nodeVisitId());
-    }
   }
 
   @Test

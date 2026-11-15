@@ -31,3 +31,9 @@ python3 tools/check_client_profiles.py --profile grounds-26.3 --client /absolute
 
 The public profile is protocol 776 / pack 88.0; the Grounds profile is protocol
 777 / pack 97.1. A matching server-side profile is not a visual client acceptance.
+
+NPC page controls use a separate32×256 transparent atlas with two16×8
+pixel-drawn chevrons. The existing even-ascent native fonts register its private
+E780/E781 glyphs; frozen normal-text metrics and existing HUD/panel artwork are
+unchanged. The encoder tints enabled/disabled icons and centers the visible ink
+inside larger hit rectangles. Asset generation remains maintenance-only.

@@ -54,6 +54,25 @@ class NpcLayoutTest {
             .filter(b -> b.direction() == WidgetFrame.NavigationDirection.NEXT)
             .findFirst()
             .orElseThrow();
+    var choice =
+        first.widgets().stream()
+            .filter(w -> w.kind() == WidgetFrame.Kind.CHOICE)
+            .findFirst()
+            .orElseThrow();
+    double center = choice.bounds().x() + choice.bounds().width() / 2;
+    for (var button : first.scrollbar().buttons()) {
+      assertEquals(center, button.bounds().x() + button.bounds().width() / 2);
+      assertTrue(button.bounds().width() >= 64, "Navigation should be easy to aim at");
+      assertTrue(button.bounds().height() >= 24);
+    }
+    var hint =
+        first.widgets().stream().filter(w -> w.id().equals("hint")).findFirst().orElseThrow();
+    assertTrue(
+        hint.bounds().y() + hint.bounds().height() <= up.bounds().y() - 6,
+        "Instruction text must not overlap the upper page control");
+    assertEquals(
+        first.scrollbar().buttons().stream().map(WidgetFrame.NavigationButton::bounds).toList(),
+        last.scrollbar().buttons().stream().map(WidgetFrame.NavigationButton::bounds).toList());
     assertFalse(up.enabled());
     assertEquals("c4", down.choiceId());
     assertTrue(up.bounds().y() + up.bounds().height() < first.scrollbar().track().y());

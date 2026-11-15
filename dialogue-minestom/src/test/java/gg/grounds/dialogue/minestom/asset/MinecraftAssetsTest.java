@@ -9,6 +9,51 @@ import org.junit.jupiter.api.Test;
 
 class MinecraftAssetsTest {
   @Test
+  void navigationChevronsAreCompactTransparentMirrorsInBothProfiles() throws Exception {
+    for (var profile :
+        List.of(MinecraftPackProfile.public262(), MinecraftPackProfile.grounds263())) {
+      var bundle = AssetBundle.loadDefault(profile);
+      var bytes = bundle.entries().get("assets/dialogue/textures/font/navigation.png");
+      assertNotNull(bytes, "Page controls use hand-drawn chevrons rather than text arrows");
+      var image = ImageIO.read(new ByteArrayInputStream(bytes));
+      assertEquals(32, image.getWidth());
+      assertEquals(256, image.getHeight());
+      int ink = 0;
+      for (int y = 0; y < 256; y++)
+        for (int x = 0; x < 16; x++) {
+          int pixel = image.getRGB(x, y);
+          if (pixel >>> 24 != 0) {
+            ink++;
+            assertTrue(y < 8);
+          }
+          if (y < 8) assertEquals(pixel, image.getRGB(16 + x, 7 - y));
+          else assertEquals(0, image.getRGB(16 + x, y));
+        }
+      assertTrue(ink > 16 && ink < 100);
+      assertEquals(0, image.getRGB(0, 0));
+      assertEquals(0xffffffff, image.getRGB(7, 0));
+      var providers =
+          com.google.gson.JsonParser.parseString(
+                  new String(
+                      bundle.entries().get("assets/dialogue/font/a_212.json"),
+                      java.nio.charset.StandardCharsets.UTF_8))
+              .getAsJsonObject()
+              .getAsJsonArray("providers");
+      assertTrue(
+          java.util.stream.StreamSupport.stream(providers.spliterator(), false)
+              .map(com.google.gson.JsonElement::getAsJsonObject)
+              .anyMatch(
+                  v ->
+                      v.has("file")
+                          && v.get("file").getAsString().equals("dialogue:font/navigation.png")
+                          && v.getAsJsonArray("chars")
+                              .get(0)
+                              .getAsString()
+                              .equals("\ue780\ue781")));
+    }
+  }
+
+  @Test
   void belowHudKeepsTheExactOriginalPreviewPixels() throws Exception {
     var b = AssetBundle.loadDefault(MinecraftPackProfile.public262());
     var original = b.entries().get("assets/dialogue/font-source/prototype_hud_panel.png");

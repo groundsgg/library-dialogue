@@ -217,16 +217,20 @@ bounded body-front yaw and constant world scale.
 
 More than three answers use the same `WidgetFrame.Scrollbar` and `ChoiceViewport`
 as the HUD. The native encoder provides one additional private front/back pair,
-using existing scroll glyphs and an explicit paint baseline. It adds no pack
-assets, clock or NPC-library dependency. Empty/fewer-choice nodes release that
-pair. NPC scrollbars include an up/down arrow on the same folded plane; each
+using scroll glyphs and an explicit paint baseline. It adds no clock or NPC-library
+dependency. Empty/fewer-choice nodes release that pair. NPC page controls sit
+centered above and below the answer column, separate from the indicator-only
+scrollbar at the right. Small16×8 pixel-drawn chevrons have generous64×24 hit
+rectangles; hints reserve space above the upper target. Both controls stay on
+the same folded plane, with fixed positions across pages. Each
 confirmation over an enabled arrow selects the first available answer on the
 adjacent three-answer page without confirming that answer or executing an
 action. Pages without available answers are skipped. Disabled end arrows are
 muted. Their hits, including blocked/back hits, consume confirmation without
 falling through to the current answer. Targets are stamped and validated against
 the current issued offers, state, visit and surface generation. Arrow glyphs use
-the existing font, appear on the front only and need no additional display pair.
+a dedicated frozen32×256 two-cell atlas registered in the existing native font
+positions, appear on the front only and need no additional display pair.
 The default native world scrollbar supports track heights up to192 GUI
 pixels; unsupported custom geometry falls back intact to chat. All displays
 remain inside the shared per-connection32 budget, including pending/closing ones.

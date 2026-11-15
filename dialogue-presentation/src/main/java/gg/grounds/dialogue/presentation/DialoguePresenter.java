@@ -243,7 +243,9 @@ public final class DialoguePresenter implements DialogueRenderer {
     double hintX = l.placement() != LayoutProfile.ChoicePlacement.BELOW ? x : 0;
     double hintY =
         l.placement() != LayoutProfile.ChoicePlacement.BELOW
-            ? -hintLayout.height() - l.gap()
+            ? -hintLayout.height()
+                - l.gap()
+                - (l.navigationButtons() && window.total() > l.choiceCapacity() ? 28 : 0)
             : y + window.choices().size() * (cardHeight + l.gap()) + l.gap();
     widgets.add(
         widget(
@@ -298,11 +300,11 @@ public final class DialoguePresenter implements DialogueRenderer {
           List.of(
               new WidgetFrame.NavigationButton(
                   WidgetFrame.NavigationDirection.PREVIOUS,
-                  new Rect(track.x() - 7, track.y() - 20, 16, 16),
+                  new Rect(x + (l.choiceWidth() - 64) / 2, track.y() - 28, 64, 24),
                   pageTarget(view.choices(), window.start(), l.choiceCapacity(), -1)),
               new WidgetFrame.NavigationButton(
                   WidgetFrame.NavigationDirection.NEXT,
-                  new Rect(track.x() - 7, track.y() + track.height() + 4, 16, 16),
+                  new Rect(x + (l.choiceWidth() - 64) / 2, track.y() + track.height() + 4, 64, 24),
                   pageTarget(view.choices(), window.start(), l.choiceCapacity(), 1)));
       scroll = new WidgetFrame.Scrollbar(track, scroll.thumb(), buttons);
     }

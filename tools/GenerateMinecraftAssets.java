@@ -243,6 +243,28 @@ class GenerateMinecraftAssets {
     g.fill(new java.awt.geom.RoundRectangle2D.Double(x + 4.5, y + 3.75, w - 9, h - 7.5, 4.5, 4.5));
   }
 
+  static BufferedImage navigationChevrons() {
+    // Two small pixel-drawn chevrons. Transparent cell padding preserves native scale.
+    var image = new BufferedImage(32, 256, BufferedImage.TYPE_INT_ARGB);
+    var rows =
+        List.of(
+            ".......##.......",
+            "......####......",
+            ".....######.....",
+            "....###..###....",
+            "...###....###...",
+            "..###......###..",
+            ".###........###.",
+            "###..........###");
+    for (int y = 0; y < rows.size(); y++)
+      for (int x = 0; x < 16; x++)
+        if (rows.get(y).charAt(x) == '#') {
+          image.setRGB(x, y, 0xffffffff);
+          image.setRGB(16 + x, 7 - y, 0xffffffff);
+        }
+    return image;
+  }
+
   public static void main(String[] args) throws Exception {
     Path source = Path.of(args[0]), output = Path.of(args[1]);
     var points = new TreeSet<Integer>();
@@ -312,6 +334,7 @@ class GenerateMinecraftAssets {
     for (String profile : List.of("public-26.2", "grounds-26.3")) {
       var files = new TreeMap<String, byte[]>();
       files.put("assets/dialogue/textures/font/letters.png", png(atlas));
+      files.put("assets/dialogue/textures/font/navigation.png", png(navigationChevrons()));
 
       files.put("assets/dialogue/textures/font/hud-mask.png", png(mask));
       files.put("assets/dialogue/font-source/dejavu_sans.ttf", Files.readAllBytes(source));
@@ -393,6 +416,7 @@ class GenerateMinecraftAssets {
                   256,
                   a,
                   panelChars.get(style)));
+        providers.add(bitmap("dialogue:font/navigation.png", 256, a, List.of("\ue780\ue781")));
         providers.add(spacing);
         put(files, "assets/dialogue/font/a_" + a + ".json", Map.of("providers", providers));
       }
