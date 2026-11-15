@@ -200,7 +200,7 @@ The baked panel heights are 24, 28, 32, 40, 48, 56, 64 and 72 GUI pixels (the co
 The HUD reuses the original prototype's rounded modal and frozen Monospaced
 bitmap text at 75% native size. The speaker sits inside the speech region. Answers
 are compact text rows in a shared darker region, with a gold `> ` marker and gold
-text for the selected answer. They have no individual card frames. NPC panels,
+text for the selected answer. This shared style is the default. NPC panels,
 fonts, hover growth and fixed world scale remain unchanged.
 
 `PresentationPreferences.effects()` accepts `Map.of("hudChoices", "left")`;
@@ -212,6 +212,16 @@ gap, for 300px total. Answer text widths are 222px below and 117px beside the
 speech; rows are 10px or 20px high depending on wrapping. Three answers remain
 visible through the shared viewport. Unsupported text still falls back intact
 to chat.
+
+`effects.hudStyle` independently selects `shared`, `split`, or `cards`:
+shared keeps one rounded modal; split gives the speech and answer list separate
+rounded backgrounds; cards gives every visible answer its own compact background.
+All three work below, left and right. `/hudstyle shared|split|cards` changes the
+current demo live, preserving selection, reveal and the current node. Separated
+below layouts leave a 6px gap after the speech; individual cards add 10px vertical
+padding and 3px gaps. Columns and bitmap text metrics stay the same. Every variant
+is a precomposed texture contribution, with real transparent gaps instead of
+layered coplanar rectangles. Unknown style values use the typed chat fallback.
 
 The framework-free presenter produces the same semantic widgets and choice IDs.
 A `WidgetFrame.Chrome` describes the shared background and stable baseline;

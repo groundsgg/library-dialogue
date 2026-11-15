@@ -14,7 +14,9 @@ public record LayoutProfile(
     Style style) {
   public enum Style {
     PANELS,
-    HUD
+    HUD,
+    HUD_SPLIT,
+    HUD_CARDS
   }
 
   public LayoutProfile(
@@ -96,19 +98,15 @@ public record LayoutProfile(
 
   /** Compact HUD presets keep both side columns within a 300px composition. */
   public static LayoutProfile compactHud(ChoicePlacement placement) {
+    return compactHud(placement, Style.HUD);
+  }
+
+  public static LayoutProfile compactHud(ChoicePlacement placement, Style style) {
+    if (style == null || style == Style.PANELS)
+      throw new IllegalArgumentException("HUD style required");
     boolean below = placement == ChoicePlacement.BELOW;
     return new LayoutProfile(
-        "hud-preview",
-        below ? 240 : 162,
-        below ? 222 : 117,
-        9,
-        3,
-        3,
-        2,
-        placement,
-        3,
-        0,
-        Style.HUD);
+        "hud-preview", below ? 240 : 162, below ? 222 : 117, 9, 3, 3, 2, placement, 3, 0, style);
   }
 
   public static LayoutProfile npc() {

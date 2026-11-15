@@ -126,7 +126,7 @@ public final class DialoguePresenter implements DialogueRenderer {
             labels.resolve(
                 new UiLabelSource.LabelRequest(
                     view.localeTag(), view.hint(), controls, view.notice(), reasons)));
-    if (l.style() == LayoutProfile.Style.HUD)
+    if (l.style() != LayoutProfile.Style.PANELS)
       return composePrototypeHud(view, p, l, preferences, ui);
     var text = new ResolvedText(view.text(), view.localeTag());
     var body = layout(text, metrics, l.width() - 2 * l.padding(), l.maxTextLines());
@@ -335,18 +335,25 @@ public final class DialoguePresenter implements DialogueRenderer {
     double columnWidth = l.choiceWidth() + 18;
     double left = l.placement() == LayoutProfile.ChoicePlacement.LEFT ? -columnWidth - l.gap() : 0;
     double width = below ? l.width() : l.width() + l.gap() + columnWidth;
-    double height = below ? 84 + 3 * (rowHeight - 10) : rowHeight == 10 ? 51 : 75;
+    boolean shared = l.style() == LayoutProfile.Style.HUD;
+    boolean cards = l.style() == LayoutProfile.Style.HUD_CARDS;
+    double step = cards ? rowHeight + 13 : rowHeight;
+    double answerHeight = cards ? 3 * (rowHeight + 10) + 6 : 3 * rowHeight + 14;
+    double height =
+        shared
+            ? (below ? 84 + 3 * (rowHeight - 10) : rowHeight == 10 ? 51 : 75)
+            : below ? 54 + answerHeight : Math.max(48, answerHeight);
     double x =
         switch (l.placement()) {
           case BELOW -> 9;
           case RIGHT -> l.width() + l.gap() + 9;
           case LEFT -> left + 9;
         };
-    double y = below ? 50 : 7;
+    double y = below ? (shared ? 50 : 61) : 7;
     for (int n = 0; n < window.choices().size(); n++) {
       var c = window.choices().get(n);
       var text = labels.get(n);
-      var bounds = new Rect(x, y + n * rowHeight, l.choiceWidth(), rowHeight);
+      var bounds = new Rect(x, y + n * step, l.choiceWidth(), rowHeight);
       widgets.add(
           widget(
               "choice:" + c.id(),
@@ -405,7 +412,11 @@ public final class DialoguePresenter implements DialogueRenderer {
     }
     var chrome =
         new WidgetFrame.Chrome(
-            "hud_" + l.placement().name().toLowerCase(Locale.ROOT) + "_" + (int) rowHeight + "_3",
+            (shared ? "hud_" : cards ? "hud_cards_" : "hud_split_")
+                + l.placement().name().toLowerCase(Locale.ROOT)
+                + "_"
+                + (int) rowHeight
+                + "_3",
             new Rect(left, 0, width, height),
             height + 10);
     return new WidgetFrame(v, widgets, metrics.pin(), p.theme(), chrome);

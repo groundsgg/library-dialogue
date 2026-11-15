@@ -26,6 +26,22 @@ class MinecraftAssetsTest {
   }
 
   @Test
+  void splitAndCardBackgroundsHaveRealTransparentGaps() throws Exception {
+    var assets = AssetBundle.loadDefault(MinecraftPackProfile.public262()).entries();
+    var images = new HashMap<String, java.awt.image.BufferedImage>();
+    for (String prefix : List.of("hud", "hud_split", "hud_cards")) {
+      var data = assets.get("assets/dialogue/textures/font/" + prefix + "_below_10_3.png");
+      assertNotNull(data, prefix);
+      images.put(prefix, ImageIO.read(new ByteArrayInputStream(data)));
+    }
+    assertTrue((images.get("hud").getRGB(160, 68) >>> 24) > 0);
+    assertEquals(0, images.get("hud_split").getRGB(160, 68) >>> 24);
+    assertEquals(0, images.get("hud_cards").getRGB(160, 68) >>> 24);
+    assertTrue((images.get("hud_split").getRGB(160, 100) >>> 24) > 0);
+    assertEquals(0, images.get("hud_cards").getRGB(160, 100) >>> 24);
+  }
+
+  @Test
   void previewTileImagesHaveBoundedDecodedMemory() throws Exception {
     var bundle = AssetBundle.loadDefault(MinecraftPackProfile.public262());
     long decoded = 0;

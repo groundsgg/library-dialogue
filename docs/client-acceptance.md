@@ -73,3 +73,9 @@ HUD source pixels: one rounded modal, embedded speaker name, smaller bitmap text
 and compact arrow-selected answer rows. Below/left/right placement remains.
 This faithful HUD correction requires a fresh pack download and visual check.
 The full client matrix above remains pending.
+
+The user requested optional separation as well: both speech/list backgrounds and
+individual answer cards. `hudStyle=shared|split|cards` is independent of
+`hudChoices=below|left|right`; all nine combinations need a fresh visual check.
+Use `/hudstyle` and `/hudchoices` in the current demo. The previous shared HUD is
+preserved as default; no broad visual acceptance is inferred from this request.

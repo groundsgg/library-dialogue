@@ -63,6 +63,46 @@ class HudOptionsTest {
     }
   }
 
+  @Test
+  void backgroundStyleAndAnswerPlacementAreIndependentLivePreferences(Env env) throws Exception {
+    for (boolean wrapped : List.of(false, true)) {
+      try (var f = new NativeReviewRegressionTest.F(env, 7, wrapped)) {
+        var ticket = f.start("hud", false);
+        var h =
+            ((DialogueStartResult.Started) NativeReviewRegressionTest.done(env, ticket.result()))
+                .handle();
+        long visit = h.snapshot().nodeVisitId();
+        String selected = h.snapshot().selectedChoiceId();
+        var inspector = new NativeWidths(f.options.assets());
+        for (String style : List.of("shared", "split", "cards")) {
+          for (String position : List.of("below", "left", "right")) {
+            NativeReviewRegressionTest.done(
+                env,
+                h.updatePreferences(
+                    new PresentationPreferences(
+                        "hud",
+                        Duration.ZERO,
+                        false,
+                        Map.of("hudChoices", position, "hudStyle", style))));
+            var frame = f.hudFrames.getLast();
+            String json =
+                net.kyori.adventure.text.serializer.gson.GsonComponentSerializer.gson()
+                    .serialize(frame);
+            String prefix = style.equals("shared") ? "hud_" : "hud_" + style + "_";
+            assertTrue(
+                json.contains("dialogue:" + prefix + position + (wrapped ? "_20_3" : "_10_3")),
+                json);
+            assertEquals(position.equals("below") ? 240 : 300, inspector.width(frame), .001);
+            assertEquals(0, inspector.leftmostInk(frame), .001);
+            assertEquals(visit, h.snapshot().nodeVisitId());
+            assertEquals(selected, h.snapshot().selectedChoiceId());
+            assertEquals("hud", ticket.status().effectiveSurface());
+          }
+        }
+      }
+    }
+  }
+
   // Compute advances from actual PNG ink and bitmap definitions, not the presenter/encoder's width
   // helper.
   static final class NativeWidths {

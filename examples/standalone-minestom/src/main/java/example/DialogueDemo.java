@@ -297,6 +297,14 @@ public final class DialogueDemo {
             return l.refresh();
           });
       command(
+          "hudstyle",
+          (l, args) -> {
+            if (args.length != 2 || !Set.of("shared", "split", "cards").contains(args[1]))
+              throw new IllegalArgumentException("/hudstyle shared|split|cards");
+            l.effects.put("hudStyle", args[1]);
+            return l.refresh();
+          });
+      command(
           "lang",
           (l, args) -> {
             if (args.length < 2 || !Set.of("en", "de").contains(args[1]))

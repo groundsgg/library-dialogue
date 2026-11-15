@@ -209,7 +209,17 @@ public final class MinestomDialogueHost {
       var placement =
           gg.grounds.dialogue.presentation.LayoutProfile.ChoicePlacement.valueOf(
               preferences.effects().getOrDefault("hudChoices", "below").toUpperCase(Locale.ROOT));
-      return gg.grounds.dialogue.presentation.LayoutProfile.compactHud(placement);
+      var style =
+          switch (preferences
+              .effects()
+              .getOrDefault("hudStyle", "shared")
+              .toLowerCase(Locale.ROOT)) {
+            case "shared" -> gg.grounds.dialogue.presentation.LayoutProfile.Style.HUD;
+            case "split" -> gg.grounds.dialogue.presentation.LayoutProfile.Style.HUD_SPLIT;
+            case "cards" -> gg.grounds.dialogue.presentation.LayoutProfile.Style.HUD_CARDS;
+            default -> throw new IllegalArgumentException("Unknown HUD style");
+          };
+      return gg.grounds.dialogue.presentation.LayoutProfile.compactHud(placement, style);
     } catch (IllegalArgumentException error) {
       throw new gg.grounds.dialogue.presentation.DialoguePresenter.FallbackRequired(
           "UNSUPPORTED_RASTER");

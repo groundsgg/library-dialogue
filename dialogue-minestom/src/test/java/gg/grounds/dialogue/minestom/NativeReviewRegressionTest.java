@@ -53,6 +53,10 @@ class NativeReviewRegressionTest {
     final TextCatalog texts;
 
     F(Env e, int answers) {
+      this(e, answers, false);
+    }
+
+    F(Env e, int answers, boolean wrapped) {
       env = e;
       var base = new MinestomDialogueHostTest.Fixture(e);
       done(e, base.host.closeAsync());
@@ -85,7 +89,7 @@ class NativeReviewRegressionTest {
       var choices = new ArrayList<Choice>();
       var b = DialogueBuilder.dialogue("test:review").locales("en", "en", "de");
       for (int i = 0; i < answers; i++) {
-        en.put("c" + i, "Choice " + i);
+        en.put("c" + i, "Choice " + i + (wrapped ? "\nDetails" : ""));
         de.put("c" + i, "Antwort " + i);
         choices.add(new Choice("c" + i, "c" + i, "reply" + i, i == 0, null));
         b.node("reply" + i, new Message("npc", "c" + i, null, List.of(), "end"));

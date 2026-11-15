@@ -136,6 +136,42 @@ class GenerateMinecraftAssets {
                     bitmap("dialogue:font/" + key + ".png", 192, baseline, List.of("\ue600\ue601")),
                     spacing)));
       }
+    for (String style : List.of("split", "cards"))
+      for (String placement : List.of("below", "left", "right"))
+        for (int rowHeight : List.of(10, 20)) {
+          boolean below = placement.equals("below"), cards = style.equals("cards");
+          int answerHeight = cards ? 3 * (rowHeight + 10) + 6 : 3 * rowHeight + 14;
+          int logicalHeight = below ? 54 + answerHeight : Math.max(48, answerHeight);
+          int baseline = logicalHeight + 10, step = cards ? rowHeight + 13 : rowHeight;
+          ascents.add(baseline - 7);
+          for (int line = 0; line < 3; line++) ascents.add(baseline - 17 - line * 10);
+          for (int slot = 0; slot < 3; slot++)
+            for (int line = 0; line < rowHeight / 10; line++)
+              ascents.add(baseline - (below ? 61 : 7) - slot * step - line * 10);
+          String key = "hud_" + style + "_" + placement + "_" + rowHeight + "_3";
+          var image = new BufferedImage(below ? 320 : 400, 256, BufferedImage.TYPE_INT_ARGB);
+          var g = image.createGraphics();
+          g.scale(4d / 3, 4d / 3);
+          double speechX = placement.equals("left") ? 138 : 0;
+          double answerX = below ? 0 : placement.equals("left") ? 0 : 165;
+          double answerY = below ? 54 : 0;
+          hudRegion(g, speechX, 0, below ? 240 : 162, 48, false);
+          if (cards) {
+            for (int slot = 0; slot < 3; slot++)
+              hudRegion(g, answerX, answerY + slot * step, below ? 240 : 135, rowHeight + 10, true);
+          } else hudRegion(g, answerX, answerY, below ? 240 : 135, answerHeight, true);
+          g.dispose();
+          files.put("assets/dialogue/textures/font/" + key + ".png", png(image));
+          put(
+              files,
+              "assets/dialogue/font/" + key + ".json",
+              Map.of(
+                  "providers",
+                  List.of(
+                      bitmap(
+                          "dialogue:font/" + key + ".png", 192, baseline, List.of("\ue600\ue601")),
+                      spacing)));
+        }
     for (int ascent : ascents)
       put(
           files,
@@ -144,6 +180,15 @@ class GenerateMinecraftAssets {
               "providers",
               List.of(bitmap("dialogue:font/hud_letters.png", 192, ascent, chars), spacing)));
     System.out.println("Frozen prototype HUD fonts=" + ascents.size());
+  }
+
+  static void hudRegion(Graphics2D g, double x, double y, double w, double h, boolean answer) {
+    g.setColor(new Color(9, 15, 24, 220));
+    g.fill(new java.awt.geom.RoundRectangle2D.Double(x, y, w, h, 7.5, 7.5));
+    g.setColor(new Color(78, 104, 127, 230));
+    g.draw(new java.awt.geom.RoundRectangle2D.Double(x, y, w - .75, h - .75, 7.5, 7.5));
+    g.setColor(answer ? new Color(15, 27, 39, 230) : new Color(25, 40, 55, 220));
+    g.fill(new java.awt.geom.RoundRectangle2D.Double(x + 4.5, y + 3.75, w - 9, h - 7.5, 4.5, 4.5));
   }
 
   public static void main(String[] args) throws Exception {
