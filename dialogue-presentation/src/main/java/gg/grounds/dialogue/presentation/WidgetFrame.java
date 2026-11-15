@@ -83,7 +83,8 @@ public record WidgetFrame(
     SPEAKER,
     TEXT,
     CHOICE,
-    HINT
+    HINT,
+    SCROLLBAR
   }
 
   public record Rect(double x, double y, double width, double height) {

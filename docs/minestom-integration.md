@@ -195,6 +195,31 @@ asset bundle. Replacement panel art must therefore supply a matching bundle pin.
 The baked panel heights are 24, 28, 32, 40, 48, 56, 64 and 72 GUI pixels (the compact HUD and standard NPC nameplate/cards); other custom heights diagnose
 `UNSUPPORTED_RASTER` and fall back to chat. Widths remain bounded by 512 pixels.
 
+## NPC answer column
+
+NPC answers reserve a minimum visible gap from the speech even while selected
+cards grow. `effects.npcChoiceGap` is that minimum in GUI pixels (default12,
+range0–64 in half-pixel steps); the shared presenter adds the half-width needed for selection growth.
+Vertical card gaps retain their existing layout values. `effects.npcChoiceAngle`
+is an inward fold around the answer column's left edge (default12 degrees,
+range0–35); 0 keeps the column flat. Both settings are per viewer and change live
+without restarting the dialogue. The demo exposes `/npcgap 12` and `/npcangle 12`.
+
+Answers, their hints and the overflow indicator share the same hinged plane.
+Native front/back quaternions, positions, hover rays, block occlusion and leave
+zones use that plane. Selection growth keeps the original hit rectangles.
+Angle/gap reconfiguration snaps the new plane before targets are acknowledged;
+ordinary selection growth stays animated. NPC following preserves the fold,
+bounded body-front yaw and constant world scale.
+
+More than three answers use the same `WidgetFrame.Scrollbar` and `ChoiceViewport`
+as the HUD. The native encoder provides one additional private front/back pair,
+using existing scroll glyphs and an explicit paint baseline. It adds no pack
+assets, clock or NPC-library dependency. Empty/fewer-choice nodes release that
+pair. The default native world scrollbar supports track heights up to192 GUI
+pixels; unsupported custom geometry falls back intact to chat. All displays
+remain inside the shared per-connection32 budget, including pending/closing ones.
+
 ## Compact HUD answer placement
 
 The HUD reuses the original prototype's rounded modal and frozen Monospaced

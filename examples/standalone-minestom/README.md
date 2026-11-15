@@ -24,6 +24,9 @@ Both preferences can change during a dialogue. More than three answers show a
 proportional scrollbar; cards keep left-aligned, vertically centered text.
 The card viewport reserves three slots and its scrollbar gutter; unused cards
 remain transparent so the speech and footer do not move between pages.
+For NPC panels, `/npcangle 0..35` sets the inward column angle (default12) and
+`/npcgap 0..64` sets the minimum visible gap after hover growth (default12 GUI
+pixels). Both apply live. More than three NPC answers also show a private scrollbar.
 The task choice waits two seconds as a local example action, without a quest service.
 
 `/confirm use|attack|swap` selects the next dialogue's confirm profile. Defaults

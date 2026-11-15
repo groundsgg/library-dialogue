@@ -171,6 +171,8 @@ public final class NpcDialogueSurface implements DialogueSurface {
     WidgetFrame frame;
     MinestomSpeakerBinding binding;
     NpcPanelTransform transform;
+    double appliedAngle = Double.NaN;
+    double hingePosition, appliedHinge = Double.NaN;
     DialogueScheduler.ScheduledTask follow;
     Display backdrop;
     OutputChannels.HudLease hud;
@@ -275,8 +277,20 @@ public final class NpcDialogueSurface implements DialogueSurface {
                       .mapToDouble(w -> w.bounds().height())
                       .findFirst()
                       .orElse(72);
+              double hinge =
+                  next.widgets().stream()
+                      .filter(
+                          w ->
+                              w.kind() == WidgetFrame.Kind.CHOICE
+                                  || w.kind() == WidgetFrame.Kind.HINT && w.bounds().x() >= 320)
+                      .mapToDouble(w -> w.bounds().x())
+                      .min()
+                      .orElse(320);
+              hingePosition = hinge;
               transform =
-                  NpcPanelTransform.from(binding.snapshot().get(), eye()).withSpeechHeight(height);
+                  NpcPanelTransform.from(binding.snapshot().get(), eye())
+                      .withSpeechHeight(height)
+                      .withChoiceFold(hinge, NpcPanelOptions.from(preferences).choiceAngle());
               var wanted = new HashSet<String>();
               encoded.widgets().forEach(w -> wanted.add(w.id()));
               var pending = new ArrayList<CompletableFuture<?>>();
@@ -430,10 +444,15 @@ public final class NpcDialogueSurface implements DialogueSurface {
     }
 
     void apply(EncodedFrame encoded) {
+      double nextAngle = transform.fold() == null ? 0 : transform.fold().degrees();
+      boolean poseChanged =
+          Double.compare(appliedAngle, nextAngle) != 0
+              || Double.compare(appliedHinge, hingePosition) != 0;
       for (var w : encoded.widgets()) {
         var pair = panels.get(w.id());
         double factor = w.visualScale(), scale = .32 * factor;
         var b = w.bounds();
+        double angle = transform.planeFor(b) == transform ? 0 : Math.toRadians(nextAngle);
         for (int side = 0; side < 2; side++) {
           var d = pair.get(side);
           boolean back = side == 1;
@@ -441,21 +460,37 @@ public final class NpcDialogueSurface implements DialogueSurface {
           meta.setText(back ? w.back() : w.front());
           meta.setTransformationInterpolationStartDelta(-1);
           meta.setTransformationInterpolationDuration(
-              (int) Math.ceil(w.transition().toMillis() / 50d));
-          meta.setLeftRotation(back ? new float[] {0, 1, 0, 0} : new float[] {0, 0, 0, 1});
+              poseChanged ? 0 : (int) Math.ceil(w.transition().toMillis() / 50d));
+          double turn = (back ? Math.PI : 0) - angle;
+          meta.setLeftRotation(
+              new float[] {0, (float) Math.sin(turn / 2), 0, (float) Math.cos(turn / 2)});
           meta.setScale(new Vec(scale, scale, scale));
           // Native one-line origin: x=1-width/2; y=-9 + bitmap bearing 7 = -2.
+          double x =
+              (b.x() + b.width() / 2 - 160 + (back ? factor : -factor)) * NpcPanelTransform.UNIT;
+          double z = back ? -.012 : 0;
+          double hinge =
+              transform.fold() == null
+                  ? 0
+                  : (transform.fold().pivot() - 160) * NpcPanelTransform.UNIT;
+          double rotatedX =
+              angle == 0 ? x : hinge + (x - hinge) * Math.cos(angle) - z * Math.sin(angle);
+          double rotatedZ = angle == 0 ? z : (x - hinge) * Math.sin(angle) + z * Math.cos(angle);
           meta.setTranslation(
               new Vec(
-                  (b.x() + b.width() / 2 - 160 + (back ? factor : -factor))
+                  rotatedX,
+                  (transform.speechHeight()
+                          - b.y()
+                          + b.height() * (factor - 1) / 2
+                          - (2 + w.paintBaseline()) * factor)
                       * NpcPanelTransform.UNIT,
-                  (transform.speechHeight() - b.y() + b.height() * (factor - 1) / 2 - 2 * factor)
-                      * NpcPanelTransform.UNIT,
-                  back ? -.012 : 0));
+                  rotatedZ));
           meta.setTransformationInterpolationStartDelta(0);
           d.entity.addViewer(player);
         }
       }
+      appliedAngle = nextAngle;
+      appliedHinge = hingePosition;
       if (backdrop != null) {
         var meta = (TextDisplayMeta) backdrop.entity.getEntityMeta();
         meta.setScale(new Vec(.6, .6, .6));
@@ -477,6 +512,7 @@ public final class NpcDialogueSurface implements DialogueSurface {
         if (w.kind() == WidgetFrame.Kind.CHOICE && w.enabled())
           choices.put(w.choiceId(), w.hitRect());
       }
+      if (value.scrollbar() != null) fronts.add(value.scrollbar().track());
       geometries.put(context.generation(), new Geometry(transform, fronts, context.generation()));
       targets.publish(value, context.generation(), choices, () -> !closed.get() && available());
     }
@@ -541,7 +577,8 @@ public final class NpcDialogueSurface implements DialogueSurface {
                           }
                           var next =
                               NpcPanelTransform.from(binding.snapshot().get(), eye())
-                                  .withSpeechHeight(transform.speechHeight());
+                                  .withSpeechHeight(transform.speechHeight())
+                                  .withFold(transform.fold());
                           positionDisplays(next.position())
                               .whenComplete(
                                   (v, error) ->

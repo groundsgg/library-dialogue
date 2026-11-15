@@ -236,6 +236,173 @@ class NpcDialogueSurfaceTest {
         frame.widgets().stream().filter(w -> "c4".equals(w.choiceId())).findFirst().orElseThrow();
     assertEquals(1.08, selected.visualScale());
     assertEquals(selected.bounds(), f.targets.current().choices().get("c4"));
+    assertNotNull(frame.scrollbar());
+    var bar =
+        new MinecraftWidgetEncoder()
+            .encode(frame, RenderFixtures.ASSETS).widgets().stream()
+                .filter(w -> w.kind() == WidgetFrame.Kind.SCROLLBAR)
+                .findFirst()
+                .orElseThrow();
+    var barEntity =
+        f.displays().stream()
+            .filter(
+                e -> {
+                  var m = (TextDisplayMeta) e.getEntityMeta();
+                  return m.getText().equals(bar.front()) && m.getLeftRotation()[1] < 0;
+                })
+            .findFirst()
+            .orElseThrow();
+    var bm = (TextDisplayMeta) barEntity.getEntityMeta();
+    double bu = .025 * bm.getScale().x();
+    var bc =
+        rotate(
+            new Vec((1 - bar.bounds().width() / 2) * bu, (2 + bar.paintBaseline()) * bu, 0),
+            bm.getLeftRotation());
+    var bl = bm.getTranslation().add(bc);
+    var bp =
+        barEntity
+            .getPosition()
+            .add(transform.right().mul(bl.x()))
+            .add(0, bl.y(), 0)
+            .add(transform.normal().mul(bl.z()));
+    assertEquals(
+        0,
+        bp.distance(
+            transform.planeFor(bar.bounds()).widgetToWorld(bar.bounds().x(), bar.bounds().y())),
+        1e-6);
+    done(env, h.closeAsync());
+    assertTrue(f.displays().isEmpty());
+  }
+
+  private static Vec rotate(Vec v, float[] q) {
+    var axis = new Vec(q[0], q[1], q[2]);
+    var cross = axis.cross(v).mul(2);
+    return v.add(cross.mul(q[3])).add(axis.cross(cross));
+  }
+
+  @Test
+  void foldedDisplayCornersBackDepthAndHitPlaneAgreeAndLiveGapDoesNotInterpolate(Env env) {
+    var f = new Fixture(env, CompletableFuture.completedFuture(null));
+    var h = f.open(env);
+    var prefs =
+        new PresentationPreferences("npc", Duration.ZERO, false, Map.of("npcChoiceAngle", "30"));
+    done(env, h.configure(prefs));
+    var frame = RenderFixtures.frame("npc", "Hello", 5);
+    done(env, h.replace(frame));
+    var w = frame.widgets().stream().filter(WidgetFrame.Widget::selected).findFirst().orElseThrow();
+    var entity =
+        f.displays().stream()
+            .filter(
+                e ->
+                    net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
+                        .plainText()
+                        .serialize(((TextDisplayMeta) e.getEntityMeta()).getText())
+                        .contains("Ask"))
+            .findFirst()
+            .orElseThrow();
+    var meta = (TextDisplayMeta) entity.getEntityMeta();
+    var transform = f.surface.geometry().transform();
+    var plane = transform.planeFor(w.bounds());
+    double unit = .025 * meta.getScale().x();
+    var nativeCorner =
+        rotate(new Vec((1 - w.bounds().width() / 2) * unit, 2 * unit, 0), meta.getLeftRotation());
+    var local = meta.getTranslation().add(nativeCorner);
+    var actual =
+        entity
+            .getPosition()
+            .add(transform.right().mul(local.x()))
+            .add(0, local.y(), 0)
+            .add(transform.normal().mul(local.z()));
+    var expected =
+        plane.widgetToWorld(
+            w.bounds().x() - w.bounds().width() * (w.visualScale() - 1) / 2,
+            w.bounds().y() - w.bounds().height() * (w.visualScale() - 1) / 2);
+    assertEquals(0, actual.distance(expected), 1e-6);
+    var frontNormal = rotate(new Vec(0, 0, 1), meta.getLeftRotation());
+    assertEquals(0, frontNormal.distance(plane.normal()), 1e-6);
+    var encodedBack =
+        new MinecraftWidgetEncoder()
+            .encode(frame, RenderFixtures.ASSETS).widgets().stream()
+                .filter(e -> e.id().equals(w.id()))
+                .findFirst()
+                .orElseThrow()
+                .back();
+    var back =
+        f.displays().stream()
+            .map(e -> (TextDisplayMeta) e.getEntityMeta())
+            .filter(m -> m.getText().equals(encodedBack) && m.getScale().x() > .33)
+            .findFirst()
+            .orElseThrow();
+    assertEquals(-1, rotate(new Vec(0, 0, 1), back.getLeftRotation()).dot(frontNormal), 1e-6);
+    assertEquals(-.012, back.getTranslation().sub(meta.getTranslation()).dot(frontNormal), 1e-6);
+    var eye = f.a.getPosition().add(0, f.a.getEyeHeight(), 0);
+    var center =
+        plane.widgetToWorld(
+            w.bounds().x() + w.bounds().width() / 2, w.bounds().y() + w.bounds().height() / 2);
+    assertEquals(
+        w.choiceId(),
+        gg.grounds.dialogue.minestom.geometry.NpcHitTest.hit(
+                eye,
+                center.sub(eye).asVec().normalize(),
+                transform,
+                f.targets.current(),
+                (a, b) -> true)
+            .orElseThrow());
+
+    done(
+        env,
+        h.configure(
+            new PresentationPreferences(
+                "npc", Duration.ZERO, false, Map.of("npcChoiceAngle", "0"))));
+    done(env, h.replace(frame));
+    assertNull(f.surface.geometry().transform().fold());
+    assertEquals(0, meta.getLeftRotation()[1], 1e-6);
+    done(
+        env,
+        h.configure(
+            new PresentationPreferences(
+                "npc", Duration.ZERO, false, Map.of("npcChoiceAngle", "0", "npcChoiceGap", "28"))));
+    var presenter =
+        new DialoguePresenter(
+            Map.of(
+                "npc",
+                new DialoguePresenter.SurfaceProfile(
+                    f.surface,
+                    LayoutProfile.npc(28),
+                    DialogueTheme.neutral(),
+                    RenderFixtures.ASSETS.metrics(),
+                    false)),
+            new MinestomDialogueScheduler(f.a.getInstance()));
+    var moved = presenter.compose(frame.semantic(), "npc", prefs);
+    done(env, h.replace(moved));
+    assertEquals(
+        0,
+        meta.getTransformationInterpolationDuration(),
+        "New hit planes must not race an interpolating gap change");
+    done(env, h.closeAsync());
+    assertTrue(f.displays().isEmpty());
+  }
+
+  @Test
+  void followingTheNpcRetainsTheFoldAndFixedWorldSize(Env env) {
+    var f = new Fixture(env, CompletableFuture.completedFuture(null));
+    var h = f.open(env);
+    done(env, h.replace(RenderFixtures.frame("npc", "Hello", 5)));
+    var fold = f.surface.geometry().transform().fold();
+    assertNotNull(fold);
+    f.feet.set(new Vec(4, 42, 0));
+    assertTrue(
+        env.tickWhile(
+            () -> f.surface.geometry().transform().origin().x() != 4, Duration.ofSeconds(2)));
+    var transform = f.surface.geometry().transform();
+    assertEquals(fold, transform.fold());
+    assertEquals(
+        240 * .008,
+        transform
+            .widgetToWorld(fold.pivot(), 20)
+            .distance(transform.widgetToWorld(fold.pivot() + 240, 20)),
+        1e-6);
+    for (var display : f.displays()) assertEquals(4, display.getPosition().x(), 1e-6);
     done(env, h.closeAsync());
   }
 

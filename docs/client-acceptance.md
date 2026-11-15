@@ -66,6 +66,14 @@ the dialogue afterwards must not produce another pack prompt. Headless demo runs
 may mark a simulated connection's pack ready solely for server-side tests; they
 are never evidence that a real client downloaded or rendered it.
 
+NPC follow-up: the user confirmed hover selection/growth and fixed placement
+while moving/off-screen on the accepted 70f7e67 demo. Highlighted cards still
+needed more space from the speech and lacked the overflow indicator. The user
+also requested a configurable inward angle. The next candidate adds highlight-safe
+spacing, a shared world scrollbar and a hinged answer column (default12 degrees,
+`/npcangle 0` for flat, `/npcgap 12` for the minimum visible gap). That changed
+NPC geometry requires a fresh client check; the confirmed HUD remains reference.
+
 ## Earlier iteration history
 
 The entries below describe the check state at each earlier iteration; the latest

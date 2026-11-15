@@ -21,5 +21,19 @@ public record EncodedFrame(List<EncodedWidget> widgets, Component hud) {
       String choiceId,
       boolean enabled,
       double visualScale,
-      Duration transition) {}
+      Duration transition,
+      double paintBaseline) {
+    public EncodedWidget(
+        String id,
+        WidgetFrame.Kind kind,
+        Component front,
+        Component back,
+        WidgetFrame.Rect bounds,
+        String choiceId,
+        boolean enabled,
+        double visualScale,
+        Duration transition) {
+      this(id, kind, front, back, bounds, choiceId, enabled, visualScale, transition, 0);
+    }
+  }
 }

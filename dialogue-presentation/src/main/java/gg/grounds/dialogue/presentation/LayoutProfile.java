@@ -11,7 +11,35 @@ public record LayoutProfile(
     ChoicePlacement placement,
     double gap,
     double choicePadding,
-    Style style) {
+    Style style,
+    double columnGap) {
+  public LayoutProfile(
+      String key,
+      double width,
+      double choiceWidth,
+      double padding,
+      int maxTextLines,
+      int choiceCapacity,
+      int maxChoiceLines,
+      ChoicePlacement placement,
+      double gap,
+      double choicePadding,
+      Style style) {
+    this(
+        key,
+        width,
+        choiceWidth,
+        padding,
+        maxTextLines,
+        choiceCapacity,
+        maxChoiceLines,
+        placement,
+        gap,
+        choicePadding,
+        style,
+        gap);
+  }
+
   public enum Style {
     PANELS,
     HUD,
@@ -82,11 +110,13 @@ public record LayoutProfile(
         || !Double.isFinite(padding)
         || !Double.isFinite(gap)
         || !Double.isFinite(choicePadding)
+        || !Double.isFinite(columnGap)
         || width <= 2 * padding
         || choiceWidth <= 2 * choicePadding
         || padding < 0
         || gap < 0
         || choicePadding < 0
+        || columnGap < 0
         || maxTextLines < 1
         || choiceCapacity < 1
         || maxChoiceLines < 1) throw new IllegalArgumentException("Invalid layout profile");
@@ -110,6 +140,12 @@ public record LayoutProfile(
   }
 
   public static LayoutProfile npc() {
-    return new LayoutProfile("npc", 320, 240, 12, 3, 3, 2, ChoicePlacement.RIGHT, 6);
+    return npc(12);
+  }
+
+  /** Minimum clear column gap; the presenter additionally reserves selection growth. */
+  public static LayoutProfile npc(double columnGap) {
+    return new LayoutProfile(
+        "npc", 320, 240, 12, 3, 3, 2, ChoicePlacement.RIGHT, 6, 12, Style.PANELS, columnGap);
   }
 }

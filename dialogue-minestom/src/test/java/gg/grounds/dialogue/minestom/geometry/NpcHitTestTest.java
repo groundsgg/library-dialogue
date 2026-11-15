@@ -55,6 +55,37 @@ class NpcHitTestTest {
   }
 
   @Test
+  void foldedChoicePlaneKeepsTheHingeAndWorldSizeAndUsesItsActualFront() {
+    var eye = new Vec(0, 2, 4);
+    var flat = NpcPanelTransform.from(anchor, eye);
+    var folded = flat.withChoiceFold(342, 30);
+    var bounds = new WidgetFrame.Rect(342, 0, 240, 40);
+    assertEquals(0, flat.widgetToWorld(342, 20).distance(folded.widgetToWorld(342, 20)), 1e-9);
+    assertEquals(
+        240 * .008, folded.widgetToWorld(342, 20).distance(folded.widgetToWorld(582, 20)), 1e-9);
+    assertEquals(
+        240 * .008 * .5, folded.widgetToWorld(582, 20).z() - flat.widgetToWorld(342, 20).z(), 1e-9);
+    assertEquals(flat.widgetToWorld(160, 20), folded.widgetToWorld(160, 20));
+    var plane = folded.planeFor(bounds);
+    var center = folded.widgetToWorld(462, 20);
+    var ray = center.sub(eye).asVec().normalize();
+    var targets = new TargetSnapshot(UUID.randomUUID(), 1, 1, 1, Map.of("answer", bounds));
+    assertEquals(
+        "answer",
+        NpcHitTest.hit(eye, ray, folded, targets, (a, b) -> b.distance(center) < 1e-6)
+            .orElseThrow());
+    assertTrue(NpcHitTest.inDialogueZone(eye, ray, folded, List.of(bounds), (a, b) -> true));
+    assertTrue(NpcHitTest.hit(eye, ray, folded, targets, (a, b) -> false).isEmpty());
+    assertTrue(
+        NpcHitTest.hit(
+                center.sub(plane.normal().mul(2)), plane.normal(), folded, targets, (a, b) -> true)
+            .isEmpty());
+    var outside = folded.widgetToWorld(583, 20).sub(eye).asVec().normalize();
+    assertTrue(NpcHitTest.hit(eye, outside, folded, targets, (a, b) -> true).isEmpty());
+    assertEquals(flat.widgetToWorld(462, 20), flat.withChoiceFold(342, 0).widgetToWorld(462, 20));
+  }
+
+  @Test
   void disabledFrontProtectsZoneButNeverSelects() {
     var eye = new Vec(0, 2, 4);
     var t = NpcPanelTransform.from(anchor, eye);

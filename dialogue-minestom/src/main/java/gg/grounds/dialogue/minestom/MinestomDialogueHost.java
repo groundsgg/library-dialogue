@@ -193,7 +193,10 @@ public final class MinestomDialogueHost {
                     gg.grounds.dialogue.presentation.LayoutProfile.npc(),
                     gg.grounds.dialogue.presentation.DialogueTheme.neutral(),
                     options.assets().metrics(),
-                    false)),
+                    false,
+                    preferences ->
+                        gg.grounds.dialogue.presentation.LayoutProfile.npc(
+                            NpcPanelOptions.from(preferences).choiceGap()))),
         clock,
         controls,
         options.labels(),

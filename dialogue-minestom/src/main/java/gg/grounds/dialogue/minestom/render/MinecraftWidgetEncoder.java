@@ -53,9 +53,27 @@ public final class MinecraftWidgetEncoder {
               w.transition()));
     }
     if (frame.scrollbar() != null) {
-      if (!prototype) throw failure("UNSUPPORTED_RASTER");
+      var track = frame.scrollbar().track();
+      validate(track);
+      if (track.height() > 192) throw failure("UNSUPPORTED_RASTER");
       hud.scrollbar(frame.scrollbar(), bounds.x(), bottom, frame.theme());
+      var local = new Canvas(bundle, true);
+      local.scrollbar(frame.scrollbar(), track.x(), 192 + track.y(), frame.theme());
+      local.move(track.width());
+      widgets.add(
+          new EncodedFrame.EncodedWidget(
+              "scrollbar",
+              Kind.SCROLLBAR,
+              local.component,
+              local.component,
+              track,
+              null,
+              false,
+              1,
+              java.time.Duration.ZERO,
+              192));
     }
+    if (widgets.size() > 32) throw failure("WIDGET_LIMIT");
     hud.move(width);
     long bytes = wireBytes(hud.component);
     for (var w : widgets) {
@@ -190,7 +208,16 @@ public final class MinecraftWidgetEncoder {
     }
 
     void bar(double x, double y, double height, double baseline, int colour) {
-      if (height == 0) return;
+      if (height < 0 || height != Math.rint(height)) throw failure("UNSUPPORTED_RASTER");
+      while (height > 0) {
+        double part = Math.min(height, 128);
+        barGlyph(x, y, part, baseline, colour);
+        y += part;
+        height -= part;
+      }
+    }
+
+    void barGlyph(double x, double y, double height, double baseline, int colour) {
       double ascent = baseline - y;
       String key = "hud_scroll_a_" + (int) ascent;
       if (height < 1

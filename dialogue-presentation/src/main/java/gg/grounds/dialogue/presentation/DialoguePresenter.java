@@ -192,11 +192,13 @@ public final class DialoguePresenter implements DialogueRenderer {
                 .max()
                 .orElse(metrics.lineHeight())
             + 2 * l.choicePadding();
+    double growth = Math.ceil(l.choiceWidth() * (p.theme().selectedScale() - 1) / 2);
+    double columnGap = l.columnGap() + growth;
     double x =
         switch (l.placement()) {
           case BELOW -> (l.width() - l.choiceWidth()) / 2;
-          case RIGHT -> l.width() + l.gap();
-          case LEFT -> -l.choiceWidth() - l.gap();
+          case RIGHT -> l.width() + columnGap;
+          case LEFT -> -l.choiceWidth() - columnGap;
         };
     double y = l.placement() != LayoutProfile.ChoicePlacement.BELOW ? 0 : bodyHeight + l.gap();
     for (int i = 0; i < window.choices().size(); i++) {
@@ -265,7 +267,17 @@ public final class DialoguePresenter implements DialogueRenderer {
               p,
               preferences));
     }
-    return new WidgetFrame(view, widgets, metrics.pin(), p.theme());
+    WidgetFrame.Scrollbar scroll =
+        window.total() > l.choiceCapacity()
+            ? scrollbar(
+                window,
+                new Rect(
+                    x + l.choiceWidth() + growth + 8,
+                    y,
+                    2,
+                    l.choiceCapacity() * cardHeight + (l.choiceCapacity() - 1) * l.gap()))
+            : null;
+    return new WidgetFrame(view, widgets, metrics.pin(), p.theme(), null, scroll);
   }
 
   private static WidgetFrame composePrototypeHud(
@@ -443,19 +455,23 @@ public final class DialoguePresenter implements DialogueRenderer {
     if (window.total() > l.choiceCapacity()) {
       double trackHeight = cards ? answerHeight : 3 * rowHeight;
       double top = cards ? y - 7 : y;
-      double thumbHeight =
-          Math.max(6, Math.floor(trackHeight * window.choices().size() / window.total()));
-      double thumbY =
-          top
-              + Math.min(
-                  trackHeight - thumbHeight,
-                  window.start() + window.choices().size() == window.total()
-                      ? trackHeight - thumbHeight
-                      : Math.round(trackHeight * window.start() / window.total()));
       var track = new Rect(x + l.choiceWidth() + (cards ? 14 : 3), top, 2, trackHeight);
-      scrollbar = new WidgetFrame.Scrollbar(track, new Rect(track.x(), thumbY, 2, thumbHeight));
+      scrollbar = scrollbar(window, track);
     }
     return new WidgetFrame(v, widgets, metrics.pin(), p.theme(), chrome, scrollbar);
+  }
+
+  private static WidgetFrame.Scrollbar scrollbar(ChoiceViewport.ChoiceWindow window, Rect track) {
+    double thumbHeight =
+        Math.max(6, Math.floor(track.height() * window.choices().size() / window.total()));
+    double offset =
+        window.start() + window.choices().size() == window.total()
+            ? track.height() - thumbHeight
+            : Math.min(
+                track.height() - thumbHeight,
+                Math.round(track.height() * window.start() / window.total()));
+    return new WidgetFrame.Scrollbar(
+        track, new Rect(track.x(), track.y() + offset, track.width(), thumbHeight));
   }
 
   private static TextLayout.TextLayoutResult layout(
@@ -517,6 +533,7 @@ public final class DialoguePresenter implements DialogueRenderer {
     layout.put("maxChoiceLines", l.maxChoiceLines());
     layout.put("placement", l.placement().name().toLowerCase(Locale.ROOT));
     layout.put("gap", l.gap());
+    if (l.columnGap() != l.gap()) layout.put("columnGap", l.columnGap());
     return ContentFingerprint.hash(
             ContentFingerprint.canonicalBytes(
                 Map.of(

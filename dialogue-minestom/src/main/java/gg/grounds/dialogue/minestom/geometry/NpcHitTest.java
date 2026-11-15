@@ -14,13 +14,15 @@ public final class NpcHitTest {
   }
 
   private static Point intersection(
-      Point eye, Vec direction, NpcPanelTransform t, OcclusionTest occlusion) {
-    double denominator = direction.dot(t.normal());
+      Point eye, Vec direction, NpcPanelTransform transform, WidgetFrame.Rect bounds) {
+    var plane = transform.planeFor(bounds);
+    double denominator = direction.dot(plane.normal());
     if (denominator >= -1e-9) return null;
-    double distance = t.origin().sub(eye).asVec().dot(t.normal()) / denominator;
+    double distance = plane.origin().sub(eye).asVec().dot(plane.normal()) / denominator;
     if (!Double.isFinite(distance) || distance <= 0) return null;
-    var p = eye.add(direction.mul(distance));
-    return occlusion.visible(eye, p) ? t.worldToWidget(p) : null;
+    var world = eye.add(direction.mul(distance));
+    var p = plane.worldToWidget(world);
+    return bounds.contains(p.x(), p.y()) ? world : null;
   }
 
   public static Optional<String> hit(
@@ -29,12 +31,11 @@ public final class NpcHitTest {
       NpcPanelTransform transform,
       TargetSnapshot targets,
       OcclusionTest occlusion) {
-    var p = intersection(eye, direction, transform, occlusion);
-    if (p == null) return Optional.empty();
-    return targets.choices().entrySet().stream()
-        .filter(e -> e.getValue().contains(p.x(), p.y()))
-        .map(Map.Entry::getKey)
-        .findFirst();
+    for (var target : targets.choices().entrySet()) {
+      var world = intersection(eye, direction, transform, target.getValue());
+      if (world != null && occlusion.visible(eye, world)) return Optional.of(target.getKey());
+    }
+    return Optional.empty();
   }
 
   public static boolean inDialogueZone(
@@ -43,7 +44,10 @@ public final class NpcHitTest {
       NpcPanelTransform transform,
       List<WidgetFrame.Rect> fronts,
       OcclusionTest occlusion) {
-    var p = intersection(eye, direction, transform, occlusion);
-    return p != null && fronts.stream().anyMatch(r -> r.contains(p.x(), p.y()));
+    for (var bounds : fronts) {
+      var world = intersection(eye, direction, transform, bounds);
+      if (world != null && occlusion.visible(eye, world)) return true;
+    }
+    return false;
   }
 }

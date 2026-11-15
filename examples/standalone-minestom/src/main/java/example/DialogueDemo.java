@@ -304,6 +304,19 @@ public final class DialogueDemo {
             l.effects.put("hudStyle", args[1]);
             return l.refresh();
           });
+      for (String name : List.of("npcangle", "npcgap"))
+        command(
+            name,
+            (l, args) -> {
+              if (args.length != 2) throw new IllegalArgumentException("/" + name + " <number>");
+              var effects = new HashMap<>(l.effects);
+              effects.put(name.equals("npcangle") ? "npcChoiceAngle" : "npcChoiceGap", args[1]);
+              NpcPanelOptions.from(
+                  new PresentationPreferences("npc", Duration.ZERO, false, effects));
+              l.effects.clear();
+              l.effects.putAll(effects);
+              return l.refresh();
+            });
       command(
           "lang",
           (l, args) -> {
