@@ -46,6 +46,7 @@ class NativeReviewRegressionTest {
     final AtomicReference<CompletableFuture<Void>> write =
         new AtomicReference<>(CompletableFuture.completedFuture(null));
     final AtomicInteger pendingWrites = new AtomicInteger();
+    final List<Component> hudFrames = new CopyOnWriteArrayList<>();
     final MinestomDialogueOptions options;
     final UUID pack = UUID.randomUUID();
     final ValidatedDialogue content;
@@ -61,6 +62,7 @@ class NativeReviewRegressionTest {
       channels =
           new LocalOutputChannels(
               (p, c) -> {
+                hudFrames.add(c);
                 var gate = write.get();
                 if (!gate.isDone()) pendingWrites.incrementAndGet();
                 return gate;

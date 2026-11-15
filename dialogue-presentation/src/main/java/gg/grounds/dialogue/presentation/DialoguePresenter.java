@@ -19,7 +19,23 @@ public final class DialoguePresenter implements DialogueRenderer {
       LayoutProfile layout,
       DialogueTheme theme,
       FontMetrics metrics,
-      boolean semanticOnly) {
+      boolean semanticOnly,
+      java.util.function.Function<PresentationPreferences, LayoutProfile> layoutResolver) {
+    public SurfaceProfile(
+        DialogueSurface surface,
+        LayoutProfile layout,
+        DialogueTheme theme,
+        FontMetrics metrics,
+        boolean semanticOnly) {
+      this(surface, layout, theme, metrics, semanticOnly, null);
+    }
+
+    public LayoutProfile resolveLayout(PresentationPreferences preferences) {
+      return layoutResolver == null
+          ? layout
+          : Objects.requireNonNull(layoutResolver.apply(preferences));
+    }
+
     public SurfaceProfile {
       Objects.requireNonNull(surface);
       if (!semanticOnly) {
@@ -98,7 +114,7 @@ public final class DialoguePresenter implements DialogueRenderer {
   public WidgetFrame compose(DialogueView view, String key, PresentationPreferences preferences) {
     var p = profile(key);
     if (p.semanticOnly()) return new WidgetFrame(view, List.of(), "semantic", "semantic");
-    var l = p.layout();
+    var l = p.resolveLayout(preferences);
     var metrics = p.metrics();
     var widgets = new ArrayList<Widget>();
     var reasons = new LinkedHashMap<String, String>();
@@ -172,8 +188,13 @@ public final class DialoguePresenter implements DialogueRenderer {
                 .max()
                 .orElse(metrics.lineHeight())
             + 2 * l.padding();
-    double x = l.placement() == LayoutProfile.ChoicePlacement.RIGHT ? l.width() + l.gap() : 0;
-    double y = l.placement() == LayoutProfile.ChoicePlacement.RIGHT ? 0 : bodyHeight + l.gap();
+    double x =
+        switch (l.placement()) {
+          case BELOW -> 0;
+          case RIGHT -> l.width() + l.gap();
+          case LEFT -> -l.choiceWidth() - l.gap();
+        };
+    double y = l.placement() != LayoutProfile.ChoicePlacement.BELOW ? 0 : bodyHeight + l.gap();
     for (int i = 0; i < window.choices().size(); i++) {
       var c = window.choices().get(i);
       var bounds = new Rect(x, y + i * (cardHeight + l.gap()), l.choiceWidth(), cardHeight);
@@ -196,11 +217,11 @@ public final class DialoguePresenter implements DialogueRenderer {
     String hint = ui.hint();
     var hintText = new ResolvedText(hint, view.localeTag());
     double hintWidth =
-        l.placement() == LayoutProfile.ChoicePlacement.RIGHT ? l.choiceWidth() : l.width();
+        l.placement() != LayoutProfile.ChoicePlacement.BELOW ? l.choiceWidth() : l.width();
     var hintLayout = layout(hintText, metrics, hintWidth, 2);
-    double hintX = l.placement() == LayoutProfile.ChoicePlacement.RIGHT ? x : 0;
+    double hintX = l.placement() != LayoutProfile.ChoicePlacement.BELOW ? x : 0;
     double hintY =
-        l.placement() == LayoutProfile.ChoicePlacement.RIGHT
+        l.placement() != LayoutProfile.ChoicePlacement.BELOW
             ? -hintLayout.height() - l.gap()
             : y + window.choices().size() * (cardHeight + l.gap()) + l.gap();
     widgets.add(
@@ -222,7 +243,7 @@ public final class DialoguePresenter implements DialogueRenderer {
       var statusText = new ResolvedText(ui.notice(), view.localeTag());
       var statusLayout = layout(statusText, metrics, hintWidth, 2);
       double statusY = hintY + hintLayout.height() + l.gap();
-      if (l.placement() == LayoutProfile.ChoicePlacement.RIGHT)
+      if (l.placement() != LayoutProfile.ChoicePlacement.BELOW)
         statusY = y + window.choices().size() * (cardHeight + l.gap()) + l.gap();
       widgets.add(
           widget(
@@ -285,9 +306,9 @@ public final class DialoguePresenter implements DialogueRenderer {
     return session.ready.minimalCompletionStage();
   }
 
-  private static String profilePin(SurfaceProfile profile) {
+  private static String profilePin(SurfaceProfile profile, PresentationPreferences preferences) {
     if (profile.semanticOnly()) return "semantic";
-    var l = profile.layout();
+    var l = profile.resolveLayout(preferences);
     var t = profile.theme();
     var layout = new LinkedHashMap<String, Object>();
     layout.put("key", l.key());
@@ -434,7 +455,7 @@ public final class DialoguePresenter implements DialogueRenderer {
                         request.audienceId(),
                         request.hostGeneration(),
                         key,
-                        profilePin(p),
+                        profilePin(p, openingPreferences),
                         request.cancellation(),
                         gen,
                         deadline,

@@ -34,7 +34,7 @@ class MinecraftWidgetEncoderTest {
               java.util.Arrays.stream(codes).anyMatch(c -> c >= 0xe001 && c <= 0xe100),
               "Overlapping coloured column glyphs cause the photographed striped panels");
           long tiles =
-              java.util.Arrays.stream(codes).filter(c -> c >= 0xe400 && c < 0xe478).count();
+              java.util.Arrays.stream(codes).filter(c -> c >= 0xe400 && c < 0xe500).count();
           assertTrue(
               tiles >= 3 && tiles <= 68, "A panel must use the bounded precomposed preview tiles");
         }

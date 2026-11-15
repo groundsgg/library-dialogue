@@ -168,11 +168,7 @@ public final class HudDialogueSurface implements DialogueSurface {
                   vignette = VisualOptions.enabled(preferences, "vignette", diagnostic);
               VisualOptions.enabled(preferences, "npcBackdrop", diagnostic);
               if (vignette && effects == null) diagnostic.accept("POST_EFFECT_UNSUPPORTED");
-              double width =
-                  frame.widgets().stream()
-                      .mapToDouble(w -> w.bounds().x() + w.bounds().width())
-                      .max()
-                      .orElse(0);
+              double width = frame.canvasBounds().width();
               var component = HudCoverage.compose(encoded.hud(), width, hide);
               var effectWrite =
                   effects == null

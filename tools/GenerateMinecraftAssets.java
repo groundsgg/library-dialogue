@@ -147,10 +147,10 @@ class GenerateMinecraftAssets {
       // Every horizontal tile contains its own final border+fill pixels: no coplanar paint layers.
       var panelChars = new ArrayList<List<String>>();
       for (int style = 0; style < 3; style++) {
-        var image = new BufferedImage(8, 24 * 256, BufferedImage.TYPE_INT_ARGB);
+        var image = new BufferedImage(8, 48 * 256, BufferedImage.TYPE_INT_ARGB);
         var rowsOfChars = new ArrayList<String>();
-        for (int hi = 0; hi < 4; hi++) {
-          int h = new int[] {28, 40, 56, 72}[hi];
+        for (int hi = 0; hi < 8; hi++) {
+          int h = new int[] {28, 40, 56, 72, 24, 32, 48, 64}[hi];
           var original = previewPanel(320, h, style == 1);
           if (style == 2)
             for (int y = 0; y < h; y++)
@@ -169,8 +169,8 @@ class GenerateMinecraftAssets {
                 image.setRGB(dx + x, dy + y, original.getRGB(from + x, y));
           }
         }
-        for (int row = 0; row < 24; row++)
-          rowsOfChars.add(Character.toString(0xe400 + style * 24 + row));
+        for (int row = 0; row < 48; row++)
+          rowsOfChars.add(Character.toString(0xe400 + style * 48 + row));
         panelChars.add(rowsOfChars);
         files.put(
             "assets/dialogue/textures/font/panels-"

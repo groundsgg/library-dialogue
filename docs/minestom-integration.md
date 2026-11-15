@@ -192,6 +192,30 @@ no overlapping coplanar stripe glyphs paint their layers at runtime. Fronts use
 the dark-blue normal or gold-selected frame, and backs use closed dark material.
 The text palette remains theme-controlled; panel colours are part of the verified
 asset bundle. Replacement panel art must therefore supply a matching bundle pin.
-The initial baked panel heights are 28, 40, 56 and 72 GUI pixels (the standard
-nameplate and one-to-three-line default cards); other custom heights diagnose
+The baked panel heights are 24, 28, 32, 40, 48, 56, 64 and 72 GUI pixels (the compact HUD and standard NPC nameplate/cards); other custom heights diagnose
 `UNSUPPORTED_RASTER` and fall back to chat. Widths remain bounded by 512 pixels.
+
+## Compact HUD answer placement
+
+The native host uses a compact HUD by default: 240 GUI pixels wide, 8px inner
+padding and 4px gaps. The text font stays readable at its existing size. NPC
+profiles and their fixed world scale remain unchanged. Answer cards remain stacked
+vertically; `hudChoices` selects whether that stack is below, left or right of the
+speech. Set `PresentationPreferences.effects()` to, for example,
+`Map.of("hudChoices", "left")`, then call the normal `updatePreferences` path.
+Valid values are `below` (default), `left`, and `right`. The demo provides
+`/hudchoices below|left|right` for live changes.
+
+Side presets use a 160px speech column, a 144px answer column and a 4px gap,
+keeping their complete width at 308px. Wrapping uses the chosen column widths.
+The presenter keeps the same three-card viewport and choice IDs. Left layouts
+retain negative logical coordinates; native HUD projection uses `canvasBounds()`
+to center the full composition, including the left column. HUD coverage uses that
+same width.
+
+The framework-free `SurfaceProfile` optionally resolves a `LayoutProfile` from
+current preferences. Existing five-argument constructors keep the fixed-profile
+behaviour. Custom consumers can use `ChoicePlacement.LEFT` directly without the
+native preset. Geometry, text and input targets still come from one shared frame.
+The additional compact card heights keep decoded panel-image data below 2MiB per
+ascent; they do not add another font family or change NPC text metrics.

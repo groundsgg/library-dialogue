@@ -12,7 +12,8 @@ public record LayoutProfile(
     double gap) {
   public enum ChoicePlacement {
     BELOW,
-    RIGHT
+    RIGHT,
+    LEFT
   }
 
   public LayoutProfile {
@@ -33,6 +34,13 @@ public record LayoutProfile(
 
   public static LayoutProfile hud() {
     return new LayoutProfile("hud", 320, 320, 12, 3, 3, 2, ChoicePlacement.BELOW, 6);
+  }
+
+  /** Compact HUD presets keep both side columns within a 308px composition. */
+  public static LayoutProfile compactHud(ChoicePlacement placement) {
+    boolean below = placement == ChoicePlacement.BELOW;
+    return new LayoutProfile(
+        "hud-compact", below ? 240 : 160, below ? 240 : 144, 8, 3, 3, 2, placement, 4);
   }
 
   public static LayoutProfile npc() {

@@ -173,7 +173,8 @@ public final class MinestomDialogueRenderer implements DialogueRenderer, Dialogu
                       p.layout(),
                       p.theme(),
                       p.metrics(),
-                      p.semanticOnly())));
+                      p.semanticOnly(),
+                      p.layoutResolver())));
       presenter = new DialoguePresenter(wrapped, clock, controls, labels);
     }
 

@@ -20,7 +20,7 @@ class MinecraftAssetsTest {
       decoded += (long) image.getWidth() * image.getHeight() * 4;
     }
     assertTrue(
-        decoded <= 1024 * 1024,
+        decoded <= 2 * 1024 * 1024,
         "Each ascent loads bitmap images; do not multiply large transparent atlases across native"
             + " fonts");
   }

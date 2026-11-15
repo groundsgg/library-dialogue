@@ -15,17 +15,8 @@ public final class MinecraftWidgetEncoder {
   public EncodedFrame encode(WidgetFrame frame, AssetBundle bundle) {
     if (!frame.fontPin().equals(bundle.pin())) throw failure("FONT_PIN_MISMATCH");
     if (frame.widgets().size() > 32) throw failure("WIDGET_LIMIT");
-    double
-        bottom =
-            frame.widgets().stream()
-                .mapToDouble(w -> w.bounds().y() + w.bounds().height())
-                .max()
-                .orElse(0),
-        width =
-            frame.widgets().stream()
-                .mapToDouble(w -> w.bounds().x() + w.bounds().width())
-                .max()
-                .orElse(0);
+    var bounds = frame.canvasBounds();
+    double bottom = bounds.y() + bounds.height(), width = bounds.width();
     var hud = new Canvas(bundle);
     var widgets = new ArrayList<EncodedFrame.EncodedWidget>();
     for (var w : frame.widgets()) {
@@ -36,7 +27,7 @@ public final class MinecraftWidgetEncoder {
       draw(w, frame.theme(), back, 0, 0, 0, false);
       front.move(w.bounds().width());
       back.move(w.bounds().width());
-      draw(w, frame.theme(), hud, w.bounds().x(), w.bounds().y(), bottom, true);
+      draw(w, frame.theme(), hud, w.bounds().x() - bounds.x(), w.bounds().y(), bottom, true);
       widgets.add(
           new EncodedFrame.EncodedWidget(
               w.id(),
@@ -170,10 +161,14 @@ public final class MinecraftWidgetEncoder {
             case 40 -> 1;
             case 56 -> 2;
             case 72 -> 3;
+            case 24 -> 4;
+            case 32 -> 5;
+            case 48 -> 6;
+            case 64 -> 7;
             default -> throw failure("UNSUPPORTED_RASTER");
           };
       if (width < 8) throw failure("UNSUPPORTED_RASTER");
-      int base = 0xe400 + style * 24 + hi * 6;
+      int base = 0xe400 + style * 48 + hi * 6;
       tile(x, y, baseline, base, 4);
       int remaining = width - 8;
       double pen = x + 4;

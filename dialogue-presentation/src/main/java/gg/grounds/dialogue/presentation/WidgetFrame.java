@@ -13,6 +13,18 @@ public record WidgetFrame(
     widgets = List.copyOf(widgets);
   }
 
+  /** Union includes negative coordinates, e.g. choices to the left of the speaker. */
+  public Rect canvasBounds() {
+    if (widgets.isEmpty()) return new Rect(0, 0, 0, 0);
+    double left = widgets.stream().mapToDouble(w -> w.bounds().x()).min().orElse(0);
+    double top = widgets.stream().mapToDouble(w -> w.bounds().y()).min().orElse(0);
+    double right =
+        widgets.stream().mapToDouble(w -> w.bounds().x() + w.bounds().width()).max().orElse(0);
+    double bottom =
+        widgets.stream().mapToDouble(w -> w.bounds().y() + w.bounds().height()).max().orElse(0);
+    return new Rect(left, top, right - left, bottom - top);
+  }
+
   public String themeId() {
     return theme.id();
   }

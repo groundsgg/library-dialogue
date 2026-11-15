@@ -266,8 +266,9 @@ public final class DialogueDemo {
       host.packState().expect(p, 1, pack.packId(), assets.pin());
       p.sendResourcePacks(pack.request());
       p.sendMessage(
-          "/dialogue · /renderer hud|npc|chat · /lang en|de · /confirm use|attack|swap · /hidehud ·"
-              + " /vignette · /npcbackdrop · /cancel · /personalwave");
+          "/dialogue · /renderer hud|npc|chat · /hudchoices below|left|right · /lang en|de ·"
+              + " /confirm use|attack|swap · /hidehud · /vignette · /npcbackdrop · /cancel ·"
+              + " /personalwave");
       return live;
     }
 
@@ -285,6 +286,14 @@ public final class DialogueDemo {
             if (args.length < 2 || !Set.of("hud", "npc", "chat").contains(args[1]))
               throw new IllegalArgumentException("/renderer hud|npc|chat");
             l.renderer = args[1];
+            return l.refresh();
+          });
+      command(
+          "hudchoices",
+          (l, args) -> {
+            if (args.length != 2 || !Set.of("below", "left", "right").contains(args[1]))
+              throw new IllegalArgumentException("/hudchoices below|left|right");
+            l.effects.put("hudChoices", args[1]);
             return l.refresh();
           });
       command(

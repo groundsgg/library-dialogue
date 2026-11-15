@@ -181,10 +181,12 @@ public final class MinestomDialogueHost {
             "hud",
                 new gg.grounds.dialogue.presentation.DialoguePresenter.SurfaceProfile(
                     hud,
-                    gg.grounds.dialogue.presentation.LayoutProfile.hud(),
+                    gg.grounds.dialogue.presentation.LayoutProfile.compactHud(
+                        gg.grounds.dialogue.presentation.LayoutProfile.ChoicePlacement.BELOW),
                     gg.grounds.dialogue.presentation.DialogueTheme.neutral(),
                     options.assets().metrics(),
-                    false),
+                    false,
+                    MinestomDialogueHost::hudLayout),
             "npc",
                 new gg.grounds.dialogue.presentation.DialoguePresenter.SurfaceProfile(
                     npc,
@@ -199,6 +201,19 @@ public final class MinestomDialogueHost {
         status,
         tokens,
         npc::geometry);
+  }
+
+  private static gg.grounds.dialogue.presentation.LayoutProfile hudLayout(
+      PresentationPreferences preferences) {
+    try {
+      var placement =
+          gg.grounds.dialogue.presentation.LayoutProfile.ChoicePlacement.valueOf(
+              preferences.effects().getOrDefault("hudChoices", "below").toUpperCase(Locale.ROOT));
+      return gg.grounds.dialogue.presentation.LayoutProfile.compactHud(placement);
+    } catch (IllegalArgumentException error) {
+      throw new gg.grounds.dialogue.presentation.DialoguePresenter.FallbackRequired(
+          "UNSUPPORTED_RASTER");
+    }
   }
 
   private Ticket current(Player player) {

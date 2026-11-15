@@ -54,3 +54,13 @@ this row is failed/pending correction, not accepted. The candidate now replaces
 coplanar stripe painting with precomposed tiles using the approved prototype art.
 Both pack profiles have new pins; visual confirmation of this corrected pack is
 still required.
+
+The user subsequently confirmed both HUD and NPC graphics as correct on
+3953b83 / 26.3 pack `666bd90b852d1fc7ec0e330e0c75e74a59cbf86eec16585c2e5de028af96dcfb`.
+This accepts the corrected blue/gold panel appearance and disappearance of the
+stripes; it does not complete the full input/GUI-scale/two-client matrix.
+
+The next requested change makes only the HUD more compact and adds answer stacks
+below, left and right. NPC world size remains unchanged. The updated HUD layouts
+and their left/right wrapping/centering need a fresh client check; use
+`/renderer hud`, `/dialogue`, and `/hudchoices below|left|right`.
