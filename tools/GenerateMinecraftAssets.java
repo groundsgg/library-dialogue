@@ -27,6 +27,27 @@ class GenerateMinecraftAssets {
     return out.toByteArray();
   }
 
+  static BufferedImage previewPanel(int width, int height, boolean selected) {
+    var image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+    var graphics = image.createGraphics();
+    pixelPanel(graphics, 0, 0, width, height, selected);
+    graphics.dispose();
+    return image;
+  }
+
+  private static void pixelPanel(Graphics2D g, int x, int y, int w, int h, boolean selected) {
+    g.setColor(selected ? new Color(25, 40, 55, 240) : new Color(9, 15, 24, 240));
+    g.fillRect(x + 2, y, w - 4, h);
+    g.fillRect(x, y + 2, w, h - 4);
+    g.setColor(selected ? new Color(255, 205, 117) : new Color(78, 104, 127));
+    g.drawPolyline(
+        new int[] {x + 2, x + w - 3, x + w - 1, x + w - 1, x + w - 3, x + 2, x, x, x + 2},
+        new int[] {y, y, y + 2, y + h - 3, y + h - 1, y + h - 1, y + h - 3, y + 2, y},
+        9);
+    g.setColor(selected ? new Color(130, 104, 62) : new Color(34, 52, 69));
+    g.drawRect(x + 3, y + 3, w - 7, h - 7);
+  }
+
   public static void main(String[] args) throws Exception {
     Path source = Path.of(args[0]), output = Path.of(args[1]);
     var points = new TreeSet<Integer>();
@@ -73,17 +94,6 @@ class GenerateMinecraftAssets {
       chars.add(line.toString());
     }
     graphics.dispose();
-    var stripes = new BufferedImage(16, 4096, BufferedImage.TYPE_INT_ARGB);
-    var stripChars = new ArrayList<String>();
-    for (int row = 0; row < 16; row++) {
-      var line = new StringBuilder();
-      for (int col = 0; col < 16; col++) {
-        int h = row * 16 + col + 1;
-        line.appendCodePoint(0xe000 + h);
-        for (int y = 0; y < h; y++) stripes.setRGB(col, row * 256 + y, 0xffffffff);
-      }
-      stripChars.add(line.toString());
-    }
     var spaces = new TreeMap<String, Object>();
     spaces.put(" ", 4);
     spaces.put("\u00a0", 4);
@@ -107,7 +117,7 @@ class GenerateMinecraftAssets {
     for (String profile : List.of("public-26.2", "grounds-26.3")) {
       var files = new TreeMap<String, byte[]>();
       files.put("assets/dialogue/textures/font/letters.png", png(atlas));
-      files.put("assets/dialogue/textures/font/stripes.png", png(stripes));
+
       files.put("assets/dialogue/textures/font/hud-mask.png", png(mask));
       files.put("assets/dialogue/font-source/dejavu_sans.ttf", Files.readAllBytes(source));
       files.put(
@@ -133,6 +143,41 @@ class GenerateMinecraftAssets {
           Map.of(
               "providers",
               List.of(bitmap("dialogue:font/npc-focus.png", 256, 128, List.of("\ue300")))));
+      // Original blue/gold preview art, precomposed before it reaches the native font renderer.
+      // Every horizontal tile contains its own final border+fill pixels: no coplanar paint layers.
+      var panelChars = new ArrayList<List<String>>();
+      for (int style = 0; style < 3; style++) {
+        var image = new BufferedImage(8, 24 * 256, BufferedImage.TYPE_INT_ARGB);
+        var rowsOfChars = new ArrayList<String>();
+        for (int hi = 0; hi < 4; hi++) {
+          int h = new int[] {28, 40, 56, 72}[hi];
+          var original = previewPanel(320, h, style == 1);
+          if (style == 2)
+            for (int y = 0; y < h; y++)
+              for (int x = 0; x < 320; x++) {
+                int pixel = original.getRGB(x, y), alpha = pixel >>> 24;
+                if (alpha != 0 && alpha != 255)
+                  original.setRGB(x, y, (x + y) % 12 == 0 ? 0xff101b28 : 0xff0b1420);
+              }
+          for (int part = 0; part < 6; part++) {
+            int index = hi * 6 + part,
+                w = part < 2 ? 4 : 1 << (part - 2),
+                from = part == 0 ? 0 : part == 1 ? 316 : 6;
+            int dx = 0, dy = index * 256;
+            for (int y = 0; y < h; y++)
+              for (int x = 0; x < w; x++)
+                image.setRGB(dx + x, dy + y, original.getRGB(from + x, y));
+          }
+        }
+        for (int row = 0; row < 24; row++)
+          rowsOfChars.add(Character.toString(0xe400 + style * 24 + row));
+        panelChars.add(rowsOfChars);
+        files.put(
+            "assets/dialogue/textures/font/panels-"
+                + new String[] {"normal", "selected", "back"}[style]
+                + ".png",
+            png(image));
+      }
       var spacing = Map.of("type", "space", "advances", spaces);
       put(files, "assets/dialogue/font/spacing.json", Map.of("providers", List.of(spacing)));
       put(
@@ -141,16 +186,21 @@ class GenerateMinecraftAssets {
           Map.of(
               "providers",
               List.of(bitmap("dialogue:font/hud-mask.png", 200, 106, List.of("\ue200")), spacing)));
-      for (int a = -64; a <= 256; a += 2)
-        put(
-            files,
-            "assets/dialogue/font/a_" + a + ".json",
-            Map.of(
-                "providers",
-                List.of(
-                    bitmap("dialogue:font/letters.png", 256, a, chars),
-                    bitmap("dialogue:font/stripes.png", 256, a, stripChars),
-                    spacing)));
+      for (int a = -64; a <= 256; a += 2) {
+        var providers = new ArrayList<Object>();
+        providers.add(bitmap("dialogue:font/letters.png", 256, a, chars));
+        for (int style = 0; style < 3; style++)
+          providers.add(
+              bitmap(
+                  "dialogue:font/panels-"
+                      + new String[] {"normal", "selected", "back"}[style]
+                      + ".png",
+                  256,
+                  a,
+                  panelChars.get(style)));
+        providers.add(spacing);
+        put(files, "assets/dialogue/font/a_" + a + ".json", Map.of("providers", providers));
+      }
       if (profile.equals("grounds-26.3")) {
         files.put(
             "assets/dialogue/post_effect/vignette.json",

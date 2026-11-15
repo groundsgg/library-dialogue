@@ -9,6 +9,44 @@ import org.junit.jupiter.api.Test;
 
 class MinecraftAssetsTest {
   @Test
+  void previewTileImagesHaveBoundedDecodedMemory() throws Exception {
+    var bundle = AssetBundle.loadDefault(MinecraftPackProfile.public262());
+    long decoded = 0;
+    for (String style : List.of("normal", "selected", "back")) {
+      var image =
+          ImageIO.read(
+              new ByteArrayInputStream(
+                  bundle.entries().get("assets/dialogue/textures/font/panels-" + style + ".png")));
+      decoded += (long) image.getWidth() * image.getHeight() * 4;
+    }
+    assertTrue(
+        decoded <= 1024 * 1024,
+        "Each ascent loads bitmap images; do not multiply large transparent atlases across native"
+            + " fonts");
+  }
+
+  @Test
+  void bakedPanelsPreservePreviewFrameAndFillPixels() throws Exception {
+    var bundle = AssetBundle.loadDefault(MinecraftPackProfile.grounds263());
+    var normal =
+        ImageIO.read(
+            new ByteArrayInputStream(
+                bundle.entries().get("assets/dialogue/textures/font/panels-normal.png")));
+    var selected =
+        ImageIO.read(
+            new ByteArrayInputStream(
+                bundle.entries().get("assets/dialogue/textures/font/panels-selected.png")));
+    // First cell is the original 4px left edge of the 28px preview name/answer frame.
+    assertEquals(0, normal.getRGB(0, 0));
+    assertEquals(0xff4e687f, normal.getRGB(2, 0));
+    assertEquals(0xff223445, normal.getRGB(3, 3));
+    assertEquals(0xff82683e, selected.getRGB(3, 3));
+    assertEquals(0xffffcd75, selected.getRGB(2, 0));
+    // The preview painter overlaps two alpha-240 fills: 240 + 240*(15/255) = 254.
+    assertEquals(0xfe080f18, normal.getRGB(2, 10));
+  }
+
+  @Test
   void nativeManifestDescribesActualRasterAndOptionalEffects() {
     var publicBundle = AssetBundle.loadDefault(MinecraftPackProfile.public262());
     var metadata =

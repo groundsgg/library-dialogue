@@ -22,6 +22,27 @@ class MinecraftWidgetEncoderTest {
   }
 
   @Test
+  void panelsUseBakedPreviewTexturesWithoutOverlappingStripGlyphs() {
+    for (String key : List.of("hud", "npc")) {
+      var frame = RenderFixtures.frame(key, "Hello", 5);
+      var encoded = new MinecraftWidgetEncoder().encode(frame, RenderFixtures.ASSETS);
+      for (var widget : encoded.widgets()) {
+        if (widget.kind() == WidgetFrame.Kind.HINT) continue;
+        for (var face : List.of(widget.front(), widget.back())) {
+          var codes = plain(face).codePoints().toArray();
+          assertFalse(
+              java.util.Arrays.stream(codes).anyMatch(c -> c >= 0xe001 && c <= 0xe100),
+              "Overlapping coloured column glyphs cause the photographed striped panels");
+          long tiles =
+              java.util.Arrays.stream(codes).filter(c -> c >= 0xe400 && c < 0xe478).count();
+          assertTrue(
+              tiles >= 3 && tiles <= 68, "A panel must use the bounded precomposed preview tiles");
+        }
+      }
+    }
+  }
+
+  @Test
   void lettersExplicitlyReceiveDepthSeparatingShadow() {
     var frame = RenderFixtures.frame("npc", "Hello", 5);
     var encoded = new MinecraftWidgetEncoder().encode(frame, RenderFixtures.ASSETS);

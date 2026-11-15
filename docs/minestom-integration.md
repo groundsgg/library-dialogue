@@ -183,3 +183,15 @@ After `installDist`, `tools/minestom_smoke.py --profile grounds-26.3
 socket and downloadable 97.1 pack. `--client /absolute/26.3.jar` additionally
 validates installed client metadata before launch. These checks do not claim
 visual acceptance; see the separate client matrix.
+
+## Preview graphics
+
+The neutral native panels use the original blue/gold pixel-frame art from the
+approved dialogue prototype. Border and fill are baked into each adjacent tile;
+no overlapping coplanar stripe glyphs paint their layers at runtime. Fronts use
+the dark-blue normal or gold-selected frame, and backs use closed dark material.
+The text palette remains theme-controlled; panel colours are part of the verified
+asset bundle. Replacement panel art must therefore supply a matching bundle pin.
+The initial baked panel heights are 28, 40, 56 and 72 GUI pixels (the standard
+nameplate and one-to-three-line default cards); other custom heights diagnose
+`UNSUPPORTED_RASTER` and fall back to chat. Widths remain bounded by 512 pixels.

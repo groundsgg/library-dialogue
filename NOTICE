@@ -19,3 +19,10 @@ client code or texture files are redistributed.
 The independent NPC dialogue example reuses the original neutral MIT example
 model/clip/JSON from groundsgg/library-npc, by the same project owner. Its JSON
 references vanilla texture identifiers without redistributing vanilla textures.
+
+Native dialogue panel tiles reuse the original blue/gold pixel-frame painter
+from the Grounds dialogue-java-probe preview (HudPackCompiler.pixelPanel).
+They are original Grounds assets, not copied from Rivet or LuxDialogues.
+The native encoder places precomposed, adjacent texture tiles instead of
+overpainting coplanar border/fill glyphs. The maintenance generator retains
+the preview palette and contour; the server never rasterizes these assets.

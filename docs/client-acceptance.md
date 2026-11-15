@@ -47,3 +47,10 @@ A new pack hash requires a fresh pack download/acceptance for that build. Openin
 the dialogue afterwards must not produce another pack prompt. Headless demo runs
 may mark a simulated connection's pack ready solely for server-side tests; they
 are never evidence that a real client downloaded or rendered it.
+
+2026-11-15 follow-up: the first real 26.3 client run reported graphical errors.
+The supplied NPC screenshot shows vertical stripes across panel fills and frames;
+this row is failed/pending correction, not accepted. The candidate now replaces
+coplanar stripe painting with precomposed tiles using the approved prototype art.
+Both pack profiles have new pins; visual confirmation of this corrected pack is
+still required.

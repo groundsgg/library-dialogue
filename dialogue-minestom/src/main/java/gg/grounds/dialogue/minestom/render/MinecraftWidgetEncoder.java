@@ -91,17 +91,13 @@ public final class MinecraftWidgetEncoder {
     boolean panel = w.kind() != Kind.HINT;
     double width = w.bounds().width(), height = w.bounds().height();
     if (panel) {
-      int border =
-          colour(theme, w.selected() || w.kind() == Kind.SPEAKER ? "selected" : "muted", 0x9ba9b7);
-      canvas.roundRect(ox, oy, (int) width, (int) height, baseline, border);
-      if (width >= 8 && height >= 8)
-        canvas.roundRect(
-            ox + 2,
-            oy + 2,
-            (int) width - 4,
-            (int) height - 4,
-            baseline,
-            colour(theme, "panel", 0x152335));
+      canvas.panel(
+          ox,
+          oy,
+          (int) width,
+          (int) height,
+          baseline,
+          !letters ? 2 : w.selected() || w.kind() == Kind.SPEAKER ? 1 : 0);
     }
     if (!letters) return;
     var lines = w.layout().visible(w.visibleGraphemes());
@@ -167,21 +163,37 @@ public final class MinecraftWidgetEncoder {
       cursor = x + advance;
     }
 
-    void columns(double x, double y, int width, int height, double baseline, int colour) {
-      if (width <= 0 || height <= 0) return;
-      if (height > 256) throw failure("UNSUPPORTED_RASTER");
-      String column = Character.toString(0xe000 + height) + Character.toString(0xf800);
-      draw(x, column.repeat(width), font(baseline - y), width, colour, false);
+    void panel(double x, double y, int width, int height, double baseline, int style) {
+      int hi =
+          switch (height) {
+            case 28 -> 0;
+            case 40 -> 1;
+            case 56 -> 2;
+            case 72 -> 3;
+            default -> throw failure("UNSUPPORTED_RASTER");
+          };
+      if (width < 8) throw failure("UNSUPPORTED_RASTER");
+      int base = 0xe400 + style * 24 + hi * 6;
+      tile(x, y, baseline, base, 4);
+      int remaining = width - 8;
+      double pen = x + 4;
+      for (int bit = 3; bit >= 0; bit--) {
+        int size = 1 << bit;
+        int count = remaining / size;
+        if (count > 0) {
+          String glyphs =
+              (Character.toString(base + 2 + bit) + Character.toString(0xf800)).repeat(count);
+          draw(pen, glyphs, font(baseline - y), size * count, 0xffffff, false);
+          pen += size * count;
+          remaining -= size * count;
+        }
+      }
+      tile(x + width - 4, y, baseline, base + 1, 4);
     }
 
-    void roundRect(double x, double y, int width, int height, double baseline, int colour) {
-      if (width < 4 || height < 4) {
-        columns(x, y, width, height, baseline, colour);
-        return;
-      }
-      columns(x + 2, y, width - 4, height, baseline, colour);
-      columns(x, y + 2, 2, height - 4, baseline, colour);
-      columns(x + width - 2, y + 2, 2, height - 4, baseline, colour);
+    void tile(double x, double y, double baseline, int code, int width) {
+      // BitmapProvider's full-ink tile advance is width+1; the next explicit move removes it.
+      draw(x, Character.toString(code), font(baseline - y), width + 1, 0xffffff, false);
     }
   }
 }
