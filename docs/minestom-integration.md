@@ -197,32 +197,32 @@ The baked panel heights are 24, 28, 32, 40, 48, 56, 64 and 72 GUI pixels (the co
 
 ## Compact HUD answer placement
 
-The native host uses a compact HUD by default: 240 GUI pixels wide, 8px inner
-padding and 4px gaps. Answer cards have their own 4px padding and are 24px high
-for one-line labels. Below the speech their 192px width is centered inside its
-240px width; beside it they are 128px wide. The text font stays readable at its existing size. NPC
-profiles and their fixed world scale remain unchanged. Answer cards remain stacked
-vertically; `hudChoices` selects whether that stack is below, left or right of the
-speech. Set `PresentationPreferences.effects()` to, for example,
-`Map.of("hudChoices", "left")`, then call the normal `updatePreferences` path.
-Valid values are `below` (default), `left`, and `right`. The demo provides
-`/hudchoices below|left|right` for live changes.
+The HUD reuses the original prototype's rounded modal and frozen Monospaced
+bitmap text at 75% native size. The speaker sits inside the speech region. Answers
+are compact text rows in a shared darker region, with a gold `> ` marker and gold
+text for the selected answer. They have no individual card frames. NPC panels,
+fonts, hover growth and fixed world scale remain unchanged.
 
-Side presets use a 160px speech column, a 128px answer column and a 4px gap,
-keeping their complete width at 292px. Wrapping uses the chosen column widths.
-The presenter keeps the same three-card viewport and choice IDs. Left layouts
-retain negative logical coordinates; native HUD projection uses `canvasBounds()`
-to center the full composition, including the left column. HUD coverage uses that
-same width.
+`PresentationPreferences.effects()` accepts `Map.of("hudChoices", "left")`;
+apply changes through the normal `updatePreferences` path. Valid values are
+`below` (default), `left`, and `right`. The demo provides
+`/hudchoices below|left|right` for live changes. The below modal is 240 GUI pixels
+wide; side layouts combine a 162px speech region, a 135px answer region and a 3px
+gap, for 300px total. Answer text widths are 222px below and 117px beside the
+speech; rows are 10px or 20px high depending on wrapping. Three answers remain
+visible through the shared viewport. Unsupported text still falls back intact
+to chat.
 
-The framework-free `SurfaceProfile` optionally resolves a `LayoutProfile` from
-current preferences. Existing five-argument constructors keep the fixed-profile
-behaviour. Custom consumers can use `ChoicePlacement.LEFT` directly without the
-native preset. Geometry, text and input targets still come from one shared frame.
-The additional compact card heights keep decoded panel-image data below 2MiB per
-ascent; they do not add another font family or change NPC text metrics.
+The framework-free presenter produces the same semantic widgets and choice IDs.
+A `WidgetFrame.Chrome` describes the shared background and stable baseline;
+`canvasBounds()` includes it and negative left-column coordinates. The native
+encoder draws that background once, then places the shared widgets. HUD metrics
+have their own verified pin derived from the asset bundle. The frozen source
+pixels are in `tools/prototype-hud`; normal builds and server starts do not
+rasterize fonts.
 
-`LayoutProfile.choicePadding()` controls the inner margin of answer cards
-separately from the speech. The existing constructor preserves shared padding
-for older/custom profiles, including the NPC preset and its existing profile pin.
-Only an explicitly different answer padding contributes a new pin field.
+`SurfaceProfile` optionally resolves a `LayoutProfile` from current preferences.
+Existing constructors keep fixed-profile behaviour. `LayoutProfile.Style.PANELS`
+and shared padding remain the default for existing consumers, including NPC.
+`choicePadding()` remains available for custom panel profiles. Only explicitly
+nondefault style/padding contributes additional profile-pin fields.

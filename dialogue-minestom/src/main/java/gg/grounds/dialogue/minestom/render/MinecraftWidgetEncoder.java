@@ -13,21 +13,33 @@ import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
 /** Native projection only. All wrapping, reveal and hit rectangles come from the presenter. */
 public final class MinecraftWidgetEncoder {
   public EncodedFrame encode(WidgetFrame frame, AssetBundle bundle) {
-    if (!frame.fontPin().equals(bundle.pin())) throw failure("FONT_PIN_MISMATCH");
+    boolean prototype = frame.chrome() != null;
+    if (!frame.fontPin().equals(prototype ? bundle.hudMetrics().pin() : bundle.pin()))
+      throw failure("FONT_PIN_MISMATCH");
     if (frame.widgets().size() > 32) throw failure("WIDGET_LIMIT");
     var bounds = frame.canvasBounds();
-    double bottom = bounds.y() + bounds.height(), width = bounds.width();
-    var hud = new Canvas(bundle);
+    double bottom = prototype ? frame.chrome().baseline() : bounds.y() + bounds.height(),
+        width = bounds.width();
+    var hud = new Canvas(bundle, prototype);
+    if (prototype) hud.chrome(frame.chrome(), bounds.x());
     var widgets = new ArrayList<EncodedFrame.EncodedWidget>();
     for (var w : frame.widgets()) {
       validate(w.bounds());
-      var front = new Canvas(bundle);
-      var back = new Canvas(bundle);
-      draw(w, frame.theme(), front, 0, 0, 0, true);
-      draw(w, frame.theme(), back, 0, 0, 0, false);
+      var front = new Canvas(bundle, prototype);
+      var back = new Canvas(bundle, prototype);
+      draw(w, frame.theme(), front, 0, 0, 0, true, !prototype);
+      draw(w, frame.theme(), back, 0, 0, 0, false, !prototype);
       front.move(w.bounds().width());
       back.move(w.bounds().width());
-      draw(w, frame.theme(), hud, w.bounds().x() - bounds.x(), w.bounds().y(), bottom, true);
+      draw(
+          w,
+          frame.theme(),
+          hud,
+          w.bounds().x() - bounds.x(),
+          w.bounds().y(),
+          bottom,
+          true,
+          !prototype);
       widgets.add(
           new EncodedFrame.EncodedWidget(
               w.id(),
@@ -78,8 +90,9 @@ public final class MinecraftWidgetEncoder {
       double ox,
       double oy,
       double baseline,
-      boolean letters) {
-    boolean panel = w.kind() != Kind.HINT;
+      boolean letters,
+      boolean panels) {
+    boolean panel = panels && w.kind() != Kind.HINT;
     double width = w.bounds().width(), height = w.bounds().height();
     if (panel) {
       canvas.panel(
@@ -104,27 +117,46 @@ public final class MinecraftWidgetEncoder {
       canvas.draw(
           x,
           text,
-          canvas.font(baseline - y - n * canvas.assets.metrics().lineHeight()),
+          canvas.font(baseline - y - n * canvas.metrics.lineHeight()),
           advance,
-          colour(theme, w.enabled() ? "text" : "muted", 0xf3eee4),
+          colour(
+              theme,
+              !panels
+                  ? (w.kind() == Kind.SPEAKER || w.kind() == Kind.CHOICE && w.selected()
+                      ? "selected"
+                      : w.kind() == Kind.CHOICE ? "muted" : w.kind() == Kind.HINT ? "hint" : "text")
+                  : w.enabled() ? "text" : "muted",
+              0xf3eee4),
           true);
     }
   }
 
   private static final class Canvas {
     final AssetBundle assets;
+    final boolean prototype;
+    final gg.grounds.dialogue.presentation.FontMetrics metrics;
     Component component = Component.empty().decoration(TextDecoration.ITALIC, false);
     double cursor;
 
-    Canvas(AssetBundle assets) {
+    Canvas(AssetBundle assets, boolean prototype) {
       this.assets = assets;
+      this.prototype = prototype;
+      metrics = prototype ? assets.hudMetrics() : assets.metrics();
+    }
+
+    void chrome(WidgetFrame.Chrome chrome, double left) {
+      String key = chrome.key();
+      if (!assets.hasEntry("assets/dialogue/font/" + key + ".json")) throw failure("MISSING_GLYPH");
+      double width = chrome.bounds().width() / 2, x = chrome.bounds().x() - left;
+      draw(x, "\ue600", Key.key("dialogue:" + key), width + 1, 0xffffff, false);
+      draw(x + width, "\ue601", Key.key("dialogue:" + key), width + 1, 0xffffff, false);
     }
 
     Key font(double ascent) {
-      if (ascent != Math.rint(ascent)
-          || !assets.hasEntry("assets/dialogue/font/a_" + (int) ascent + ".json"))
+      String key = (prototype ? "hud_a_" : "a_") + (int) ascent;
+      if (ascent != Math.rint(ascent) || !assets.hasEntry("assets/dialogue/font/" + key + ".json"))
         throw failure("UNSUPPORTED_RASTER");
-      return Key.key("dialogue:a_" + (int) ascent);
+      return Key.key("dialogue:" + key);
     }
 
     void move(double target) {

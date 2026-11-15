@@ -17,7 +17,7 @@ Connect to `localhost:25578`, accept the original demo pack hosted on loopback
 `25579`, then use `/dialogue`. The pack is sent once on first spawn, never on
 opening a dialogue. Rejected/failed packs use semantic chat fallback. `/renderer
 hud|npc|chat` changes the current presentation, `/lang en|de` changes the current
-language, and `/cancel` closes it. Seven choices use the shared three-card viewport.
+language, and `/cancel` closes it. Seven choices use the shared three-answer viewport.
 The task choice waits two seconds as a local example action, without a quest service.
 
 `/confirm use|attack|swap` selects the next dialogue's confirm profile. Defaults

@@ -126,6 +126,8 @@ public final class DialoguePresenter implements DialogueRenderer {
             labels.resolve(
                 new UiLabelSource.LabelRequest(
                     view.localeTag(), view.hint(), controls, view.notice(), reasons)));
+    if (l.style() == LayoutProfile.Style.HUD)
+      return composePrototypeHud(view, p, l, preferences, ui);
     var text = new ResolvedText(view.text(), view.localeTag());
     var body = layout(text, metrics, l.width() - 2 * l.padding(), l.maxTextLines());
     double bodyHeight = body.height() + 2 * l.padding();
@@ -266,6 +268,149 @@ public final class DialoguePresenter implements DialogueRenderer {
     return new WidgetFrame(view, widgets, metrics.pin(), p.theme());
   }
 
+  private static WidgetFrame composePrototypeHud(
+      DialogueView v,
+      SurfaceProfile p,
+      LayoutProfile l,
+      PresentationPreferences preferences,
+      UiLabelSource.UiLabels ui) {
+    var metrics = p.metrics();
+    if (metrics.lineHeight() != 10
+        || l.choiceCapacity() != 3
+        || l.maxTextLines() > 3
+        || l.maxChoiceLines() > 2) throw new FallbackRequired("UNSUPPORTED_RASTER");
+    var widgets = new ArrayList<Widget>();
+    var body = new ResolvedText(v.text(), v.localeTag());
+    var bodyLayout = layout(body, metrics, l.width() - 18, 3);
+    widgets.add(
+        widget(
+            "text",
+            Kind.TEXT,
+            new Rect(0, 0, l.width(), 48),
+            body,
+            bodyLayout,
+            9,
+            17,
+            v.revealedGraphemes(),
+            false,
+            true,
+            null,
+            p,
+            preferences));
+    var name = new ResolvedText(v.speaker(), v.localeTag());
+    var nameLayout = layout(name, metrics, l.width() - 18, 1);
+    widgets.add(
+        widget(
+            "speaker",
+            Kind.SPEAKER,
+            new Rect(9, 7, l.width() - 18, 10),
+            name,
+            nameLayout,
+            0,
+            0,
+            Graphemes.split(name.plain()).size(),
+            false,
+            true,
+            null,
+            p,
+            preferences));
+    var window = new ChoiceViewport().window(v.choices(), v.selectedChoiceId(), 3);
+    var labels = new ArrayList<ResolvedText>();
+    var lines = new ArrayList<TextLayout.TextLayoutResult>();
+    for (var c : window.choices()) {
+      String reason =
+          c.availability() == DialogueView.Availability.AVAILABLE
+              ? ""
+              : ui.choiceReasons().getOrDefault(c.id(), "");
+      String prefix = c.id().equals(v.selectedChoiceId()) ? "> " : "  ";
+      var text =
+          new ResolvedText(
+              prefix + c.label() + (reason.isEmpty() ? "" : "\n  " + reason), v.localeTag());
+      labels.add(text);
+      lines.add(layout(text, metrics, l.choiceWidth(), 2));
+    }
+    double rowHeight =
+        lines.stream().mapToDouble(TextLayout.TextLayoutResult::height).max().orElse(10);
+    boolean below = l.placement() == LayoutProfile.ChoicePlacement.BELOW;
+    double columnWidth = l.choiceWidth() + 18;
+    double left = l.placement() == LayoutProfile.ChoicePlacement.LEFT ? -columnWidth - l.gap() : 0;
+    double width = below ? l.width() : l.width() + l.gap() + columnWidth;
+    double height = below ? 84 + 3 * (rowHeight - 10) : rowHeight == 10 ? 51 : 75;
+    double x =
+        switch (l.placement()) {
+          case BELOW -> 9;
+          case RIGHT -> l.width() + l.gap() + 9;
+          case LEFT -> left + 9;
+        };
+    double y = below ? 50 : 7;
+    for (int n = 0; n < window.choices().size(); n++) {
+      var c = window.choices().get(n);
+      var text = labels.get(n);
+      var bounds = new Rect(x, y + n * rowHeight, l.choiceWidth(), rowHeight);
+      widgets.add(
+          widget(
+              "choice:" + c.id(),
+              Kind.CHOICE,
+              bounds,
+              text,
+              lines.get(n),
+              0,
+              0,
+              Graphemes.split(text.plain()).size(),
+              c.id().equals(v.selectedChoiceId()),
+              c.availability() == DialogueView.Availability.AVAILABLE,
+              c.id(),
+              p,
+              preferences));
+    }
+    var hint = new ResolvedText(ui.hint(), v.localeTag());
+    var hintLayout = layout(hint, metrics, width - 18, 2);
+    widgets.add(
+        widget(
+            "hint",
+            Kind.HINT,
+            new Rect(left + 9, height - 1, width - 18, hintLayout.height()),
+            hint,
+            hintLayout,
+            0,
+            0,
+            Graphemes.split(hint.plain()).size(),
+            false,
+            true,
+            null,
+            p,
+            preferences));
+    if (!ui.notice().isEmpty()) {
+      var notice = new ResolvedText(ui.notice(), v.localeTag());
+      var noticeLayout = layout(notice, metrics, width - 18, 2);
+      widgets.add(
+          widget(
+              "status",
+              Kind.HINT,
+              new Rect(
+                  left + 9,
+                  height - 1 + hintLayout.height() + 4,
+                  width - 18,
+                  noticeLayout.height()),
+              notice,
+              noticeLayout,
+              0,
+              0,
+              Graphemes.split(notice.plain()).size(),
+              false,
+              true,
+              null,
+              p,
+              preferences));
+    }
+    var chrome =
+        new WidgetFrame.Chrome(
+            "hud_" + l.placement().name().toLowerCase(Locale.ROOT) + "_" + (int) rowHeight + "_3",
+            new Rect(left, 0, width, height),
+            height + 10);
+    return new WidgetFrame(v, widgets, metrics.pin(), p.theme(), chrome);
+  }
+
   private static TextLayout.TextLayoutResult layout(
       ResolvedText text, FontMetrics metrics, double width, int lines) {
     var result = new TextLayout().layout(text, metrics, new TextLayout.TextLimits(width, lines));
@@ -314,6 +459,7 @@ public final class DialoguePresenter implements DialogueRenderer {
     var t = profile.theme();
     var layout = new LinkedHashMap<String, Object>();
     layout.put("key", l.key());
+    if (l.style() != LayoutProfile.Style.PANELS) layout.put("style", l.style().name());
     layout.put("width", l.width());
     layout.put("choiceWidth", l.choiceWidth());
     layout.put("padding", l.padding());

@@ -9,6 +9,23 @@ import org.junit.jupiter.api.Test;
 
 class MinecraftAssetsTest {
   @Test
+  void belowHudKeepsTheExactOriginalPreviewPixels() throws Exception {
+    var b = AssetBundle.loadDefault(MinecraftPackProfile.public262());
+    var original = b.entries().get("assets/dialogue/font-source/prototype_hud_panel.png");
+    assertNotNull(
+        original, "Retain the actual preview source rather than guessing its proportions");
+    var source = ImageIO.read(new ByteArrayInputStream(original));
+    var generated =
+        ImageIO.read(
+            new ByteArrayInputStream(
+                b.entries().get("assets/dialogue/textures/font/hud_below_10_3.png")));
+    for (int y = 0; y < 128; y++)
+      for (int x = 0; x < 320; x++) assertEquals(source.getRGB(x, y), generated.getRGB(x, y));
+    assertTrue(b.hudMetrics().width("A") < b.metrics().width("A"));
+    assertEquals(10, b.hudMetrics().lineHeight());
+  }
+
+  @Test
   void previewTileImagesHaveBoundedDecodedMemory() throws Exception {
     var bundle = AssetBundle.loadDefault(MinecraftPackProfile.public262());
     long decoded = 0;

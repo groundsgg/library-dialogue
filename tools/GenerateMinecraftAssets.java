@@ -48,6 +48,104 @@ class GenerateMinecraftAssets {
     g.drawRect(x + 3, y + 3, w - 7, h - 7);
   }
 
+  static void hudAssets(Map<String, byte[]> files, Path source, Map<String, Object> baseSpaces)
+      throws Exception {
+    var original = ImageIO.read(source.resolve("letters.png").toFile());
+    var panel = ImageIO.read(source.resolve("panel.png").toFile());
+    var rows = Files.readAllLines(source.resolve("glyphs.txt"));
+    var letters =
+        new BufferedImage(original.getWidth(), rows.size() * 256, BufferedImage.TYPE_INT_ARGB);
+    var chars = new ArrayList<String>();
+    var properties = new StringBuilder("lineHeight=10\nglyph.32=3\nglyph.160=3\n");
+    for (int row = 0; row < rows.size(); row++) {
+      var grid = rows.get(row).split(" ");
+      var text = new StringBuilder();
+      for (int col = 0; col < grid.length; col++) {
+        int cp = Integer.parseInt(grid[col], 16);
+        text.appendCodePoint(cp == 160 ? 0 : cp);
+        int right = -1;
+        for (int y = 0; y < 128; y++)
+          for (int x = 0; x < 12; x++) {
+            int pixel = original.getRGB(col * 12 + x, row * 128 + y);
+            letters.setRGB(col * 12 + x, row * 256 + y, pixel);
+            if ((pixel >>> 24) != 0) right = Math.max(right, x);
+          }
+        if (cp != 0 && cp != 160)
+          properties
+              .append("glyph.")
+              .append(cp)
+              .append('=')
+              .append(Math.round((right + 1) * .75f) + 1)
+              .append('\n');
+      }
+      chars.add(text.toString());
+    }
+    files.put("assets/dialogue/textures/font/hud_letters.png", png(letters));
+    files.put(
+        "assets/dialogue/font-source/prototype_hud_panel.png",
+        Files.readAllBytes(source.resolve("panel.png")));
+    files.put(
+        "assets/dialogue/hud_metrics.properties",
+        properties.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    var spaces = new TreeMap<String, Object>(baseSpaces);
+    spaces.put(" ", 3);
+    spaces.put("\u00a0", 3);
+    var spacing = Map.of("type", "space", "advances", spaces);
+    var ascents = new TreeSet<Integer>(List.of(0, -10, -17, -27, -37, 11, 1, -3, -13, -23));
+    for (String placement : List.of("below", "left", "right"))
+      for (int rowHeight : List.of(10, 20)) {
+        boolean below = placement.equals("below");
+        int logicalHeight = below ? 84 + 3 * (rowHeight - 10) : rowHeight == 10 ? 51 : 75;
+        int baseline = logicalHeight + 10;
+        ascents.add(baseline - 7);
+        for (int line = 0; line < 3; line++) ascents.add(baseline - 17 - line * 10);
+        for (int slot = 0; slot < 3; slot++)
+          for (int line = 0; line < rowHeight / 10; line++)
+            ascents.add(baseline - (below ? 50 : 7) - slot * rowHeight - line * 10);
+        String key = "hud_" + placement + "_" + rowHeight + "_3";
+        int width = below ? 320 : 400;
+        var image = new BufferedImage(width, 256, BufferedImage.TYPE_INT_ARGB);
+        if (below)
+          for (int y = 0; y < 128 + (rowHeight == 20 ? 40 : 0); y++)
+            for (int x = 0; x < 320; x++) {
+              int from = rowHeight == 10 || y < 103 ? y : y < 143 ? 100 : y - 40;
+              image.setRGB(x, y, panel.getRGB(x, from));
+            }
+        else {
+          int height = rowHeight == 10 ? 68 : 100;
+          var g = image.createGraphics();
+          g.setColor(new Color(9, 15, 24, 220));
+          g.fillRoundRect(0, 0, width, height, 10, 10);
+          g.setColor(new Color(78, 104, 127, 230));
+          g.drawRoundRect(0, 0, width - 1, height - 1, 10, 10);
+          int speech = placement.equals("left") ? 184 : 0,
+              answers = placement.equals("left") ? 0 : 220;
+          g.setColor(new Color(25, 40, 55, 220));
+          g.fillRoundRect(speech + 6, 7, 204, height - 16, 6, 6);
+          g.setColor(new Color(15, 27, 39, 230));
+          g.fillRoundRect(answers + 6, 7, 168, height - 16, 6, 6);
+          g.dispose();
+        }
+        files.put("assets/dialogue/textures/font/" + key + ".png", png(image));
+        put(
+            files,
+            "assets/dialogue/font/" + key + ".json",
+            Map.of(
+                "providers",
+                List.of(
+                    bitmap("dialogue:font/" + key + ".png", 192, baseline, List.of("\ue600\ue601")),
+                    spacing)));
+      }
+    for (int ascent : ascents)
+      put(
+          files,
+          "assets/dialogue/font/hud_a_" + ascent + ".json",
+          Map.of(
+              "providers",
+              List.of(bitmap("dialogue:font/hud_letters.png", 192, ascent, chars), spacing)));
+    System.out.println("Frozen prototype HUD fonts=" + ascents.size());
+  }
+
   public static void main(String[] args) throws Exception {
     Path source = Path.of(args[0]), output = Path.of(args[1]);
     var points = new TreeSet<Integer>();
@@ -224,6 +322,7 @@ class GenerateMinecraftAssets {
             """)
                 .getBytes(java.nio.charset.StandardCharsets.UTF_8));
       }
+      hudAssets(files, args.length > 2 ? Path.of(args[2]) : Path.of("tools/prototype-hud"), spaces);
       var hashes = new TreeMap<String, String>();
       files.forEach((k, v) -> hashes.put(k, ContentFingerprint.hash(v).sha256()));
       String pin =

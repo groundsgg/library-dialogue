@@ -7,10 +7,16 @@ import java.util.*;
 public final class MinecraftFontMetrics implements FontMetrics {
   private final String pin;
   private final Map<Integer, Integer> advances;
+  private final double height;
 
   MinecraftFontMetrics(String pin, Map<Integer, Integer> advances) {
+    this(pin, advances, 16);
+  }
+
+  MinecraftFontMetrics(String pin, Map<Integer, Integer> advances, double height) {
     this.pin = pin;
     this.advances = Map.copyOf(advances);
+    this.height = height;
   }
 
   public double width(String grapheme) {
@@ -22,7 +28,7 @@ public final class MinecraftFontMetrics implements FontMetrics {
   }
 
   public double lineHeight() {
-    return 16;
+    return height;
   }
 
   public String pin() {

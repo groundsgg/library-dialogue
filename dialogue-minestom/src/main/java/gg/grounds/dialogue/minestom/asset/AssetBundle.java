@@ -14,7 +14,7 @@ public final class AssetBundle {
   private final byte[] manifest;
   private final Map<String, byte[]> files;
   private final Map<Integer, Glyph> glyphs;
-  private final MinecraftFontMetrics metrics;
+  private final MinecraftFontMetrics metrics, hudMetrics;
   private final String pin;
 
   private AssetBundle(
@@ -35,6 +35,33 @@ public final class AssetBundle {
     advances.put(32, 4);
     advances.put(160, 4);
     metrics = new MinecraftFontMetrics(pin, advances);
+    var hud = files.get("assets/dialogue/hud_metrics.properties");
+    if (hud == null) hudMetrics = metrics;
+    else {
+      if (hud.length > 65536) throw new IllegalArgumentException("HUD_METRICS_LIMIT");
+      var properties = new Properties();
+      try {
+        properties.load(new ByteArrayInputStream(hud));
+      } catch (IOException e) {
+        throw new IllegalArgumentException("HUD_METRICS", e);
+      }
+      var widths = new HashMap<Integer, Integer>();
+      for (String k : properties.stringPropertyNames())
+        if (k.startsWith("glyph.")) {
+          int cp = Integer.parseInt(k.substring(6)),
+              width = Integer.parseInt(properties.getProperty(k));
+          if (!Character.isValidCodePoint(cp) || width < 1 || width > 17 || widths.size() >= 512)
+            throw new IllegalArgumentException("HUD_METRICS");
+          widths.put(cp, width);
+        }
+      if (!properties.getProperty("lineHeight", "").equals("10"))
+        throw new IllegalArgumentException("HUD_METRICS");
+      hudMetrics =
+          new MinecraftFontMetrics(
+              ContentFingerprint.hash(("hud:" + pin).getBytes(StandardCharsets.UTF_8)).sha256(),
+              widths,
+              10);
+    }
   }
 
   public static AssetBundle loadDefault(MinecraftPackProfile profile) {
@@ -132,6 +159,10 @@ public final class AssetBundle {
 
   public MinecraftFontMetrics metrics() {
     return metrics;
+  }
+
+  public MinecraftFontMetrics hudMetrics() {
+    return hudMetrics;
   }
 
   public Map<Integer, Glyph> glyphs() {

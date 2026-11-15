@@ -16,6 +16,26 @@ import org.junit.jupiter.api.Test;
 @EnvTest
 class HudOptionsTest {
   @Test
+  void originalHudUsesOnePanelEmbeddedNameAndArrowRows(Env env) throws Exception {
+    try (var f = new NativeReviewRegressionTest.F(env, 7)) {
+      var ticket = f.start("hud", false);
+      NativeReviewRegressionTest.done(env, ticket.result());
+      var component = f.hudFrames.getLast();
+      var text =
+          net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText()
+              .serialize(component);
+      assertEquals(
+          2,
+          text.codePoints().filter(c -> c == 0xe600 || c == 0xe601).count(),
+          "Original HUD has one two-tile shared backdrop");
+      assertFalse(
+          text.codePoints().anyMatch(c -> c >= 0xe400 && c < 0xe500),
+          "Individual NPC card frames do not belong in the prototype HUD");
+      assertTrue(text.contains("> Choice 0"));
+    }
+  }
+
+  @Test
   void nativeHudUsesCompactColumnsAndCentersTheWholeLeftCanvas(Env env) throws Exception {
     try (var f = new NativeReviewRegressionTest.F(env, 7)) {
       var t = f.start("hud", false);
@@ -31,7 +51,7 @@ class HudOptionsTest {
                 new PresentationPreferences(
                     "hud", Duration.ZERO, false, Map.of("hudChoices", position))));
         var out = f.hudFrames.getLast();
-        assertEquals(position.equals("below") ? 240 : 292, inspector.width(out), .001);
+        assertEquals(position.equals("below") ? 240 : 300, inspector.width(out), .001);
         assertEquals(
             0,
             inspector.leftmostInk(out),

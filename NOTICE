@@ -26,3 +26,9 @@ They are original Grounds assets, not copied from Rivet or LuxDialogues.
 The native encoder places precomposed, adjacent texture tiles instead of
 overpainting coplanar border/fill glyphs. The maintenance generator retains
 the preview palette and contour; the server never rasterizes these assets.
+
+The compact HUD additionally reuses the original rounded modal and frozen
+Monospaced glyph raster from the Grounds dialogue-java-probe preview. Source
+pixels are retained under tools/prototype-hud; the generator pads bitmap cells
+and uses native scaling without redrawing the source font. The font raster keeps
+the bundled DejaVu/Bitstream license. No third-party server artwork is included.

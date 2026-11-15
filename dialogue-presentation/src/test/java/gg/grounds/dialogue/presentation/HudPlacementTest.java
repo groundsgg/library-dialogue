@@ -8,8 +8,24 @@ import java.util.*;
 import org.junit.jupiter.api.Test;
 
 class HudPlacementTest {
+  private static FontMetrics hudMetrics() {
+    return new FontMetrics() {
+      public double width(String g) {
+        return 6;
+      }
+
+      public double lineHeight() {
+        return 10;
+      }
+
+      public String pin() {
+        return "fixture-hud";
+      }
+    };
+  }
+
   @Test
-  void compactAnswerCardsStaySmallerThanTheSpeechPanel() {
+  void prototypeHudUsesCompactRowsAndEmbeddedSpeaker() {
     for (var position : LayoutProfile.ChoicePlacement.values()) {
       var surface = new PresenterFixtures.Surface();
       var presenter =
@@ -20,7 +36,7 @@ class HudPlacementTest {
                       surface,
                       LayoutProfile.compactHud(position),
                       DialogueTheme.neutral(),
-                      FontMetrics.defaults(),
+                      hudMetrics(),
                       false)),
               new PresenterFixtures.Clock());
       var frame =
@@ -38,12 +54,21 @@ class HudPlacementTest {
               .filter(w -> w.kind() == WidgetFrame.Kind.CHOICE)
               .findFirst()
               .orElseThrow();
-      assertEquals(24, answer.bounds().height());
-      assertEquals(32, speech.bounds().height());
+      assertEquals(10, answer.bounds().height());
+      assertEquals(48, speech.bounds().height());
+      assertNotNull(frame.chrome());
+      var speaker =
+          frame.widgets().stream()
+              .filter(w -> w.kind() == WidgetFrame.Kind.SPEAKER)
+              .findFirst()
+              .orElseThrow();
+      assertEquals(7, speaker.bounds().y());
+      assertEquals(17, speech.textBounds().y());
+      assertTrue(answer.text().plain().startsWith("> "));
       assertEquals(
-          position == LayoutProfile.ChoicePlacement.BELOW ? 192 : 128, answer.bounds().width());
+          position == LayoutProfile.ChoicePlacement.BELOW ? 222 : 117, answer.bounds().width());
       assertTrue(answer.bounds().width() < speech.bounds().width());
-      if (position == LayoutProfile.ChoicePlacement.BELOW) assertEquals(24, answer.bounds().x());
+      if (position == LayoutProfile.ChoicePlacement.BELOW) assertEquals(9, answer.bounds().x());
     }
   }
 
@@ -61,7 +86,7 @@ class HudPlacementTest {
             surface,
             LayoutProfile.compactHud(LayoutProfile.ChoicePlacement.BELOW),
             DialogueTheme.neutral(),
-            FontMetrics.defaults(),
+            hudMetrics(),
             false,
             p ->
                 LayoutProfile.compactHud(
@@ -102,7 +127,7 @@ class HudPlacementTest {
                         hud,
                         LayoutProfile.compactHud(LayoutProfile.ChoicePlacement.BELOW),
                         DialogueTheme.neutral(),
-                        FontMetrics.defaults(),
+                        hudMetrics(),
                         false,
                         p ->
                             LayoutProfile.compactHud(
@@ -133,15 +158,15 @@ class HudPlacementTest {
           List.of("c4", "c5", "c6"), choices.stream().map(WidgetFrame.Widget::choiceId).toList());
       assertEquals(3, choices.size());
       assertTrue(speech.bounds().width() < 320);
-      assertEquals(position.equals("below") ? 240 : 292, f.canvasBounds().width());
+      assertEquals(position.equals("below") ? 240 : 300, f.canvasBounds().width());
       for (var c : choices) {
         assertEquals(c.bounds(), c.hitRect());
         switch (position) {
           case "below" ->
-              assertTrue(c.bounds().y() >= speech.bounds().y() + speech.bounds().height() + 4);
-          case "left" -> assertTrue(c.bounds().x() + c.bounds().width() <= speech.bounds().x() - 4);
+              assertTrue(c.bounds().y() >= speech.bounds().y() + speech.bounds().height() + 2);
+          case "left" -> assertTrue(c.bounds().x() + c.bounds().width() <= speech.bounds().x() - 3);
           case "right" ->
-              assertTrue(c.bounds().x() >= speech.bounds().x() + speech.bounds().width() + 4);
+              assertTrue(c.bounds().x() >= speech.bounds().x() + speech.bounds().width() + 3);
         }
       }
       assertTrue(choices.get(1).bounds().y() > choices.get(0).bounds().y());

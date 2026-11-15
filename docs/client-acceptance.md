@@ -67,7 +67,9 @@ and their left/right wrapping/centering need a fresh client check; use
 
 The user confirmed the compact HUD's below/left/right arrangement on 984232e,
 then requested smaller answer cards matching the prototype's proportions.
-The follow-up uses separate 4px answer padding: one-line cards are 24px high,
-192px wide below a 240px speech panel, or 128px beside a 160px speech panel.
-The below stack is centered. Placement choices and NPC sizing stay unchanged;
-this proportion adjustment requires another quick client check.
+The smaller individual cards on 9551511 were still unlike the requested HUD;
+the user did not accept that styling. The next correction uses the actual original
+HUD source pixels: one rounded modal, embedded speaker name, smaller bitmap text
+and compact arrow-selected answer rows. Below/left/right placement remains.
+This faithful HUD correction requires a fresh pack download and visual check.
+The full client matrix above remains pending.

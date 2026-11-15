@@ -183,8 +183,8 @@ public final class MinestomDialogueHost {
                     hud,
                     gg.grounds.dialogue.presentation.LayoutProfile.compactHud(
                         gg.grounds.dialogue.presentation.LayoutProfile.ChoicePlacement.BELOW),
-                    gg.grounds.dialogue.presentation.DialogueTheme.neutral(),
-                    options.assets().metrics(),
+                    gg.grounds.dialogue.presentation.DialogueTheme.hudPrototype(),
+                    options.assets().hudMetrics(),
                     false,
                     MinestomDialogueHost::hudLayout),
             "npc",
