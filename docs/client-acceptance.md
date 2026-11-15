@@ -96,3 +96,11 @@ independent Minestom consumer test; the earlier log suppressed its detailed
 report. Failure output is now printed for that check, and a new green head CI
 is required before proceeding. This is not marked as a resolved CI failure
 without fresh evidence.
+
+On edeb89f the user requested two further refinements: no empty card placeholders,
+and the scrollbar beside the cards. The next candidate paints exactly the
+visible number of cards (including zero), shrinks the stack/footer, and places
+the indicator 5px outside it. Left placement reserves a wider gap to the speech.
+The edeb89f head CI completed successfully. The older 5f30730 consumer failure
+was not reproduced locally or on edeb89f; detailed diagnostics remain enabled.
+The count/outer-scrollbar refinement still requires its own visual check.

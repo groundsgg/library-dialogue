@@ -332,21 +332,26 @@ public final class DialoguePresenter implements DialogueRenderer {
     double rowHeight =
         lines.stream().mapToDouble(TextLayout.TextLayoutResult::height).max().orElse(10);
     boolean below = l.placement() == LayoutProfile.ChoicePlacement.BELOW;
-    double columnWidth = l.choiceWidth() + 18;
-    double left = l.placement() == LayoutProfile.ChoicePlacement.LEFT ? -columnWidth - l.gap() : 0;
-    double width = below ? l.width() : l.width() + l.gap() + columnWidth;
     boolean shared = l.style() == LayoutProfile.Style.HUD;
     boolean cards = l.style() == LayoutProfile.Style.HUD_CARDS;
+    int count = window.choices().size();
+    boolean hasColumn = !cards || count > 0;
+    double gap = cards && l.placement() == LayoutProfile.ChoicePlacement.LEFT ? 15 : l.gap();
+    double columnWidth = l.choiceWidth() + 18;
+    double left =
+        hasColumn && l.placement() == LayoutProfile.ChoicePlacement.LEFT ? -columnWidth - gap : 0;
+    double width = below || !hasColumn ? l.width() : l.width() + gap + columnWidth;
     double step = cards ? rowHeight + 13 : rowHeight;
-    double answerHeight = cards ? 3 * (rowHeight + 10) + 6 : 3 * rowHeight + 14;
+    double answerHeight =
+        cards ? count * (rowHeight + 10) + Math.max(0, count - 1) * 3 : 3 * rowHeight + 14;
     double height =
         shared
             ? (below ? 84 + 3 * (rowHeight - 10) : rowHeight == 10 ? 51 : 75)
-            : below ? 54 + answerHeight : Math.max(48, answerHeight);
+            : cards && count == 0 ? 48 : below ? 54 + answerHeight : Math.max(48, answerHeight);
     double x =
         switch (l.placement()) {
           case BELOW -> 9;
-          case RIGHT -> l.width() + l.gap() + 9;
+          case RIGHT -> l.width() + gap + 9;
           case LEFT -> left + 9;
         };
     double y = below ? (shared ? 50 : 61) : 7;
@@ -419,12 +424,13 @@ public final class DialoguePresenter implements DialogueRenderer {
                 + l.placement().name().toLowerCase(Locale.ROOT)
                 + "_"
                 + (int) rowHeight
-                + "_3",
+                + "_"
+                + (cards ? count : 3),
             new Rect(left, 0, width, height),
             height + 10);
     WidgetFrame.Scrollbar scrollbar = null;
     if (window.total() > l.choiceCapacity()) {
-      double trackHeight = cards ? 3 * step - 3 : 3 * rowHeight;
+      double trackHeight = cards ? answerHeight : 3 * rowHeight;
       double top = cards ? y - 7 : y;
       double thumbHeight =
           Math.max(6, Math.floor(trackHeight * window.choices().size() / window.total()));
@@ -432,8 +438,10 @@ public final class DialoguePresenter implements DialogueRenderer {
           top
               + Math.min(
                   trackHeight - thumbHeight,
-                  Math.round(trackHeight * window.start() / window.total()));
-      var track = new Rect(x + l.choiceWidth() + 3, top, 2, trackHeight);
+                  window.start() + window.choices().size() == window.total()
+                      ? trackHeight - thumbHeight
+                      : Math.round(trackHeight * window.start() / window.total()));
+      var track = new Rect(x + l.choiceWidth() + (cards ? 14 : 3), top, 2, trackHeight);
       scrollbar = new WidgetFrame.Scrollbar(track, new Rect(track.x(), thumbY, 2, thumbHeight));
     }
     return new WidgetFrame(v, widgets, metrics.pin(), p.theme(), chrome, scrollbar);

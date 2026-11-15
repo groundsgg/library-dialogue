@@ -130,6 +130,18 @@ class HudPlacementTest {
                 PresenterFixtures.view("Hello", 5, "leave", 2),
                 "hud",
                 PresentationPreferences.defaults());
+        if (style == LayoutProfile.Style.HUD_CARDS) {
+          for (var frame : List.of(first, last)) {
+            double right =
+                frame.widgets().stream()
+                    .filter(w -> w.kind() == WidgetFrame.Kind.CHOICE)
+                    .mapToDouble(w -> w.bounds().x() + w.bounds().width())
+                    .max()
+                    .orElseThrow();
+            assertTrue(frame.scrollbar().track().x() >= right + 5);
+          }
+          assertTrue(last.chrome().key().endsWith("_1"));
+        }
         assertNotNull(first.scrollbar());
         assertNotNull(last.scrollbar());
         assertEquals(first.scrollbar().track().y(), first.scrollbar().thumb().y(), .001);
@@ -142,6 +154,52 @@ class HudPlacementTest {
         assertTrue(last.scrollbar().thumb().height() <= first.scrollbar().thumb().height());
         assertEquals(first.canvasBounds().width(), last.canvasBounds().width());
       }
+  }
+
+  @Test
+  void cardsChooseOnlyTheActuallyVisibleBackgroundCountIncludingNoAnswers() {
+    for (var position : LayoutProfile.ChoicePlacement.values()) {
+      var p =
+          new DialoguePresenter(
+              Map.of(
+                  "hud",
+                  new DialoguePresenter.SurfaceProfile(
+                      new PresenterFixtures.Surface(),
+                      LayoutProfile.compactHud(position, LayoutProfile.Style.HUD_CARDS),
+                      DialogueTheme.hudPrototype(),
+                      hudMetrics(),
+                      false)),
+              new PresenterFixtures.Clock());
+      for (int count : List.of(0, 1, 2, 3)) {
+        var v = PresenterFixtures.view("Hello", 5, "c1", 1);
+        var view =
+            new gg.grounds.dialogue.core.runtime.DialogueView(
+                v.sessionId(),
+                v.contentPin(),
+                v.nodeId(),
+                v.nodeVisitId(),
+                v.state(),
+                v.stateRevision(),
+                v.renderRevision(),
+                v.localeTag(),
+                v.speaker(),
+                v.text(),
+                v.choices().subList(0, count),
+                count == 0 ? null : "c1",
+                v.totalGraphemes(),
+                v.revealedGraphemes(),
+                v.hint(),
+                v.notice(),
+                v.pendingAction());
+        var frame = p.compose(view, "hud", PresentationPreferences.defaults());
+        assertEquals(
+            count,
+            frame.widgets().stream().filter(w -> w.kind() == WidgetFrame.Kind.CHOICE).count());
+        assertTrue(frame.chrome().key().endsWith("_" + count));
+        assertNull(frame.scrollbar());
+        if (count == 0) assertEquals(48, frame.chrome().bounds().height());
+      }
+    }
   }
 
   @Test

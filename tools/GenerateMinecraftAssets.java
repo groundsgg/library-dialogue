@@ -138,47 +138,59 @@ class GenerateMinecraftAssets {
       }
     for (String style : List.of("split", "cards"))
       for (String placement : List.of("below", "left", "right"))
-        for (int rowHeight : List.of(10, 20)) {
-          boolean below = placement.equals("below"), cards = style.equals("cards");
-          int answerHeight = cards ? 3 * (rowHeight + 10) + 6 : 3 * rowHeight + 14;
-          int logicalHeight = below ? 54 + answerHeight : Math.max(48, answerHeight);
-          int baseline = logicalHeight + 10, step = cards ? rowHeight + 13 : rowHeight;
-          ascents.add(baseline - 7);
-          for (int line = 0; line < 3; line++) ascents.add(baseline - 17 - line * 10);
-          for (int slot = 0; slot < 3; slot++)
-            for (int line = 0; line < rowHeight / 10; line++)
-              ascents.add(baseline - (below ? 61 : 7) - slot * step - line * 10);
-          if (cards) {
-            ascents.add(-5);
-            ascents.add(-15);
-            for (int slot = 0; slot < 3; slot++)
+        for (int rowHeight : List.of(10, 20))
+          for (int count : style.equals("cards") ? List.of(0, 1, 2, 3) : List.of(3)) {
+            boolean below = placement.equals("below"), cards = style.equals("cards");
+            int answerHeight =
+                cards ? count * (rowHeight + 10) + Math.max(0, count - 1) * 3 : 3 * rowHeight + 14;
+            int logicalHeight =
+                cards && count == 0 ? 48 : below ? 54 + answerHeight : Math.max(48, answerHeight);
+            int baseline = logicalHeight + 10, step = cards ? rowHeight + 13 : rowHeight;
+            ascents.add(baseline - 7);
+            for (int line = 0; line < 3; line++) ascents.add(baseline - 17 - line * 10);
+            for (int slot = 0; slot < count; slot++)
               for (int line = 0; line < rowHeight / 10; line++)
-                ascents.add(baseline - (below ? 59 : 5) - slot * step - line * 10);
+                ascents.add(baseline - (below ? 61 : 7) - slot * step - line * 10);
+            if (cards) {
+              ascents.add(-5);
+              ascents.add(-15);
+              for (int slot = 0; slot < count; slot++)
+                for (int line = 0; line < rowHeight / 10; line++)
+                  ascents.add(baseline - (below ? 59 : 5) - slot * step - line * 10);
+            }
+            String key = "hud_" + style + "_" + placement + "_" + rowHeight + "_" + count;
+            int width =
+                below
+                    ? 320
+                    : cards && count == 0 ? 216 : cards && placement.equals("left") ? 416 : 400;
+            var image = new BufferedImage(width, 256, BufferedImage.TYPE_INT_ARGB);
+            var g = image.createGraphics();
+            g.scale(4d / 3, 4d / 3);
+            double speechX =
+                placement.equals("left") && (!cards || count > 0) ? (cards ? 150 : 138) : 0;
+            double answerX = below ? 0 : placement.equals("left") ? 0 : 165;
+            double answerY = below ? 54 : 0;
+            hudRegion(g, speechX, 0, below ? 240 : 162, 48, false);
+            if (cards) {
+              for (int slot = 0; slot < count; slot++)
+                hudRegion(
+                    g, answerX, answerY + slot * step, below ? 240 : 135, rowHeight + 10, true);
+            } else hudRegion(g, answerX, answerY, below ? 240 : 135, answerHeight, true);
+            g.dispose();
+            files.put("assets/dialogue/textures/font/" + key + ".png", png(image));
+            put(
+                files,
+                "assets/dialogue/font/" + key + ".json",
+                Map.of(
+                    "providers",
+                    List.of(
+                        bitmap(
+                            "dialogue:font/" + key + ".png",
+                            192,
+                            baseline,
+                            List.of("\ue600\ue601")),
+                        spacing)));
           }
-          String key = "hud_" + style + "_" + placement + "_" + rowHeight + "_3";
-          var image = new BufferedImage(below ? 320 : 400, 256, BufferedImage.TYPE_INT_ARGB);
-          var g = image.createGraphics();
-          g.scale(4d / 3, 4d / 3);
-          double speechX = placement.equals("left") ? 138 : 0;
-          double answerX = below ? 0 : placement.equals("left") ? 0 : 165;
-          double answerY = below ? 54 : 0;
-          hudRegion(g, speechX, 0, below ? 240 : 162, 48, false);
-          if (cards) {
-            for (int slot = 0; slot < 3; slot++)
-              hudRegion(g, answerX, answerY + slot * step, below ? 240 : 135, rowHeight + 10, true);
-          } else hudRegion(g, answerX, answerY, below ? 240 : 135, answerHeight, true);
-          g.dispose();
-          files.put("assets/dialogue/textures/font/" + key + ".png", png(image));
-          put(
-              files,
-              "assets/dialogue/font/" + key + ".json",
-              Map.of(
-                  "providers",
-                  List.of(
-                      bitmap(
-                          "dialogue:font/" + key + ".png", 192, baseline, List.of("\ue600\ue601")),
-                      spacing)));
-        }
     for (int ascent : ascents)
       put(
           files,

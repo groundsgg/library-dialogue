@@ -42,6 +42,20 @@ class MinecraftAssetsTest {
   }
 
   @Test
+  void cardTexturesDoNotPaintUnusedAnswerSlots() throws Exception {
+    var entries = AssetBundle.loadDefault(MinecraftPackProfile.public262()).entries();
+    for (int count : List.of(0, 1, 2, 3)) {
+      var data = entries.get("assets/dialogue/textures/font/hud_cards_below_10_" + count + ".png");
+      assertNotNull(data, "Card count " + count);
+      var image = ImageIO.read(new ByteArrayInputStream(data));
+      for (int slot = 0; slot < 3; slot++) {
+        int y = (int) Math.round((54 + slot * 23 + 10) * 4d / 3);
+        assertEquals(slot < count, (image.getRGB(160, y) >>> 24) > 0);
+      }
+    }
+  }
+
+  @Test
   void previewTileImagesHaveBoundedDecodedMemory() throws Exception {
     var bundle = AssetBundle.loadDefault(MinecraftPackProfile.public262());
     long decoded = 0;

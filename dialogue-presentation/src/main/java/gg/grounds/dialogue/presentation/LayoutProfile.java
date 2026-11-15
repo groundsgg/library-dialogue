@@ -96,7 +96,7 @@ public record LayoutProfile(
     return new LayoutProfile("hud", 320, 320, 12, 3, 3, 2, ChoicePlacement.BELOW, 6);
   }
 
-  /** Compact HUD presets keep both side columns within a 300px composition. */
+  /** Compact HUD columns; chrome and optional overflow indicators determine the full bounds. */
   public static LayoutProfile compactHud(ChoicePlacement placement) {
     return compactHud(placement, Style.HUD);
   }

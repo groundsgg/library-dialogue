@@ -207,7 +207,7 @@ fonts, hover growth and fixed world scale remain unchanged.
 apply changes through the normal `updatePreferences` path. Valid values are
 `below` (default), `left`, and `right`. The demo provides
 `/hudchoices below|left|right` for live changes. The below modal is 240 GUI pixels
-wide; side layouts combine a 162px speech region, a 135px answer region and a 3px
+wide; shared/split side layouts combine a 162px speech region, a 135px answer region and a 3px
 gap, for 300px total. Answer text widths are 222px below and 117px beside the
 speech; rows are 10px or 20px high depending on wrapping. Three answers remain
 visible through the shared viewport. Unsupported text still falls back intact
@@ -224,6 +224,13 @@ centers its text vertically while keeping all lines left-aligned with a 9px
 inner margin. Every background is a precomposed texture contribution,
 with real transparent gaps instead of
 layered coplanar rectangles. Unknown style values use the typed chat fallback.
+
+Card backgrounds are generated for exactly zero, one, two or three visible
+answers. Unused cards are absent, including the final message without answers.
+The card stack and footer shrink to the occupied height. A card scrollbar sits
+5px outside the cards; the left layout reserves a 15px gap to the speech so it
+fits between them. With overflow, complete card canvases are 247px below, 307px
+on the right and 312px on the left. Without overflow, the bar adds no outer width.
 
 When more than three answers exist, a narrow scrollbar appears at the right edge
 of the answer region in every HUD style/placement. Its gold thumb represents the

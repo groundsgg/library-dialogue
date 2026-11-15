@@ -92,7 +92,11 @@ class HudOptionsTest {
             assertTrue(
                 json.contains("dialogue:" + prefix + position + (wrapped ? "_20_3" : "_10_3")),
                 json);
-            assertEquals(position.equals("below") ? 240 : 300, inspector.width(frame), .001);
+            double expectedWidth =
+                style.equals("cards")
+                    ? position.equals("below") ? 247 : position.equals("left") ? 312 : 307
+                    : position.equals("below") ? 240 : 300;
+            assertEquals(expectedWidth, inspector.width(frame), .001);
             if (style.equals("cards")) {
               double left = position.equals("right") ? 174 : 9;
               assertFalse(inspector.texts.isEmpty());
@@ -105,6 +109,31 @@ class HudOptionsTest {
             assertEquals(selected, h.snapshot().selectedChoiceId());
             assertEquals("hud", ticket.status().effectiveSurface());
           }
+        }
+        var snapshot = h.snapshot();
+        NativeReviewRegressionTest.done(
+            env,
+            h.submit(
+                new DialogueInput.Confirm(
+                    new DialogueInput.InputStamp(
+                        snapshot.sessionId(), snapshot.renderRevision(), 100),
+                    selected)));
+        for (String position : List.of("below", "left", "right")) {
+          NativeReviewRegressionTest.done(
+              env,
+              h.updatePreferences(
+                  new PresentationPreferences(
+                      "hud",
+                      Duration.ZERO,
+                      false,
+                      Map.of("hudChoices", position, "hudStyle", "cards"))));
+          String json =
+              net.kyori.adventure.text.serializer.gson.GsonComponentSerializer.gson()
+                  .serialize(f.hudFrames.getLast());
+          assertTrue(json.contains("dialogue:hud_cards_" + position + "_10_0"), json);
+          assertEquals(
+              position.equals("below") ? 240 : 162, inspector.width(f.hudFrames.getLast()), .001);
+          assertEquals("hud", ticket.status().effectiveSurface());
         }
       }
     }
