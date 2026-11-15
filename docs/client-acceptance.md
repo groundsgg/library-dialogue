@@ -64,3 +64,10 @@ The next requested change makes only the HUD more compact and adds answer stacks
 below, left and right. NPC world size remains unchanged. The updated HUD layouts
 and their left/right wrapping/centering need a fresh client check; use
 `/renderer hud`, `/dialogue`, and `/hudchoices below|left|right`.
+
+The user confirmed the compact HUD's below/left/right arrangement on 984232e,
+then requested smaller answer cards matching the prototype's proportions.
+The follow-up uses separate 4px answer padding: one-line cards are 24px high,
+192px wide below a 240px speech panel, or 128px beside a 160px speech panel.
+The below stack is centered. Placement choices and NPC sizing stay unchanged;
+this proportion adjustment requires another quick client check.

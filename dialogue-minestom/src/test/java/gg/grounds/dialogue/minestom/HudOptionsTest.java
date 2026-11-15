@@ -31,7 +31,7 @@ class HudOptionsTest {
                 new PresentationPreferences(
                     "hud", Duration.ZERO, false, Map.of("hudChoices", position))));
         var out = f.hudFrames.getLast();
-        assertEquals(position.equals("below") ? 240 : 308, inspector.width(out), .001);
+        assertEquals(position.equals("below") ? 240 : 292, inspector.width(out), .001);
         assertEquals(
             0,
             inspector.leftmostInk(out),

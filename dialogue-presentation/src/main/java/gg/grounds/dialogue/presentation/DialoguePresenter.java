@@ -180,17 +180,19 @@ public final class DialoguePresenter implements DialogueRenderer {
             .toList();
     var layouts =
         labels.stream()
-            .map(t -> layout(t, metrics, l.choiceWidth() - 2 * l.padding(), l.maxChoiceLines()))
+            .map(
+                t ->
+                    layout(t, metrics, l.choiceWidth() - 2 * l.choicePadding(), l.maxChoiceLines()))
             .toList();
     double cardHeight =
         layouts.stream()
                 .mapToDouble(TextLayout.TextLayoutResult::height)
                 .max()
                 .orElse(metrics.lineHeight())
-            + 2 * l.padding();
+            + 2 * l.choicePadding();
     double x =
         switch (l.placement()) {
-          case BELOW -> 0;
+          case BELOW -> (l.width() - l.choiceWidth()) / 2;
           case RIGHT -> l.width() + l.gap();
           case LEFT -> -l.choiceWidth() - l.gap();
         };
@@ -205,7 +207,7 @@ public final class DialoguePresenter implements DialogueRenderer {
               bounds,
               labels.get(i),
               layouts.get(i),
-              l.padding(),
+              l.choicePadding(),
               (cardHeight - layouts.get(i).height()) / 2,
               Graphemes.split(labels.get(i).plain()).size(),
               c.id().equals(view.selectedChoiceId()),
@@ -315,6 +317,8 @@ public final class DialoguePresenter implements DialogueRenderer {
     layout.put("width", l.width());
     layout.put("choiceWidth", l.choiceWidth());
     layout.put("padding", l.padding());
+    // Preserve existing profile pins when choices retain the legacy shared padding.
+    if (l.choicePadding() != l.padding()) layout.put("choicePadding", l.choicePadding());
     layout.put("maxTextLines", l.maxTextLines());
     layout.put("choiceCapacity", l.choiceCapacity());
     layout.put("maxChoiceLines", l.maxChoiceLines());

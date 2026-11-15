@@ -9,6 +9,45 @@ import org.junit.jupiter.api.Test;
 
 class HudPlacementTest {
   @Test
+  void compactAnswerCardsStaySmallerThanTheSpeechPanel() {
+    for (var position : LayoutProfile.ChoicePlacement.values()) {
+      var surface = new PresenterFixtures.Surface();
+      var presenter =
+          new DialoguePresenter(
+              Map.of(
+                  "hud",
+                  new DialoguePresenter.SurfaceProfile(
+                      surface,
+                      LayoutProfile.compactHud(position),
+                      DialogueTheme.neutral(),
+                      FontMetrics.defaults(),
+                      false)),
+              new PresenterFixtures.Clock());
+      var frame =
+          presenter.compose(
+              PresenterFixtures.view("Hello", 5, "c1", 1),
+              "hud",
+              PresentationPreferences.defaults());
+      var speech =
+          frame.widgets().stream()
+              .filter(w -> w.kind() == WidgetFrame.Kind.TEXT)
+              .findFirst()
+              .orElseThrow();
+      var answer =
+          frame.widgets().stream()
+              .filter(w -> w.kind() == WidgetFrame.Kind.CHOICE)
+              .findFirst()
+              .orElseThrow();
+      assertEquals(24, answer.bounds().height());
+      assertEquals(32, speech.bounds().height());
+      assertEquals(
+          position == LayoutProfile.ChoicePlacement.BELOW ? 192 : 128, answer.bounds().width());
+      assertTrue(answer.bounds().width() < speech.bounds().width());
+      if (position == LayoutProfile.ChoicePlacement.BELOW) assertEquals(24, answer.bounds().x());
+    }
+  }
+
+  @Test
   void preparationPinIdentifiesTheResolvedLayout() {
     var pins = new ArrayList<String>();
     DialogueSurface surface =
@@ -94,7 +133,7 @@ class HudPlacementTest {
           List.of("c4", "c5", "c6"), choices.stream().map(WidgetFrame.Widget::choiceId).toList());
       assertEquals(3, choices.size());
       assertTrue(speech.bounds().width() < 320);
-      assertEquals(position.equals("below") ? 240 : 308, f.canvasBounds().width());
+      assertEquals(position.equals("below") ? 240 : 292, f.canvasBounds().width());
       for (var c : choices) {
         assertEquals(c.bounds(), c.hitRect());
         switch (position) {
