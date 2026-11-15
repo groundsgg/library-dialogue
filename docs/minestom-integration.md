@@ -220,10 +220,19 @@ All three work below, left and right. `/hudstyle shared|split|cards` changes the
 current demo live, preserving selection, reveal and the current node. Separated
 below layouts leave a 6px gap after the speech; individual cards add 10px vertical
 padding and 3px gaps. Columns and bitmap text metrics stay the same. The individual-card variant
-centers its text horizontally and vertically; wrapped lines are individually
-centered in each card. Every background is a precomposed texture contribution,
+centers its text vertically while keeping all lines left-aligned with a 9px
+inner margin. Every background is a precomposed texture contribution,
 with real transparent gaps instead of
 layered coplanar rectangles. Unknown style values use the typed chat fallback.
+
+When more than three answers exist, a narrow scrollbar appears at the right edge
+of the answer region in every HUD style/placement. Its gold thumb represents the
+visible proportion and current viewport offset, including a partial last page.
+At most three answers produce no scrollbar. It is a visual indicator; scrolling
+and confirmation keep the same input path. `WidgetFrame.Scrollbar` carries the
+track/thumb rectangles independently of Minestom; the native encoder draws
+adjacent, nonoverlapping segments with frozen glyphs. It does not add another
+session, viewport or input target.
 
 The framework-free presenter produces the same semantic widgets and choice IDs.
 A `WidgetFrame.Chrome` describes the shared background and stable baseline;

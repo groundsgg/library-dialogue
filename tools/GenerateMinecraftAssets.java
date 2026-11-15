@@ -186,6 +186,26 @@ class GenerateMinecraftAssets {
           Map.of(
               "providers",
               List.of(bitmap("dialogue:font/hud_letters.png", 192, ascent, chars), spacing)));
+    var bars = new BufferedImage(256, 192, BufferedImage.TYPE_INT_ARGB);
+    var barChars = new StringBuilder();
+    for (int height = 1; height <= 128; height++) {
+      barChars.appendCodePoint(0xe700 + height - 1);
+      for (int y = 0; y < height; y++)
+        for (int x = 0; x < 2; x++) bars.setRGB((height - 1) * 2 + x, y, 0xffffffff);
+    }
+    files.put("assets/dialogue/textures/font/hud_scrollbar.png", png(bars));
+    for (int ascent = 0; ascent <= 192; ascent++)
+      put(
+          files,
+          "assets/dialogue/font/hud_scroll_a_" + ascent + ".json",
+          Map.of(
+              "providers",
+              List.of(
+                  bitmap(
+                      "dialogue:font/hud_scrollbar.png",
+                      192,
+                      ascent,
+                      List.of(barChars.toString())))));
     System.out.println("Frozen prototype HUD fonts=" + ascents.size());
   }
 

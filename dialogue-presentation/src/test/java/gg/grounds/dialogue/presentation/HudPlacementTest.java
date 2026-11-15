@@ -73,7 +73,7 @@ class HudPlacementTest {
   }
 
   @Test
-  void individualCardsCenterTheTextBlockInsideTheWholeCard() {
+  void individualCardsCenterTextVerticallyAndKeepItLeftAligned() {
     for (var position : LayoutProfile.ChoicePlacement.values()) {
       var p =
           new DialoguePresenter(
@@ -94,16 +94,54 @@ class HudPlacementTest {
       for (var w : frame.widgets())
         if (w.kind() == WidgetFrame.Kind.CHOICE) {
           assertEquals(20, w.bounds().height());
-          assertEquals(
-              w.bounds().x() + w.bounds().width() / 2,
-              w.textBounds().x() + w.textBounds().width() / 2,
-              .001);
+          assertEquals(w.bounds().x() + 9, w.textBounds().x(), .001);
           assertEquals(
               w.bounds().y() + w.bounds().height() / 2,
               w.textBounds().y() + w.textBounds().height() / 2,
               .001);
         }
     }
+  }
+
+  @Test
+  void overflowingAnswersExposeAProportionalScrollbarAcrossAllHudStyles() {
+    for (var style :
+        List.of(
+            LayoutProfile.Style.HUD, LayoutProfile.Style.HUD_SPLIT, LayoutProfile.Style.HUD_CARDS))
+      for (var position : LayoutProfile.ChoicePlacement.values()) {
+        var p =
+            new DialoguePresenter(
+                Map.of(
+                    "hud",
+                    new DialoguePresenter.SurfaceProfile(
+                        new PresenterFixtures.Surface(),
+                        LayoutProfile.compactHud(position, style),
+                        DialogueTheme.hudPrototype(),
+                        hudMetrics(),
+                        false)),
+                new PresenterFixtures.Clock());
+        var first =
+            p.compose(
+                PresenterFixtures.view("Hello", 5, "c1", 1),
+                "hud",
+                PresentationPreferences.defaults());
+        var last =
+            p.compose(
+                PresenterFixtures.view("Hello", 5, "leave", 2),
+                "hud",
+                PresentationPreferences.defaults());
+        assertNotNull(first.scrollbar());
+        assertNotNull(last.scrollbar());
+        assertEquals(first.scrollbar().track().y(), first.scrollbar().thumb().y(), .001);
+        assertTrue(last.scrollbar().thumb().y() > first.scrollbar().thumb().y());
+        assertEquals(
+            last.scrollbar().track().y() + last.scrollbar().track().height(),
+            last.scrollbar().thumb().y() + last.scrollbar().thumb().height(),
+            .001);
+        assertTrue(first.scrollbar().thumb().height() < first.scrollbar().track().height());
+        assertTrue(last.scrollbar().thumb().height() <= first.scrollbar().thumb().height());
+        assertEquals(first.canvasBounds().width(), last.canvasBounds().width());
+      }
   }
 
   @Test

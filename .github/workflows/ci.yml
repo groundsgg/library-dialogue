@@ -23,7 +23,11 @@ jobs:
         run: |
           ./gradlew -p fixtures/java-consumer run "-PdialogueRepository=file:${GITHUB_WORKSPACE}/.evidence/maven" > .evidence/java-consumer.log
           ./gradlew -p fixtures/kotlin-consumer run "-PdialogueRepository=file:${GITHUB_WORKSPACE}/.evidence/maven" > .evidence/kotlin-consumer.log
-          ./gradlew -p fixtures/minestom-consumer test run "-PdialogueRepository=file:${GITHUB_WORKSPACE}/.evidence/maven" > .evidence/minestom-consumer.log
+          if ! ./gradlew -p fixtures/minestom-consumer test run "-PdialogueRepository=file:${GITHUB_WORKSPACE}/.evidence/maven" > .evidence/minestom-consumer.log 2>&1; then
+            cat .evidence/minestom-consumer.log
+            cat fixtures/minestom-consumer/build/test-results/test/TEST-*.xml
+            exit 1
+          fi
           python3 tools/verify_consumer_origins.py --log .evidence/java-consumer.log --log .evidence/kotlin-consumer.log --log .evidence/minestom-consumer.log
       - name: Run credential-free Minestom application and protocol smoke
         run: |

@@ -14,7 +14,6 @@ import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
 public final class MinecraftWidgetEncoder {
   public EncodedFrame encode(WidgetFrame frame, AssetBundle bundle) {
     boolean prototype = frame.chrome() != null;
-    boolean centeredChoices = prototype && frame.chrome().key().startsWith("hud_cards_");
     if (!frame.fontPin().equals(prototype ? bundle.hudMetrics().pin() : bundle.pin()))
       throw failure("FONT_PIN_MISMATCH");
     if (frame.widgets().size() > 32) throw failure("WIDGET_LIMIT");
@@ -28,8 +27,8 @@ public final class MinecraftWidgetEncoder {
       validate(w.bounds());
       var front = new Canvas(bundle, prototype);
       var back = new Canvas(bundle, prototype);
-      draw(w, frame.theme(), front, 0, 0, 0, true, !prototype, centeredChoices);
-      draw(w, frame.theme(), back, 0, 0, 0, false, !prototype, centeredChoices);
+      draw(w, frame.theme(), front, 0, 0, 0, true, !prototype);
+      draw(w, frame.theme(), back, 0, 0, 0, false, !prototype);
       front.move(w.bounds().width());
       back.move(w.bounds().width());
       draw(
@@ -40,8 +39,7 @@ public final class MinecraftWidgetEncoder {
           w.bounds().y(),
           bottom,
           true,
-          !prototype,
-          centeredChoices);
+          !prototype);
       widgets.add(
           new EncodedFrame.EncodedWidget(
               w.id(),
@@ -53,6 +51,10 @@ public final class MinecraftWidgetEncoder {
               w.enabled(),
               w.visualScale(),
               w.transition()));
+    }
+    if (frame.scrollbar() != null) {
+      if (!prototype) throw failure("UNSUPPORTED_RASTER");
+      hud.scrollbar(frame.scrollbar(), bounds.x(), bottom, frame.theme());
     }
     hud.move(width);
     long bytes = wireBytes(hud.component);
@@ -93,8 +95,7 @@ public final class MinecraftWidgetEncoder {
       double oy,
       double baseline,
       boolean letters,
-      boolean panels,
-      boolean centeredChoices) {
+      boolean panels) {
     boolean panel = panels && w.kind() != Kind.HINT;
     double width = w.bounds().width(), height = w.bounds().height();
     if (panel) {
@@ -118,7 +119,7 @@ public final class MinecraftWidgetEncoder {
               .mapToDouble(Double::doubleValue)
               .sum();
       canvas.draw(
-          x + (centeredChoices && w.kind() == Kind.CHOICE ? (w.layout().width() - advance) / 2 : 0),
+          x,
           text,
           canvas.font(baseline - y - n * canvas.metrics.lineHeight()),
           advance,
@@ -153,6 +154,45 @@ public final class MinecraftWidgetEncoder {
       double width = chrome.bounds().width() / 2, x = chrome.bounds().x() - left;
       draw(x, "\ue600", Key.key("dialogue:" + key), width + 1, 0xffffff, false);
       draw(x + width, "\ue601", Key.key("dialogue:" + key), width + 1, 0xffffff, false);
+    }
+
+    void scrollbar(
+        WidgetFrame.Scrollbar scrollbar, double left, double baseline, DialogueTheme theme) {
+      var track = scrollbar.track();
+      var thumb = scrollbar.thumb();
+      if (track.width() != 2) throw failure("UNSUPPORTED_RASTER");
+      bar(track.x() - left, track.y(), thumb.y() - track.y(), baseline, 0x52606d);
+      bar(
+          thumb.x() - left,
+          thumb.y(),
+          thumb.height(),
+          baseline,
+          colour(theme, "selected", 0xffcd75));
+      bar(
+          track.x() - left,
+          thumb.y() + thumb.height(),
+          track.y() + track.height() - thumb.y() - thumb.height(),
+          baseline,
+          0x52606d);
+    }
+
+    void bar(double x, double y, double height, double baseline, int colour) {
+      if (height == 0) return;
+      double ascent = baseline - y;
+      String key = "hud_scroll_a_" + (int) ascent;
+      if (height < 1
+          || height > 128
+          || height != Math.rint(height)
+          || ascent != Math.rint(ascent)
+          || !assets.hasEntry("assets/dialogue/font/" + key + ".json"))
+        throw failure("UNSUPPORTED_RASTER");
+      draw(
+          x,
+          Character.toString(0xe700 + (int) height - 1),
+          Key.key("dialogue:" + key),
+          3,
+          colour,
+          false);
     }
 
     Key font(double ascent) {

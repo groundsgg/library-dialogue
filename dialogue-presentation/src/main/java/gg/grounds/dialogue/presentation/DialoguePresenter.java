@@ -364,7 +364,7 @@ public final class DialoguePresenter implements DialogueRenderer {
               bounds,
               text,
               lines.get(n),
-              cards ? (bounds.width() - lines.get(n).width()) / 2 : 0,
+              cards ? 9 : 0,
               cards ? (bounds.height() - lines.get(n).height()) / 2 : 0,
               Graphemes.split(text.plain()).size(),
               c.id().equals(v.selectedChoiceId()),
@@ -422,7 +422,21 @@ public final class DialoguePresenter implements DialogueRenderer {
                 + "_3",
             new Rect(left, 0, width, height),
             height + 10);
-    return new WidgetFrame(v, widgets, metrics.pin(), p.theme(), chrome);
+    WidgetFrame.Scrollbar scrollbar = null;
+    if (window.total() > l.choiceCapacity()) {
+      double trackHeight = cards ? 3 * step - 3 : 3 * rowHeight;
+      double top = cards ? y - 7 : y;
+      double thumbHeight =
+          Math.max(6, Math.floor(trackHeight * window.choices().size() / window.total()));
+      double thumbY =
+          top
+              + Math.min(
+                  trackHeight - thumbHeight,
+                  Math.round(trackHeight * window.start() / window.total()));
+      var track = new Rect(x + l.choiceWidth() + 3, top, 2, trackHeight);
+      scrollbar = new WidgetFrame.Scrollbar(track, new Rect(track.x(), thumbY, 2, thumbHeight));
+    }
+    return new WidgetFrame(v, widgets, metrics.pin(), p.theme(), chrome, scrollbar);
   }
 
   private static TextLayout.TextLayoutResult layout(

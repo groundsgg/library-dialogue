@@ -94,12 +94,11 @@ class HudOptionsTest {
                 json);
             assertEquals(position.equals("below") ? 240 : 300, inspector.width(frame), .001);
             if (style.equals("cards")) {
-              double center =
-                  position.equals("below") ? 120 : position.equals("left") ? 67.5 : 232.5;
+              double left = position.equals("right") ? 174 : 9;
               assertFalse(inspector.texts.isEmpty());
               for (var text : inspector.texts)
                 if (text.text().contains("Choice") || text.text().contains("Details"))
-                  assertEquals(center, text.x() + text.width() / 2, .001, text.text());
+                  assertEquals(left, text.x(), .001, text.text());
             }
             assertEquals(0, inspector.leftmostInk(frame), .001);
             assertEquals(visit, h.snapshot().nodeVisitId());
@@ -109,6 +108,41 @@ class HudOptionsTest {
         }
       }
     }
+  }
+
+  @Test
+  void scrollbarIsOnlyEmittedForOverflowAndMovesWithThePublishedPage(Env env) throws Exception {
+    for (int answers : List.of(3, 7))
+      try (var f = new NativeReviewRegressionTest.F(env, answers)) {
+        var ticket = f.start("hud", false);
+        var h =
+            ((DialogueStartResult.Started) NativeReviewRegressionTest.done(env, ticket.result()))
+                .handle();
+        var plain =
+            net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText();
+        var first = plain.serialize(f.hudFrames.getLast());
+        assertEquals(answers > 3, first.codePoints().anyMatch(c -> c >= 0xe700 && c < 0xe780));
+        if (answers > 3) {
+          String before =
+              net.kyori.adventure.text.serializer.gson.GsonComponentSerializer.gson()
+                  .serialize(f.hudFrames.getLast());
+          for (int slot = 1; slot <= 6; slot++) {
+            f.packet(
+                new net.minestom.server.network.packet.client.play.ClientHeldItemChangePacket(
+                    (short) slot));
+            NativeReviewRegressionTest.ticks(env);
+          }
+          assertEquals("c6", h.snapshot().selectedChoiceId());
+          var out = f.hudFrames.getLast();
+          assertNotEquals(
+              before,
+              net.kyori.adventure.text.serializer.gson.GsonComponentSerializer.gson()
+                  .serialize(out));
+          assertEquals(
+              2, plain.serialize(out).codePoints().filter(c -> c >= 0xe700 && c < 0xe780).count());
+          assertEquals(240, new NativeWidths(f.options.assets()).width(out), .001);
+        }
+      }
   }
 
   // Compute advances from actual PNG ink and bitmap definitions, not the presenter/encoder's width

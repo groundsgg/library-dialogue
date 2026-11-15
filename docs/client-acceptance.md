@@ -85,3 +85,14 @@ visual defect: option-card text was not centered. The follow-up centers the text
 block within the full card and centers each wrapped line independently. Shared
 and split-list text alignment remain unchanged. This alignment correction awaits
 a fresh client check; the broader acceptance matrix remains pending.
+
+The user confirmed both horizontal and vertical centering on 5f30730, then
+clarified that only vertical centering is wanted. The follow-up restores left
+alignment in cards while retaining vertical centering. The user also requested
+an overflow scrollbar: it appears only for more than three answers, in all HUD
+background/placement combinations, and shows the visible page proportion.
+Both refinements require a fresh client check. The 5f30730 CI run failed in the
+independent Minestom consumer test; the earlier log suppressed its detailed
+report. Failure output is now printed for that check, and a new green head CI
+is required before proceeding. This is not marked as a resolved CI failure
+without fresh evidence.

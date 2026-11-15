@@ -11,7 +11,17 @@ public record WidgetFrame(
     List<Widget> widgets,
     String fontPin,
     DialogueTheme theme,
-    Chrome chrome) {
+    Chrome chrome,
+    Scrollbar scrollbar) {
+  public WidgetFrame(
+      DialogueView semantic,
+      List<Widget> widgets,
+      String fontPin,
+      DialogueTheme theme,
+      Chrome chrome) {
+    this(semantic, widgets, fontPin, theme, chrome, null);
+  }
+
   public WidgetFrame(
       DialogueView semantic, List<Widget> widgets, String fontPin, DialogueTheme theme) {
     this(semantic, widgets, fontPin, theme, null);
@@ -26,6 +36,22 @@ public record WidgetFrame(
     }
   }
 
+  /** Non-interactive overflow indicator measured in the shared layout coordinate system. */
+  public record Scrollbar(Rect track, Rect thumb) {
+    public Scrollbar {
+      Objects.requireNonNull(track);
+      Objects.requireNonNull(thumb);
+      if (track.width() <= 0
+          || track.height() <= 0
+          || thumb.width() != track.width()
+          || thumb.height() <= 0
+          || thumb.x() != track.x()
+          || thumb.y() < track.y()
+          || thumb.y() + thumb.height() > track.y() + track.height())
+        throw new IllegalArgumentException("Invalid scrollbar");
+    }
+  }
+
   public WidgetFrame {
     Objects.requireNonNull(semantic);
     widgets = List.copyOf(widgets);
@@ -36,6 +62,7 @@ public record WidgetFrame(
     var rects = new ArrayList<Rect>();
     widgets.forEach(w -> rects.add(w.bounds()));
     if (chrome != null) rects.add(chrome.bounds());
+    if (scrollbar != null) rects.add(scrollbar.track());
     if (rects.isEmpty()) return new Rect(0, 0, 0, 0);
     double left = rects.stream().mapToDouble(Rect::x).min().orElse(0),
         top = rects.stream().mapToDouble(Rect::y).min().orElse(0);
