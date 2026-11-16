@@ -137,6 +137,42 @@ class RendererFallbackTest {
   }
 
   @Test
+  void sameSemanticViewStillWaitsForTheNewPresentationWrite(Env env) {
+    var f = new Fixture(env);
+    var h =
+        done(
+            env,
+            f.renderer.prepare(
+                new DialogueRenderer.PresentationRequest(
+                    RenderFixtures.SESSION,
+                    "player",
+                    1,
+                    new PresentationPreferences("hud", Duration.ZERO, false, Map.of()),
+                    new CancellationToken(),
+                    System.nanoTime() + 5_000_000_000L,
+                    budgets())));
+    var view = RenderFixtures.view("Hello", 5);
+    var firstGate = new CompletableFuture<Void>();
+    f.hud.gate = firstGate;
+    var first = h.replace(view);
+    assertTrue(env.tickWhile(() -> f.hud.writes < 1, Duration.ofSeconds(1)));
+    var next = h.replace(view);
+    for (int n = 0; n < 10; n++) env.tick();
+    var secondGate = new CompletableFuture<Void>();
+    f.hud.gate = secondGate;
+    firstGate.complete(null);
+    for (int n = 0; n < 30; n++) env.tick();
+    assertEquals(
+        2, f.hud.writes, "A presentation change must redraw even with identical core view");
+    assertFalse(next.toCompletableFuture().isDone(), "Await actual new output acknowledgement");
+    secondGate.complete(null);
+    done(env, first);
+    done(env, next);
+    done(env, h.closeAsync());
+    done(env, f.core.closeAsync());
+  }
+
+  @Test
   void closeSettlesOutstandingDirectReconfiguration(Env env) {
     var f = new Fixture(env);
     var handle =

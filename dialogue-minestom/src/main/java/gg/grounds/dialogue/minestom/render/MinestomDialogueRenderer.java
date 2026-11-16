@@ -88,6 +88,13 @@ public final class MinestomDialogueRenderer implements DialogueRenderer, Dialogu
     return geometry.get();
   }
 
+  public CompletionStage<InputResult> browse(TargetSnapshot displayed, int start) {
+    var run = active;
+    return run == null
+        ? CompletableFuture.completedFuture(InputResult.STALE)
+        : run.browse(displayed, start);
+  }
+
   public void refreshOutput() {
     var run = active;
     if (run != null && refreshing.compareAndSet(false, true))
@@ -130,6 +137,7 @@ public final class MinestomDialogueRenderer implements DialogueRenderer, Dialogu
     final CompletableFuture<PresentationHandle> ready = new CompletableFuture<>();
     final List<CompletableFuture<Void>> waiters = new ArrayList<>();
     final List<CompletableFuture<Void>> configurations = new ArrayList<>();
+    final List<CompletableFuture<InputResult>> browsers = new ArrayList<>();
     final List<PendingOperation<?>> waits = new ArrayList<>();
     CompletionStage<Void> closing;
     PresentationHandle delegate;
@@ -137,7 +145,7 @@ public final class MinestomDialogueRenderer implements DialogueRenderer, Dialogu
     DialogueView latest;
     String diagnostic = "PREPARING";
     boolean changing, inflight, firstAck;
-    long intent, writeEpoch;
+    long intent, writeEpoch, frameIntent;
     Throwable failure;
     CompletableFuture<Void> batch;
     long batchDeadline;
@@ -272,8 +280,53 @@ public final class MinestomDialogueRenderer implements DialogueRenderer, Dialogu
               return;
             }
             if (latest == null || view.stateRevision() >= latest.stateRevision()) latest = view;
+            frameIntent++;
             waiters.add(result);
             flush();
+          });
+      return result.minimalCompletionStage();
+    }
+
+    CompletionStage<InputResult> browse(TargetSnapshot displayed, int start) {
+      var result = new CompletableFuture<InputResult>();
+      queue.execute(
+          () -> {
+            if (closed.get()
+                || displayed == null
+                || changing
+                || !firstAck
+                || !effective.surfaceKey().equals("npc")
+                || displayed != targets.current()
+                || latest == null
+                || displayed.stateRevision() != latest.stateRevision()
+                || displayed.renderRevision() != latest.renderRevision()
+                || !(delegate instanceof ChoiceViewport.Controller controller)) {
+              result.complete(InputResult.STALE);
+              return;
+            }
+            browsers.removeIf(CompletableFuture::isDone);
+            browsers.add(result);
+            var expected = latest;
+            invalidate();
+            await(
+                call(() -> controller.setChoiceStart(expected, start)),
+                clock.nanoTime() + request.budgets().prepare().toNanos(),
+                (changed, error) -> {
+                  if (error != null) {
+                    result.completeExceptionally(error);
+                    return;
+                  }
+                  replace(latest)
+                      .whenComplete(
+                          (v, writeError) -> {
+                            if (writeError != null) result.completeExceptionally(writeError);
+                            else
+                              result.complete(
+                                  Boolean.TRUE.equals(changed)
+                                      ? InputResult.ACCEPTED
+                                      : InputResult.STALE);
+                          });
+                });
           });
       return result.minimalCompletionStage();
     }
@@ -296,6 +349,7 @@ public final class MinestomDialogueRenderer implements DialogueRenderer, Dialogu
       }
       inflight = true;
       long epoch = ++writeEpoch;
+      long writingIntent = frameIntent;
       var frame = latest;
       call(() -> delegate.replace(frame))
           .whenComplete(
@@ -314,7 +368,7 @@ public final class MinestomDialogueRenderer implements DialogueRenderer, Dialogu
                           fatal(error);
                           return;
                         }
-                        if (frame != latest) {
+                        if (frame != latest || writingIntent != frameIntent) {
                           flush();
                           return;
                         }
@@ -427,6 +481,8 @@ public final class MinestomDialogueRenderer implements DialogueRenderer, Dialogu
             waiters.clear();
             configurations.forEach(f -> f.completeExceptionally(error));
             configurations.clear();
+            browsers.forEach(f -> f.completeExceptionally(error));
+            browsers.clear();
             scope
                 .closeAsync()
                 .whenComplete(

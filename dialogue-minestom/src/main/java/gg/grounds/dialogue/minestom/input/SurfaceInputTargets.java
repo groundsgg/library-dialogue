@@ -39,8 +39,10 @@ public final class SurfaceInputTargets {
             WidgetFrame.NavigationDirection.class);
     if (frame.scrollbar() != null)
       for (var button : frame.scrollbar().buttons()) {
-        if (button.enabled() && !allowed.contains(button.choiceId()))
+        if (button.choiceId() != null && !allowed.contains(button.choiceId()))
           throw new IllegalArgumentException("UNISSUED_NAVIGATION_CHOICE");
+        if (button.pageStart() != null && button.pageStart() >= v.choices().size())
+          throw new IllegalArgumentException("UNISSUED_NAVIGATION_PAGE");
         navigation.put(button.direction(), button);
       }
     live.put(

@@ -41,17 +41,28 @@ public record WidgetFrame(
     NEXT
   }
 
-  /** Null choiceId means a visible but disabled page button. */
-  public record NavigationButton(NavigationDirection direction, Rect bounds, String choiceId) {
+  /** Page offsets browse presentation only; the legacy choice target constructor is retained. */
+  public record NavigationButton(
+      NavigationDirection direction, Rect bounds, String choiceId, Integer pageStart) {
+    public NavigationButton(NavigationDirection direction, Rect bounds, String choiceId) {
+      this(direction, bounds, choiceId, null);
+    }
+
+    public static NavigationButton page(NavigationDirection direction, Rect bounds, Integer start) {
+      return new NavigationButton(direction, bounds, null, start);
+    }
+
     public NavigationButton {
       Objects.requireNonNull(direction);
       Objects.requireNonNull(bounds);
+      if (pageStart != null && (pageStart < 0 || choiceId != null))
+        throw new IllegalArgumentException("Invalid navigation page");
       if (choiceId != null && choiceId.isBlank())
         throw new IllegalArgumentException("Invalid navigation choice");
     }
 
     public boolean enabled() {
-      return choiceId != null;
+      return choiceId != null || pageStart != null;
     }
   }
 

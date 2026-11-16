@@ -4,7 +4,7 @@ import gg.grounds.dialogue.minestom.input.TargetSnapshot;
 import java.util.Optional;
 import net.minestom.server.entity.Player;
 
-/** Internal capability boundary; the core still authorizes every submitted input. */
+/** Core-authorized semantic inputs and separate presentation-only browsing capability. */
 public interface DialogueInputSource {
   default String effectiveSurface() {
     return "";
@@ -15,6 +15,12 @@ public interface DialogueInputSource {
   }
 
   default void refreshOutput() {}
+
+  default java.util.concurrent.CompletionStage<gg.grounds.dialogue.core.runtime.InputResult> browse(
+      TargetSnapshot displayed, int start) {
+    return java.util.concurrent.CompletableFuture.completedFuture(
+        gg.grounds.dialogue.core.runtime.InputResult.STALE);
+  }
 
   default TargetSnapshot targets() {
     return null;

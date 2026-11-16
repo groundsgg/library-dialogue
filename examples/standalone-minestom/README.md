@@ -29,8 +29,11 @@ For NPC panels, `/npcangle 0..35` sets the inward column angle (default12) and
 pixels). Both apply live. More than three NPC answers show a private scrollbar
 as an indicator, with small drawn arrows centered above/below the options and
 larger invisible hit areas. Aim at an arrow and use the configured confirm input to
-page by three answers; this never executes an answer. Wheel selection stays
-selected until you deliberately move your gaze, preventing hover from undoing it.
+page by three answers without changing or executing the selected answer. Its
+highlight can scroll out of view and returns when you browse back. The wheel
+still changes the selection and reveals its page. A hidden selection cannot be
+confirmed until visible or replaced by a new hover choice. Stationary hover does
+not undo manual navigation; deliberately move your gaze to resume hover.
 The task choice waits two seconds as a local example action, without a quest service.
 
 `/confirm use|attack|swap` selects the next dialogue's confirm profile. Defaults

@@ -223,14 +223,24 @@ centered above and below the answer column, separate from the indicator-only
 scrollbar at the right. Small16×8 pixel-drawn chevrons have generous64×24 hit
 rectangles; hints reserve space above the upper target. Both controls stay on
 the same folded plane, with fixed positions across pages. Each
-confirmation over an enabled arrow selects the first available answer on the
-adjacent three-answer page without confirming that answer or executing an
-action. Pages without available answers are skipped. Disabled end arrows are
-muted. Their hits, including blocked/back hits, consume confirmation without
-falling through to the current answer. Targets are stamped and validated against
-the current issued offers, state, visit and surface generation. Arrow glyphs use
-a dedicated frozen32×256 two-cell atlas registered in the existing native font
-positions, appear on the front only and need no additional display pair.
+confirmation over an enabled arrow only changes the visible three-answer page.
+`ChoiceViewport.Cursor` keeps the semantic selected ID, even when it is outside
+the visible window. Such a page paints no selection; browsing back restores its
+highlight. Disabled-only pages remain browseable. A real selection change (wheel
+or hover) reveals the selected answer again. Visit changes reset the cursor;
+reveal/locale refreshes preserve it and shorter offers clamp the page.
+
+`ChoiceViewport.Controller` changes presentation state without a core input.
+The native renderer redraws through its existing coordinator and waits for real
+output acknowledgement, with the same fallback/deadline/cleanup rules. Current
+issued target identity rejects queued confirms from a previous page even if the
+core state/render revisions are unchanged. A selected but offscreen answer is
+never confirmed invisibly. Disabled end controls consume confirmation.
+
+Arrow glyphs use a dedicated frozen32×256 two-cell atlas in the existing native
+font positions. The scrollbar/arrow component is painted only on the front; no
+mirrored bar is drawn across the closed panel backs. The existing display pair
+and per-connection budget remain unchanged.
 The default native world scrollbar supports track heights up to192 GUI
 pixels; unsupported custom geometry falls back intact to chat. All displays
 remain inside the shared per-connection32 budget, including pending/closing ones.

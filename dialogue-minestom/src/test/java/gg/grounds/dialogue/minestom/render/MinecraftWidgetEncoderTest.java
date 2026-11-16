@@ -22,6 +22,27 @@ class MinecraftWidgetEncoderTest {
   }
 
   @Test
+  void scrollbarIsFrontOnlyAndCannotMirrorAcrossPanelBacks() {
+    var base = RenderFixtures.frame("npc", "Hello", 5);
+    var scroll =
+        new WidgetFrame.Scrollbar(
+            new WidgetFrame.Rect(600, 0, 2, 132), new WidgetFrame.Rect(600, 0, 2, 56));
+    var f =
+        new WidgetFrame(
+            base.semantic(), base.widgets(), base.fontPin(), base.theme(), null, scroll);
+    var bar =
+        new MinecraftWidgetEncoder()
+            .encode(f, RenderFixtures.ASSETS).widgets().stream()
+                .filter(w -> w.kind() == WidgetFrame.Kind.SCROLLBAR)
+                .findFirst()
+                .orElseThrow();
+    assertTrue(plain(bar.front()).codePoints().anyMatch(c -> c >= 0xe700 && c < 0xe780));
+    assertFalse(
+        plain(bar.back()).codePoints().anyMatch(c -> c >= 0xe700 && c <= 0xe781),
+        "The rotated back must not paint a mirrored bar through the closed panel backs");
+  }
+
+  @Test
   void panelsUseBakedPreviewTexturesWithoutOverlappingStripGlyphs() {
     for (String key : List.of("hud", "npc")) {
       var frame = RenderFixtures.frame(key, "Hello", 5);

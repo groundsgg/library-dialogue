@@ -95,6 +95,14 @@ public final class MinestomDialogueSession {
                 return MinestomDialogueSession.this.nextImpulse();
               }
 
+              public CompletionStage<InputResult> browse(
+                  gg.grounds.dialogue.minestom.input.TargetSnapshot displayed, int start) {
+                var s = source();
+                return s == null
+                    ? CompletableFuture.completedFuture(InputResult.STALE)
+                    : s.browse(displayed, start);
+              }
+
               public CompletionStage<InputResult> submit(DialogueInput input) {
                 return MinestomDialogueSession.this.submit(input);
               }

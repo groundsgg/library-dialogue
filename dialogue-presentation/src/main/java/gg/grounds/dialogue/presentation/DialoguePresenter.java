@@ -112,6 +112,11 @@ public final class DialoguePresenter implements DialogueRenderer {
   }
 
   public WidgetFrame compose(DialogueView view, String key, PresentationPreferences preferences) {
+    return compose(view, key, preferences, null);
+  }
+
+  public WidgetFrame compose(
+      DialogueView view, String key, PresentationPreferences preferences, Integer choiceStart) {
     var p = profile(key);
     if (p.semanticOnly()) return new WidgetFrame(view, List.of(), "semantic", "semantic");
     var l = p.resolveLayout(preferences);
@@ -167,7 +172,8 @@ public final class DialoguePresenter implements DialogueRenderer {
             p,
             preferences));
     var window =
-        new ChoiceViewport().window(view.choices(), view.selectedChoiceId(), l.choiceCapacity());
+        new ChoiceViewport()
+            .window(view.choices(), view.selectedChoiceId(), l.choiceCapacity(), choiceStart);
     var labels =
         window.choices().stream()
             .map(
@@ -298,14 +304,16 @@ public final class DialoguePresenter implements DialogueRenderer {
       var track = scroll.track();
       var buttons =
           List.of(
-              new WidgetFrame.NavigationButton(
+              WidgetFrame.NavigationButton.page(
                   WidgetFrame.NavigationDirection.PREVIOUS,
                   new Rect(x + (l.choiceWidth() - 64) / 2, track.y() - 28, 64, 24),
-                  pageTarget(view.choices(), window.start(), l.choiceCapacity(), -1)),
-              new WidgetFrame.NavigationButton(
+                  window.start() > 0 ? window.start() - l.choiceCapacity() : null),
+              WidgetFrame.NavigationButton.page(
                   WidgetFrame.NavigationDirection.NEXT,
                   new Rect(x + (l.choiceWidth() - 64) / 2, track.y() + track.height() + 4, 64, 24),
-                  pageTarget(view.choices(), window.start(), l.choiceCapacity(), 1)));
+                  window.start() + l.choiceCapacity() < window.total()
+                      ? window.start() + l.choiceCapacity()
+                      : null));
       scroll = new WidgetFrame.Scrollbar(track, scroll.thumb(), buttons);
     }
     return new WidgetFrame(view, widgets, metrics.pin(), p.theme(), null, scroll);
@@ -492,18 +500,6 @@ public final class DialoguePresenter implements DialogueRenderer {
     return new WidgetFrame(v, widgets, metrics.pin(), p.theme(), chrome, scrollbar);
   }
 
-  private static String pageTarget(
-      List<DialogueView.ChoiceView> choices, int start, int capacity, int direction) {
-    for (int page = start + direction * capacity;
-        page >= 0 && page < choices.size();
-        page += direction * capacity) {
-      for (int index = page; index < Math.min(choices.size(), page + capacity); index++)
-        if (choices.get(index).availability() == DialogueView.Availability.AVAILABLE)
-          return choices.get(index).id();
-    }
-    return null;
-  }
-
   private static WidgetFrame.Scrollbar scrollbar(ChoiceViewport.ChoiceWindow window, Rect track) {
     double thumbHeight =
         Math.max(6, Math.floor(track.height() * window.choices().size() / window.total()));
@@ -598,7 +594,43 @@ public final class DialoguePresenter implements DialogueRenderer {
         .sha256();
   }
 
-  private final class SurfaceSession implements PresentationHandle {
+  private final class SurfaceSession implements PresentationHandle, ChoiceViewport.Controller {
+    final ChoiceViewport.Cursor choiceCursor = new ChoiceViewport.Cursor();
+
+    WidgetFrame composeCurrent(DialogueView view, String key, PresentationPreferences prefs) {
+      if (profile(key).semanticOnly()) return compose(view, key, prefs);
+      var layout = profile(key).resolveLayout(prefs);
+      return compose(
+          view,
+          key,
+          prefs,
+          layout.navigationButtons() ? choiceCursor.startFor(view, layout.choiceCapacity()) : null);
+    }
+
+    public CompletionStage<Boolean> setChoiceStart(DialogueView expected, int start) {
+      var result = new CompletableFuture<Boolean>();
+      queue.execute(
+          () -> {
+            try {
+              if (closed.get() || lastView == null || !lastView.equals(expected)) {
+                result.complete(false);
+                return;
+              }
+              if (profile(surfaceKey).semanticOnly()) {
+                result.complete(false);
+                return;
+              }
+              var layout = profile(surfaceKey).resolveLayout(preferences);
+              result.complete(
+                  layout.navigationButtons()
+                      && choiceCursor.browse(lastView, layout.choiceCapacity(), start));
+            } catch (Throwable failure) {
+              result.completeExceptionally(failure);
+            }
+          });
+      return result.minimalCompletionStage();
+    }
+
     final PresentationRequest request;
     final SerialCommandQueue queue;
     final OwnedScope scope;
@@ -778,7 +810,7 @@ public final class DialoguePresenter implements DialogueRenderer {
       pending = null;
       WidgetFrame widgets;
       try {
-        widgets = compose(frame.view, surfaceKey, preferences);
+        widgets = composeCurrent(frame.view, surfaceKey, preferences);
       } catch (Throwable error) {
         finishFrame(frame, error);
         flush();
@@ -913,7 +945,7 @@ public final class DialoguePresenter implements DialogueRenderer {
                                 frame =
                                     lastView == null
                                         ? null
-                                        : compose(lastView, next.surfaceKey(), next);
+                                        : composeCurrent(lastView, next.surfaceKey(), next);
                               } catch (Throwable e) {
                                 reject(op, "SURFACE_LAYOUT_REJECTED", e);
                                 return;

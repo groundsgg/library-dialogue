@@ -74,7 +74,7 @@ class NpcLayoutTest {
         first.scrollbar().buttons().stream().map(WidgetFrame.NavigationButton::bounds).toList(),
         last.scrollbar().buttons().stream().map(WidgetFrame.NavigationButton::bounds).toList());
     assertFalse(up.enabled());
-    assertEquals("c4", down.choiceId());
+    assertEquals(3, down.pageStart());
     assertTrue(up.bounds().y() + up.bounds().height() < first.scrollbar().track().y());
     assertTrue(
         down.bounds().y() > first.scrollbar().track().y() + first.scrollbar().track().height());
@@ -83,11 +83,11 @@ class NpcLayoutTest {
             .filter(b -> b.direction() == WidgetFrame.NavigationDirection.NEXT)
             .noneMatch(WidgetFrame.NavigationButton::enabled));
     assertEquals(
-        "c4",
+        3,
         last.scrollbar().buttons().stream()
             .filter(b -> b.direction() == WidgetFrame.NavigationDirection.PREVIOUS)
             .findFirst()
             .orElseThrow()
-            .choiceId());
+            .pageStart());
   }
 }

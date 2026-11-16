@@ -79,7 +79,8 @@ public final class MinecraftWidgetEncoder {
       var back = new Canvas(bundle, false);
       local.scrollbar(frame.scrollbar(), left, paintBaseline + top, frame.theme());
       local.navigation(frame.scrollbar(), left, paintBaseline + top, frame.theme());
-      back.scrollbar(frame.scrollbar(), left, paintBaseline + top, frame.theme());
+      // Indicators are front-only: rotating their asymmetric component mirrors
+      // the bar into the middle of the otherwise closed panel backs.
       local.move(outer.width());
       back.move(outer.width());
       widgets.add(

@@ -143,6 +143,36 @@ class InputSafetyTest {
   }
 
   @Test
+  void queuedConfirmFromPreviousPageIsRejectedEvenWhenCoreRevisionsStayEqual(Env env) {
+    var f = new Fixture(env);
+    done(env, f.adapter.activate());
+    var gate = new CompletableFuture<InputResult>();
+    f.submitGate = gate;
+    f.packet(env, new ClientHeldItemChangePacket((short) 1));
+    f.now.set(400_000_000);
+    f.packet(env, new ClientUseItemPacket(PlayerHand.MAIN, 1, 0, 0));
+    var old = f.targets;
+    f.targets =
+        new TargetSnapshot(
+            old.sessionId(),
+            old.renderRevision(),
+            old.nodeVisitId(),
+            old.surfaceGeneration(),
+            old.choices(),
+            old.stateRevision(),
+            old.navigation());
+    f.submitGate = CompletableFuture.completedFuture(InputResult.ACCEPTED);
+    gate.complete(InputResult.ACCEPTED);
+    for (int n = 0; n < 10; n++) env.tick();
+    assertEquals(1, f.submitted.size(), "An old issued frame cannot confirm the new viewport");
+    f.now.set(800_000_000);
+    f.packet(env, new ClientUseItemPacket(PlayerHand.MAIN, 2, 0, 0));
+    assertEquals(2, f.submitted.size());
+    assertInstanceOf(DialogueInput.Confirm.class, f.submitted.getLast());
+    done(env, f.adapter.closeAsync());
+  }
+
+  @Test
   void inputPreparationHasDeadlineAndOwnsLateCatcher(Env env) {
     var f = new Fixture(env);
     var clock = new MinestomDialogueScheduler(f.player.getInstance());

@@ -35,6 +35,10 @@ public final class MinestomInputAdapter implements OwnedResource {
     long nextImpulse();
 
     CompletionStage<InputResult> submit(DialogueInput input);
+
+    default CompletionStage<InputResult> browse(TargetSnapshot displayed, int start) {
+      return CompletableFuture.completedFuture(InputResult.STALE);
+    }
   }
 
   private static final AtomicInteger FENCES = new AtomicInteger(Integer.MIN_VALUE / 2);
@@ -360,8 +364,7 @@ public final class MinestomInputAdapter implements OwnedResource {
         && profile.confirm().contains(trigger)
         && burst.accept(input.arrived())
         && sameVisit(input.admitted())
-        && input.admitted().renderRevision() == current().renderRevision()
-        && input.admitted().stateRevision() == current().stateRevision()) return confirm();
+        && input.admitted() == current()) return confirm();
     return ignored();
   }
 
@@ -465,6 +468,8 @@ public final class MinestomInputAdapter implements OwnedResource {
       if (button.isPresent()) {
         if (!button.get().usable()) return ignored();
         manualSelection(snapshot);
+        if (button.get().button().pageStart() != null)
+          return target.browse(snapshot, button.get().button().pageStart());
         return target.submit(
             new DialogueInput.Select(stamp(snapshot), button.get().button().choiceId()));
       }
@@ -478,6 +483,9 @@ public final class MinestomInputAdapter implements OwnedResource {
       observed = hoverStamp(snapshot, hovered);
       return selection;
     }
+    if (target.effectiveSurface().equals("npc")
+        && !view.choices().isEmpty()
+        && !snapshot.choices().containsKey(view.selectedChoiceId())) return ignored();
     return target.submit(new DialogueInput.Confirm(stamp(snapshot), view.selectedChoiceId()));
   }
 

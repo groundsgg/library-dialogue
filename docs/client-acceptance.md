@@ -83,6 +83,14 @@ selects a page and never executes an answer. Disabled end arrows consume
 confirmation. This refined navigation still requires its own client check;
 the confirmed HUD remains reference.
 
+2026-11-16 follow-up: the user clarified that only the arrows browse the viewport;
+the mouse wheel continues to change selection. The selected answer must remain
+selected even offscreen, with no highlight on unrelated pages. The screenshot
+also showed a mirrored scrollbar crossing closed answer-panel backs. The new
+candidate separates the viewport from semantic selection, rejects confirms of
+invisible selections, keeps wheel/hover selection behaviour, and removes the
+back component's scrollbar paint. Both corrections need targeted client checks.
+
 ## Earlier iteration history
 
 The entries below describe the check state at each earlier iteration; the latest
