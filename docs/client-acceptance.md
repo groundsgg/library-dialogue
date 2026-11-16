@@ -46,12 +46,12 @@ reports under `.evidence` deliberately set `visual_client_verified=false`.
 | NPC: closed backs, no Z-fighting, hover and selection growth | Pending | Pending |
 | Seven answers reachable through three cards; disabled/occluded/back targets | Pending | Pending |
 | Chat: complete sections, all choices, current/stale click behaviour | Pending | Targeted pass4e5c121: non-first answer and stale links; full matrix still open |
-| Use/Attack/Swap with empty hands, main/offhand items and shield | Pending | Empty-hand HUD pass1ff1860; Use with main/offhand/shield pass7186e71; Attack/Swap with items pending |
+| Use/Attack/Swap with empty hands, main/offhand items and shield | Pending | Targeted HUD pass: empty hands1ff1860; Use/Attack/Swap with main/offhand/shield7186e71 |
 | Held button, fast clicks, scroll and jitter without accidental confirmation | Pending | Targeted empty-hand HUD pass1ff1860: fast clicks, held confirmation and wheel; other cases pending |
-| Current inventory and server slot preserved; visible vs covered hotbar | Pending | HUD Use main/offhand/shield PASS7186e71 after cancellation and normal end; covered comparison/other bindings pending |
+| Current inventory and server slot preserved; visible vs covered hotbar | Pending | HUD inventory/cursor/slot PASS7186e71 for all bindings and item modes; Use+shield covered-HUD return also confirmed |
 | Language switch during reveal and action wait | Pending | Accepted4e5c121 in HUD/NPC, no restart/duplicate task |
 | Optional cover/vignette/backdrop toggled independently | Vignette unsupported | Pending |
-| Ordinary hearts/hunger/hotbar covered; extra-heart limits noted | Pending | Pending |
+| Ordinary hearts/hunger/hotbar covered; extra-heart limits noted | Pending | Targeted Use+shield HUD cover, controls and return accepted7186e71; extra-heart variants not client-tested |
 | Normal looking remains open; strong turn/distance ends after grace | Pending | Pending |
 | Two visible clients: private gesture/sound and shared restoration | Pending | Pending |
 | Disconnect/instance change during active/preparing dialogue | Pending | Pending |
@@ -304,3 +304,20 @@ not replace Attack/Swap-with-items or visible/covered-HUD comparison. The demo
 uses exactly the accepted 1ff1860 library JARs and15a7eaf6 pack listed above.
 [Demo CI](https://github.com/groundsgg/library-dialogue/actions/runs/43930630173)
 passed both required jobs. No new product fix was needed after the client check.
+
+## Remaining HUD item bindings and cover accepted (2026-11-16)
+
+On unchanged demo-App7186e71, the user confirmed Attack and Swap with each of
+main/offhand/shield, including scrolling/confirmation and `/checkitems` PASS,
+without unintended item use or hand swapping: “Beide Belegungen: alle Varianten
+PASS”. Together with the previous Use check, all three HUD bindings are accepted
+for the three equipped setups. Empty hands were accepted separately.
+
+The separate Use+shield `/hidehud` check was also accepted: hotbar, ordinary
+hearts and hunger covered, dialogue/selection usable, normal HUD visible again
+after `/checkitems`, and inventory comparison PASS. Reply: “Abdeckung, Bedienung,
+Rückkehr und PASS passen”. This accepts that specific cover/restoration case,
+not every binding/equipment/extra-heart combination or other renderer. Runtime
+JARs and pack are identical to the preceding accepted7186e71 checks. The rest
+of the public26.2/Grounds26.3 client matrix remains open; no product change or
+restart was needed.
