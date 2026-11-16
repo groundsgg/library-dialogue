@@ -43,11 +43,11 @@ reports under `.evidence` deliberately set `visual_client_verified=false`.
 | NPC: fixed world size, body-front yaw limit and near-head spacing | Pending | Pending |
 | NPC: closed backs, no Z-fighting, hover and selection growth | Pending | Pending |
 | Seven answers reachable through three cards; disabled/occluded/back targets | Pending | Pending |
-| Chat: complete sections, all choices, current/stale click behaviour | Pending | Pending |
+| Chat: complete sections, all choices, current/stale click behaviour | Pending | Targeted pass4e5c121: non-first answer and stale links; full matrix still open |
 | Use/Attack/Swap with empty hands, main/offhand items and shield | Pending | Pending |
 | Held button, fast clicks, scroll and jitter without accidental confirmation | Pending | Pending |
 | Current inventory and server slot preserved; visible vs covered hotbar | Pending | Pending |
-| Language switch during reveal and action wait | Pending | Pending |
+| Language switch during reveal and action wait | Pending | Accepted4e5c121 in HUD/NPC, no restart/duplicate task |
 | Optional cover/vignette/backdrop toggled independently | Vignette unsupported | Pending |
 | Ordinary hearts/hunger/hotbar covered; extra-heart limits noted | Pending | Pending |
 | Normal looking remains open; strong turn/distance ends after grace | Pending | Pending |
@@ -224,4 +224,9 @@ blocks from the NPC with a6-block limit. Moving to3–4 blocks and reopening
 made the chat dialogue appear, explicitly confirmed by the user. The demo now
 acknowledges renderer/language changes and explains this distance cancellation.
 The library's leave policy is unchanged. This confirms command/start diagnosis;
-chat choice/link and live-language acceptance remain pending.
+The user subsequently accepted renderer feedback, selecting a non-first chat
+answer, stale links having no effect after progressing, and live de/en switching
+in HUD/NPC during reveal/action wait without restart or duplicate execution.
+Accepted demo-App build:4e5c121; library JARs and pack are unchanged from the
+accepted6e3c91c runtime. [Its CI](https://github.com/groundsgg/library-dialogue/actions/runs/43917885891)
+passed both jobs. Other client-matrix rows remain open.
