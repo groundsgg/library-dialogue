@@ -46,8 +46,8 @@ reports under `.evidence` deliberately set `visual_client_verified=false`.
 | NPC: closed backs, no Z-fighting, hover and selection growth | Pending | Pending |
 | Seven answers reachable through three cards; disabled/occluded/back targets | Pending | Pending |
 | Chat: complete sections, all choices, current/stale click behaviour | Pending | Targeted pass4e5c121: non-first answer and stale links; full matrix still open |
-| Use/Attack/Swap with empty hands, main/offhand items and shield | Pending | Pending |
-| Held button, fast clicks, scroll and jitter without accidental confirmation | Pending | Pending |
+| Use/Attack/Swap with empty hands, main/offhand items and shield | Pending | Empty-hand HUD pass1ff1860: Use in air, Attack, Swap and matching hints; items/shield pending |
+| Held button, fast clicks, scroll and jitter without accidental confirmation | Pending | Targeted empty-hand HUD pass1ff1860: fast clicks, held confirmation and wheel; other cases pending |
 | Current inventory and server slot preserved; visible vs covered hotbar | Pending | Pending |
 | Language switch during reveal and action wait | Pending | Accepted4e5c121 in HUD/NPC, no restart/duplicate task |
 | Optional cover/vignette/backdrop toggled independently | Vignette unsupported | Pending |
@@ -259,3 +259,17 @@ passed both required jobs.
 | dialogue-core | `febb99136f126137de8c8852eeb5b5196c7aefd2dac335510162c06f75c145a9` |
 | dialogue-presentation | `2cdd43bef760546d32c59c28e09110b4fedcaed279c0f199f3205294d79911b5` |
 | dialogue-minestom | `8eae1e7a61afb38cfb8c9e13d6c101ff83dee24d206374fcf0a7f683527b74b5` |
+
+## HUD empty-hand input accepted (2026-11-16)
+
+On the same accepted 1ff1860 runtime and pack recorded above, the user confirmed
+all three configurable confirmation bindings and their matching control hints:
+Use/right-click also works in the air slightly beside the NPC, Attack/left-click
+and Swap/offhand (default F) work with empty hands. Each binding was applied to
+a newly opened dialogue. The separate fast-click, held-confirmation and wheel
+check was accepted as controlled, without accidental multiple-step progression
+or wrong-answer confirmation. User replies: “Alle drei funktionieren” and
+“Ja, funktioniert kontrolliert”. This is targeted HUD empty-hand evidence;
+main/offhand items, shield, inventory/slot restoration, other renderer cases
+and the rest of the client matrix remain open. No product change or restart
+was required for this acceptance record.
