@@ -53,5 +53,5 @@ jobs:
           java-version: '25'
       - uses: gradle/actions/setup-gradle@v6
       - run: ./gradlew publishAllPublicationsToReviewRepository
-      - name: Test published NPC 0.2.0 integration with actual personal actors
+      - name: Test selected NPC integration with actual personal actors
         run: ./gradlew -p fixtures/npc-dialogue-consumer test run --args=--smoke "-PdialogueRepository=file:${GITHUB_WORKSPACE}/.evidence/maven"
