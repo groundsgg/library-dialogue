@@ -26,7 +26,10 @@ import net.minestom.server.entity.*;
 import net.minestom.server.event.player.*;
 import net.minestom.server.instance.*;
 import net.minestom.server.instance.block.Block;
+import net.minestom.server.item.ItemStack;
+import net.minestom.server.item.Material;
 import net.minestom.server.timer.TaskSchedule;
+import net.minestom.server.utils.inventory.PlayerInventoryUtils;
 
 /** Independent Java application; every library class comes from the selected Maven repository. */
 public final class DialogueDemo {
@@ -268,7 +271,7 @@ public final class DialogueDemo {
       p.sendMessage(
           "/dialogue · /renderer hud|npc|chat · /hudchoices below|left|right · /lang en|de ·"
               + " /confirm use|attack|swap · /hidehud · /vignette · /npcbackdrop · /cancel ·"
-              + " /personalwave");
+              + " /personalwave · /testitems main|offhand|shield|restore · /checkitems");
       return live;
     }
 
@@ -366,6 +369,15 @@ public final class DialogueDemo {
                   Boolean.toString(!Boolean.parseBoolean(l.effects.getOrDefault(key, "false"))));
               return l.refresh();
             });
+      command(
+          "testitems",
+          (l, args) -> {
+            if (args.length != 2
+                || !Set.of("main", "offhand", "shield", "restore").contains(args[1]))
+              throw new IllegalArgumentException("/testitems main|offhand|shield|restore");
+            return l.cancelForItems().thenRun(() -> l.testItems(args[1]));
+          });
+      command("checkitems", (l, args) -> l.cancelForItems().thenRun(l::checkItems));
       command("personalwave", (l, args) -> npc.wave().apply(l.player));
     }
 
@@ -390,6 +402,36 @@ public final class DialogueDemo {
       MinecraftServer.getCommandManager().register(cmd);
     }
 
+    private record InventorySnapshot(ItemStack[] items, ItemStack cursor, byte slot) {
+      static InventorySnapshot capture(Player player) {
+        return new InventorySnapshot(
+            player.getInventory().getItemStacks(),
+            player.getInventory().getCursorItem(),
+            player.getHeldSlot());
+      }
+
+      void restore(Player player) {
+        player.getInventory().copyContents(items);
+        player.getInventory().setCursorItem(cursor);
+        player.setHeldItemSlot(slot);
+      }
+
+      String differences(Player player) {
+        var differences = new ArrayList<String>();
+        if (!Arrays.equals(items, player.getInventory().getItemStacks()))
+          differences.add("inventory items");
+        if (!cursor.equals(player.getInventory().getCursorItem())) differences.add("cursor item");
+        if (slot != player.getHeldSlot())
+          differences.add(
+              "selected slot (expected "
+                  + (slot + 1)
+                  + ", got "
+                  + (player.getHeldSlot() + 1)
+                  + ")");
+        return String.join(", ", differences);
+      }
+    }
+
     final class Live {
       final Player player;
       LocaleContext locale = new LocaleContext("en", 0, "en");
@@ -398,9 +440,66 @@ public final class DialogueDemo {
       final Map<String, String> effects = new HashMap<>();
       MinestomDialogueStart ticket;
       DialogueHandle handle;
+      InventorySnapshot originalItems, expectedItems;
+      String itemMode;
 
       Live(Player player) {
         this.player = player;
+      }
+
+      CompletionStage<Void> cancelForItems() {
+        return ticket == null
+            ? CompletableFuture.completedFuture(null)
+            : ticket.cancel(DialogueEndReason.CANCELLED);
+      }
+
+      void testItems(String mode) {
+        if (mode.equals("restore")) {
+          if (originalItems == null) {
+            player.sendMessage("No saved test inventory.");
+            return;
+          }
+          originalItems.restore(player);
+          originalItems = expectedItems = null;
+          itemMode = null;
+          player.sendMessage("Original inventory, cursor and selected slot restored.");
+          return;
+        }
+        if (originalItems == null) originalItems = InventorySnapshot.capture(player);
+        var inventory = player.getInventory();
+        inventory.setItemStack(0, ItemStack.of(Material.GOLD_INGOT, 3));
+        inventory.setItemStack(8, ItemStack.of(Material.DIAMOND, 7));
+        inventory.setItemStack(
+            2, mode.equals("offhand") ? ItemStack.AIR : ItemStack.of(Material.IRON_SWORD));
+        inventory.setItemStack(
+            PlayerInventoryUtils.OFFHAND_SLOT,
+            switch (mode) {
+              case "offhand" -> ItemStack.of(Material.TORCH, 12);
+              case "shield" -> ItemStack.of(Material.SHIELD);
+              default -> ItemStack.AIR;
+            });
+        player.setHeldItemSlot((byte) 2);
+        expectedItems = InventorySnapshot.capture(player);
+        itemMode = mode;
+        player.sendMessage(
+            "Test items: "
+                + mode
+                + "; selected slot 3. Open /dialogue, then /checkitems to end and compare."
+                + " /testitems restore restores your original inventory.");
+      }
+
+      void checkItems() {
+        if (expectedItems == null) {
+          player.sendMessage("First use /testitems main|offhand|shield.");
+          return;
+        }
+        var differences = expectedItems.differences(player);
+        player.sendMessage(
+            differences.isEmpty()
+                ? "Inventory check PASS ("
+                    + itemMode
+                    + "): items, cursor and selected slot unchanged."
+                : "Inventory check FAIL (" + itemMode + "): changed " + differences);
       }
 
       PresentationPreferences preferences() {

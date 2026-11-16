@@ -273,3 +273,21 @@ or wrong-answer confirmation. User replies: “Alle drei funktionieren” and
 main/offhand items, shield, inventory/slot restoration, other renderer cases
 and the rest of the client matrix remain open. No product change or restart
 was required for this acceptance record.
+
+## Item and slot client check helper
+
+The demo provides `/testitems main|offhand|shield` to cancel/await any prior
+dialogue, save the original inventory once and equip a reproducible hand setup.
+Slot3 is selected, with distinguishable stacks in slots1 and9. `main` holds an
+iron sword, `offhand` has an empty main hand and12 torches offhand, and `shield`
+holds a sword with a shield offhand. `/checkitems` ends/awaits the current
+dialogue and reports PASS/FAIL against the equipped inventory, cursor item and
+selected server slot; it does not repair differences. Run it immediately after
+normal completion or use it to cancel, without scrolling outside the dialogue.
+The original state can be restored with `/testitems restore`; the snapshot is
+connection-local and does not survive reconnecting or restarting the demo.
+Do not rearrange/drop/use items outside the dialogue during the comparison.
+Run each mode with `/confirm use|attack|swap` followed by `/dialogue`. Repeat
+with visible HUD and `/hidehud` enabled, including scrolling/confirmation and
+normal end/cancellation. Actual client hand rendering and behavior remain a
+manual check; server comparison alone is not visual acceptance.
