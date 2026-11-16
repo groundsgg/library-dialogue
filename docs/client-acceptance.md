@@ -114,8 +114,19 @@ acceptance of the controls and back position, not smoothness or the full matrix.
 The follow-up reuses physical viewport display slots, including transparent
 unused slots on the partial last page, and batches visual metadata updates.
 Native packet tests verify stable entity IDs, no spawn/destroy packets while
-paging, coherent per-display metadata and cleanup of cached/pending slots. Actual
-visual smoothness remains a pending client check for the new candidate.
+paging, coherent per-display metadata and cleanup of cached/pending slots. The user subsequently confirmed smooth arrow/wheel paging, including the partial
+last page and back, on `6e3c91c`: “Ja passt”. Selection and scrollbar backs remained
+correct. This accepts that targeted refinement; all other matrix rows remain
+open. [CI for the tested product build](https://github.com/groundsgg/library-dialogue/actions/runs/43908532029)
+is recorded separately from the client result.
+
+| Smooth-paging runtime artifact | SHA-256 |
+|---|---|
+| Grounds26.3 pack | `fe5df36b8589ea87e71ef679831e1c1eb13323214fd9f49f8c94b58eb36c5435` |
+| dialogue-core | `febb99136f126137de8c8852eeb5b5196c7aefd2dac335510162c06f75c145a9` |
+| dialogue-presentation | `ba399f5952f6a82fa5bf531a272f293dd85552ed3d2d1131627f1e6a6e7b17eb` |
+| dialogue-minestom | `7079efd610634bbadac163268f58be178775f311b5616a880c9884604b8c75f1` |
+
 
 ## Earlier iteration history
 
