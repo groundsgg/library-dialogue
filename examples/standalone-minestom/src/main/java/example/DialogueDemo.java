@@ -285,8 +285,9 @@ public final class DialogueDemo {
           (l, args) -> {
             if (args.length < 2 || !Set.of("hud", "npc", "chat").contains(args[1]))
               throw new IllegalArgumentException("/renderer hud|npc|chat");
-            l.renderer = args[1];
-            return l.refresh();
+            String selected = args[1];
+            l.renderer = selected;
+            return l.refresh().thenRun(() -> l.player.sendMessage("Renderer set to: " + selected));
           });
       command(
           "hudchoices",
@@ -323,10 +324,13 @@ public final class DialogueDemo {
             if (args.length < 2 || !Set.of("en", "de").contains(args[1]))
               throw new IllegalArgumentException("/lang en|de");
             l.locale = new LocaleContext(args[1], l.locale.revision() + 1, "en");
-            return l.ticket == null
-                    || (l.handle == null && l.ticket.result().toCompletableFuture().isDone())
-                ? CompletableFuture.completedFuture(null)
-                : l.ticket.refreshLocale(l.locale).thenApply(v -> null);
+            String selected = args[1];
+            CompletionStage<Void> change =
+                l.ticket == null
+                        || (l.handle == null && l.ticket.result().toCompletableFuture().isDone())
+                    ? CompletableFuture.completedFuture(null)
+                    : l.ticket.refreshLocale(l.locale).thenApply(v -> null);
+            return change.thenRun(() -> l.player.sendMessage("Language set to: " + selected));
           });
       command(
           "confirm",
@@ -405,6 +409,7 @@ public final class DialogueDemo {
 
       CompletionStage<Void> begin() {
         handle = null;
+        var dialogue = content();
         var action =
             new ActionHandler() {
               public CompletionStage<ActionResult> execute(ActionRequest r) {
@@ -427,7 +432,7 @@ public final class DialogueDemo {
                     UUID.randomUUID().toString(),
                     player,
                     1,
-                    content(),
+                    dialogue,
                     new DialogueServices(
                         "demo-v1",
                         Map.of(),
@@ -454,7 +459,14 @@ public final class DialogueDemo {
                         .completion()
                         .whenComplete(
                             (end, error) -> {
-                              if (ticket == start) handle = null;
+                              if (ticket == start) {
+                                handle = null;
+                                if (error == null && end.reason() == DialogueEndReason.OUT_OF_RANGE)
+                                  player.sendMessage(
+                                      "Dialogue ended: too far from the NPC (max "
+                                          + dialogue.definition().interaction().maxDistanceBlocks()
+                                          + " blocks). Move closer and use /dialogue again.");
+                              }
                             });
                     player.sendMessage(
                         "Dialogue: "

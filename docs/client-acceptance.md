@@ -213,3 +213,15 @@ successful asynchronous host cleanup. Preserve this as an open example-shutdown
 lifecycle check alongside the still-pending disconnect/instance-change matrix;
 normal smoke teardown and automated library checks do not resolve this actual
 process-shutdown observation.
+
+## Demo command feedback, 2026-11-16
+
+The user reported no response to `/renderer chat` and `/dialogue`. Read-only
+inspection of the actual running process confirmed a registered command, the
+correct connected-player context and the renderer already set to chat. The
+start completed, then ended with `OUT_OF_RANGE`; the player stood about6.3
+blocks from the NPC with a6-block limit. Moving to3–4 blocks and reopening
+made the chat dialogue appear, explicitly confirmed by the user. The demo now
+acknowledges renderer/language changes and explains this distance cancellation.
+The library's leave policy is unchanged. This confirms command/start diagnosis;
+chat choice/link and live-language acceptance remain pending.
