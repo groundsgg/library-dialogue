@@ -13,7 +13,8 @@ Accepted HUD client result (2026-11-15): the user confirmed the fixed
 three-slot HUD card viewport on Grounds 26.3, build `70f7e67`. Only existing
 cards are painted, unused slots remain transparent, the scrollbar sits outside,
 and speech/footer positions stay fixed on the last page. Card text was accepted as left-aligned and vertically centered in that earlier
-check; the later screenshot below reopens foreground vertical alignment. This
+check; the later screenshot below reopened foreground vertical alignment, now separately
+accepted on 1ff1860. This
 accepts the fixed-viewport layout check;
 the full matrix below, including public 26.2 and GUI-scale/two-client cases,
 remains open. [CI for the tested build](https://github.com/groundsgg/library-dialogue/actions/runs/43741285806)
@@ -40,7 +41,7 @@ reports under `.evidence` deliberately set `visual_client_verified=false`.
 | Pack accept, decline, download failure and removal | Pending | Pending |
 | No pack request when opening/reopening a dialogue | Pending | Pending |
 | HUD: fonts, centering, typewriter, choices and final End hint | Pending | Pending |
-| GUI scale 1/2/3/Auto, window sizes and screen-edge clipping | Pending | Targeted layout pass4e5c121 for left/right cards at scales1/2/3/Auto and smaller window; foreground vertical alignment reopened |
+| GUI scale 1/2/3/Auto, window sizes and screen-edge clipping | Pending | Targeted layout pass4e5c121 for left/right cards at scales1/2/3/Auto and smaller window; foreground vertical alignment subsequently accepted1ff1860 |
 | NPC: fixed world size, body-front yaw limit and near-head spacing | Pending | Pending |
 | NPC: closed backs, no Z-fighting, hover and selection growth | Pending | Pending |
 | Seven answers reachable through three cards; disabled/occluded/back targets | Pending | Pending |
@@ -244,5 +245,17 @@ three reserved slots, scrollbar and speech/footer positions are unchanged. NPC
 rendering is unchanged. The new metrics/ascent files require a new pack load.
 The automated test reads actual atlas pixels and emitted native font ascents;
 it permits at most half a GUI pixel from integral-ascent rounding. This is
-automated evidence, not acceptance of the corrected visual position. The new
-client check remains pending.
+automated evidence. The user subsequently confirmed the corrected visual position
+on the new 1ff1860 pack with “Ja, vertikal mittig”. This accepts the targeted HUD
+card alignment check; the remaining client matrix stays open.
+
+Accepted runtime: Grounds 26.3 on localhost:25578, product
+`1ff18606fb3064a0b7f5fc6ac4998882a75095bf`; [CI](https://github.com/groundsgg/library-dialogue/actions/runs/43927232691)
+passed both required jobs.
+
+| Artifact | SHA-256 |
+|---|---|
+| Grounds 26.3 pack | `15a7eaf6163538a695ed859013e0a13e7e0f10a57d588062dd635d49a62ee1dc` |
+| dialogue-core | `febb99136f126137de8c8852eeb5b5196c7aefd2dac335510162c06f75c145a9` |
+| dialogue-presentation | `2cdd43bef760546d32c59c28e09110b4fedcaed279c0f199f3205294d79911b5` |
+| dialogue-minestom | `8eae1e7a61afb38cfb8c9e13d6c101ff83dee24d206374fcf0a7f683527b74b5` |
