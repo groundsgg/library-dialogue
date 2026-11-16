@@ -198,6 +198,71 @@ class NpcNavigationTest {
     }
   }
 
+  @Test
+  void browsingReusesViewportEntitiesWithoutSpawnDestroyOrPartialMetadata(Env env)
+      throws Exception {
+    try (var f = new NativeReviewRegressionTest.F(env, 7)) {
+      f.player.setNoGravity(true);
+      var ticket = f.start("npc", false, controls());
+      var h =
+          ((DialogueStartResult.Started) NativeReviewRegressionTest.done(env, ticket.result()))
+              .handle();
+      var first = frame(f, h);
+      var down =
+          first.scrollbar().buttons().stream()
+              .filter(b -> b.direction() == WidgetFrame.NavigationDirection.NEXT)
+              .findFirst()
+              .orElseThrow();
+      var up =
+          first.scrollbar().buttons().stream()
+              .filter(b -> b.direction() == WidgetFrame.NavigationDirection.PREVIOUS)
+              .findFirst()
+              .orElseThrow();
+      var ids = displayIds(f);
+      var spawns =
+          f.connection.trackIncoming(
+              net.minestom.server.network.packet.server.play.SpawnEntityPacket.class);
+      var destroys =
+          f.connection.trackIncoming(
+              net.minestom.server.network.packet.server.play.DestroyEntitiesPacket.class);
+      var metadata =
+          f.connection.trackIncoming(
+              net.minestom.server.network.packet.server.play.EntityMetaDataPacket.class);
+      var bundles =
+          f.connection.trackIncoming(
+              net.minestom.server.network.packet.server.play.BundlePacket.class);
+      aim(env, f, first, down.bounds());
+      click(env, f, 1);
+      assertEquals(
+          ids, displayIds(f), "A full next page must reuse the same physical display slots");
+      var firstWrites = metadata.collect();
+      assertTrue(
+          firstWrites.size() <= ids.size(),
+          "One coherent metadata update per display rather than field-by-field intermediate"
+              + " states");
+      click(env, f, 2);
+      assertEquals(ids, displayIds(f), "Transparent slots on the partial last page stay allocated");
+      assertEquals(1, choiceTexts(f).size());
+      aim(env, f, first, up.bounds());
+      click(env, f, 3);
+      assertEquals(ids, displayIds(f));
+      assertEquals(3, choiceTexts(f).size());
+      assertTrue(spawns.collect().isEmpty(), "Scrolling must not respawn UI");
+      assertTrue(destroys.collect().isEmpty(), "Scrolling must not tear down UI");
+      assertTrue(bundles.collect().size() >= 2, "Publish the visual frame together");
+      NativeReviewRegressionTest.done(env, ticket.cancel(DialogueEndReason.CANCELLED));
+      assertTrue(
+          displayIds(f).isEmpty(), "Cached hidden slots remain owned and are removed on close");
+    }
+  }
+
+  static Set<Integer> displayIds(NativeReviewRegressionTest.F f) {
+    return f.player.getInstance().getEntities().stream()
+        .filter(e -> e.getEntityType() == EntityType.TEXT_DISPLAY)
+        .map(Entity::getEntityId)
+        .collect(java.util.stream.Collectors.toSet());
+  }
+
   static List<String> choiceTexts(NativeReviewRegressionTest.F f) {
     return f.player.getInstance().getEntities().stream()
         .filter(e -> e.getEntityType() == EntityType.TEXT_DISPLAY)

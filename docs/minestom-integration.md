@@ -198,6 +198,21 @@ asset bundle. Replacement panel art must therefore supply a matching bundle pin.
 The baked panel heights are 24, 28, 32, 40, 48, 56, 64 and 72 GUI pixels (the compact HUD and standard NPC nameplate/cards); other custom heights diagnose
 `UNSUPPORTED_RASTER` and fall back to chat. Widths remain bounded by 512 pixels.
 
+## Stable NPC display slots
+
+Native answer displays are owned by viewport slot, independent of the semantic
+choice ID. Paging reuses the same front/back entities; spare slots on a partial
+page keep an empty transparent component and remain inside the existing32-display
+connection budget. No-answer nodes and cleanup release them. If a new frame
+needs the budget, hidden slot reservations are evicted before acquisition.
+
+Each pair retains its asynchronous preparation, so an overlapping replacement
+can adopt a still-pending slot and retired slots wait for preparation before
+release. Preparation/removal failures propagate. Text, frame, pose and scale use
+Minestom's metadata batching and one native packet bundle per visual frame.
+New slot contents snap to the correct pose; hover growth of the same choice keeps
+its animation. Semantic hit targets are still published only after output.
+
 ## NPC answer column
 
 NPC answers reserve a minimum visible gap from the speech even while selected

@@ -9,7 +9,7 @@ matrix is **pending**. Earlier 25570/25572/25576 prototype feedback is design
 evidence, not acceptance of these new Maven artifacts. No merge/release claim may
 replace the rows below with headless, packet or source-inspection evidence.
 
-Latest targeted client result (2026-11-15): the user confirmed the fixed
+Accepted HUD client result (2026-11-15): the user confirmed the fixed
 three-slot HUD card viewport on Grounds 26.3, build `70f7e67`. Only existing
 cards are painted, unused slots remain transparent, the scrollbar sits outside,
 and speech/footer positions stay fixed on the last page. Card text remains
@@ -18,7 +18,7 @@ the full matrix below, including public 26.2 and GUI-scale/two-client cases,
 remains open. [CI for the tested build](https://github.com/groundsgg/library-dialogue/actions/runs/43741285806)
 passed both required jobs.
 
-Runtime evidence for that client result:
+Runtime evidence for that HUD client result:
 
 | Artifact | SHA-256 |
 |---|---|
@@ -95,6 +95,27 @@ restores it with horizontally reflected ink coordinates so the native back
 rotation returns it to the same world track. Tests reconstruct actual font
 spacing, entity rotations and folded world positions. The selection refinement
 and corrected visible back still need targeted client checks.
+
+## Targeted NPC acceptance, 2026-11-16
+
+The user confirmed both independent arrow paging/selection and the visible,
+aligned scrollbar back on `03623c2`. The wheel still changes the selection;
+arrows can scroll the selected answer out of view and back without changing it.
+That same run reported intermittent flicker while scrolling, so this is scoped
+acceptance of the controls and back position, not smoothness or the full matrix.
+
+| Accepted runtime artifact | SHA-256 |
+|---|---|
+| Grounds26.3 pack | `fe5df36b8589ea87e71ef679831e1c1eb13323214fd9f49f8c94b58eb36c5435` |
+| dialogue-core | `febb99136f126137de8c8852eeb5b5196c7aefd2dac335510162c06f75c145a9` |
+| dialogue-presentation | `ba399f5952f6a82fa5bf531a272f293dd85552ed3d2d1131627f1e6a6e7b17eb` |
+| dialogue-minestom | `ad00267ac931a6ede4c97da43ff9163ff297b28506fac159c93e5832ff078600` |
+
+The follow-up reuses physical viewport display slots, including transparent
+unused slots on the partial last page, and batches visual metadata updates.
+Native packet tests verify stable entity IDs, no spawn/destroy packets while
+paging, coherent per-display metadata and cleanup of cached/pending slots. Actual
+visual smoothness remains a pending client check for the new candidate.
 
 ## Earlier iteration history
 

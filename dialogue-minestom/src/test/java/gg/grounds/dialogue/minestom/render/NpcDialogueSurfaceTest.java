@@ -90,6 +90,51 @@ class NpcDialogueSurfaceTest {
   }
 
   @Test
+  void supersedingPendingSlotsReusesTheirPreparationAndOwnsRetirement(Env env) {
+    for (boolean removeChoices : List.of(false, true)) {
+      var gate = new CompletableFuture<Void>();
+      var f = new Fixture(env, gate);
+      var h = f.open(env);
+      var first = RenderFixtures.frame("npc", "Hello", 5);
+      var older = h.replace(first);
+      assertTrue(
+          env.tickWhile(
+              () -> f.displays().size() < first.widgets().size() * 2, Duration.ofSeconds(2)));
+      var updated = RenderFixtures.frame("npc", "Updated", 7);
+      if (removeChoices)
+        updated =
+            new WidgetFrame(
+                updated.semantic(),
+                updated.widgets().stream()
+                    .filter(w -> w.kind() != WidgetFrame.Kind.CHOICE)
+                    .toList(),
+                updated.fontPin(),
+                updated.theme());
+      var newer = h.replace(updated);
+      for (int n = 0; n < 10; n++) env.tick();
+      assertFalse(newer.toCompletableFuture().isDone(), "Await adopted slot preparation");
+      assertEquals(
+          first.widgets().size() * 2, f.displays().size(), "No duplicate pending displays");
+      gate.complete(null);
+      done(env, newer);
+      assertTrue(older.toCompletableFuture().isCompletedExceptionally());
+      assertEquals(
+          updated.widgets().size() * 2, f.displays().size(), "Retired slots fully removed");
+      assertTrue(
+          f.displays().stream()
+              .map(e -> (TextDisplayMeta) e.getEntityMeta())
+              .anyMatch(
+                  m ->
+                      net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
+                          .plainText()
+                          .serialize(m.getText())
+                          .contains("Updated")));
+      done(env, h.closeAsync());
+      assertTrue(f.displays().isEmpty());
+    }
+  }
+
+  @Test
   void retiringCandidateRestoresRetainedGeometry(Env env) {
     var f = new Fixture(env, CompletableFuture.completedFuture(null));
     var old = f.open(env);

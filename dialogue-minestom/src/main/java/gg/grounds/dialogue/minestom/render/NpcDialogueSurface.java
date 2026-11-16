@@ -22,6 +22,7 @@ import net.minestom.server.coordinate.*;
 import net.minestom.server.entity.*;
 import net.minestom.server.entity.metadata.display.*;
 import net.minestom.server.instance.Instance;
+import net.minestom.server.network.packet.server.play.BundlePacket;
 
 /** Private world panels projected from shared widgets; shared NPC entities remain borrowed. */
 public final class NpcDialogueSurface implements DialogueSurface {
@@ -158,6 +159,21 @@ public final class NpcDialogueSurface implements DialogueSurface {
     }
   }
 
+  private record PanelSlot(WidgetFrame.Kind kind, String key) {}
+
+  private static Map<PanelSlot, EncodedFrame.EncodedWidget> panelSlots(EncodedFrame frame) {
+    var result = new LinkedHashMap<PanelSlot, EncodedFrame.EncodedWidget>();
+    int choice = 0;
+    for (var widget : frame.widgets()) {
+      var key =
+          new PanelSlot(
+              widget.kind(),
+              widget.kind() == WidgetFrame.Kind.CHOICE ? Integer.toString(choice++) : widget.id());
+      result.put(key, widget);
+    }
+    return result;
+  }
+
   private final class Handle implements SurfaceHandle {
     final SurfaceContext context;
     final SerialCommandQueue queue;
@@ -165,7 +181,52 @@ public final class NpcDialogueSurface implements DialogueSurface {
     final AtomicBoolean closed = new AtomicBoolean();
     final CompletableFuture<Void> cleanup = new CompletableFuture<>();
     final CompletionStage<Void> cleanupView = cleanup.minimalCompletionStage();
-    final Map<String, List<Display>> panels = new LinkedHashMap<>();
+    final Map<PanelSlot, PanelPair> panels = new LinkedHashMap<>();
+
+    final class PanelPair {
+      final List<Display> displays = new ArrayList<>(Arrays.asList(null, null));
+      final CompletableFuture<Void> ready = new CompletableFuture<>();
+      boolean shown;
+      String choice;
+
+      PanelPair(Pos position) {
+        var spawns = new ArrayList<CompletableFuture<?>>();
+        for (int side = 0; side < 2; side++) {
+          int index = side;
+          spawns.add(
+              create(position).thenAccept(d -> displays.set(index, d)).toCompletableFuture());
+        }
+        CompletableFuture.allOf(spawns.toArray(CompletableFuture[]::new))
+            .whenComplete(
+                (v, e) -> {
+                  if (e == null) ready.complete(null);
+                  else ready.completeExceptionally(e);
+                });
+      }
+
+      CompletionStage<Void> release() {
+        var result = new CompletableFuture<Void>();
+        ready.whenComplete(
+            (v, creationError) ->
+                queue.execute(
+                    () -> {
+                      var removals = new ArrayList<CompletableFuture<?>>();
+                      for (var display : displays)
+                        if (display != null)
+                          removals.add(scope.release(display).toCompletableFuture());
+                      CompletableFuture.allOf(removals.toArray(CompletableFuture[]::new))
+                          .whenComplete(
+                              (u, e) -> {
+                                if (e != null) result.completeExceptionally(e);
+                                else if (creationError != null)
+                                  result.completeExceptionally(creationError);
+                                else result.complete(null);
+                              });
+                    }));
+        return result.minimalCompletionStage();
+      }
+    }
+
     final List<CompletableFuture<Void>> writes = new ArrayList<>();
     PresentationPreferences preferences;
     WidgetFrame frame;
@@ -291,12 +352,18 @@ public final class NpcDialogueSurface implements DialogueSurface {
                   NpcPanelTransform.from(binding.snapshot().get(), eye())
                       .withSpeechHeight(height)
                       .withChoiceFold(hinge, NpcPanelOptions.from(preferences).choiceAngle());
-              var wanted = new HashSet<String>();
-              encoded.widgets().forEach(w -> wanted.add(w.id()));
+              var slots = panelSlots(encoded);
+              var wanted = new LinkedHashSet<>(slots.keySet());
+              // Keep already allocated answer slots on partial pages, without exceeding
+              // the frame's existing display budget. Empty-answer nodes release them.
+              if (slots.keySet().stream().anyMatch(k -> k.kind() == WidgetFrame.Kind.CHOICE))
+                for (var key : panels.keySet())
+                  if (key.kind() == WidgetFrame.Kind.CHOICE
+                      && wanted.size() < (32 - (focus ? 1 : 0)) / 2) wanted.add(key);
               var pending = new ArrayList<CompletableFuture<?>>();
               var obsolete = panels.keySet().stream().filter(id -> !wanted.contains(id)).toList();
               for (var id : obsolete)
-                for (var d : panels.remove(id)) pending.add(scope.release(d).toCompletableFuture());
+                pending.add(panels.remove(id).release().toCompletableFuture());
               if (!focus && backdrop != null) {
                 pending.add(scope.release(backdrop).toCompletableFuture());
                 backdrop = null;
@@ -319,18 +386,14 @@ public final class NpcDialogueSurface implements DialogueSurface {
                               return;
                             }
                             var acquisitions = new ArrayList<CompletableFuture<?>>();
-                            for (var widget : encoded.widgets())
-                              if (!panels.containsKey(widget.id())) {
-                                List<Display> pair = new ArrayList<>(Arrays.asList(null, null));
-                                panels.put(widget.id(), pair);
-                                for (int side = 0; side < 2; side++) {
-                                  int index = side;
-                                  acquisitions.add(
-                                      create(transform.position())
-                                          .thenAccept(d -> pair.set(index, d))
-                                          .toCompletableFuture());
-                                }
+                            for (var slot : wanted) {
+                              var pair = panels.get(slot);
+                              if (pair == null) {
+                                pair = new PanelPair(transform.position());
+                                panels.put(slot, pair);
                               }
+                              acquisitions.add(pair.ready);
+                            }
                             if (focus && backdrop == null)
                               acquisitions.add(
                                   create(transform.position())
@@ -425,7 +488,7 @@ public final class NpcDialogueSurface implements DialogueSurface {
                                                                   return;
                                                                 }
                                                                 frame = next;
-                                                                apply(encoded);
+                                                                apply(slots);
                                                                 publish(next);
                                                                 startFollow();
                                                                 result.complete(null);
@@ -443,64 +506,94 @@ public final class NpcDialogueSurface implements DialogueSurface {
       return player.getPosition().add(0, player.getEyeHeight(), 0);
     }
 
-    void apply(EncodedFrame encoded) {
-      double nextAngle = transform.fold() == null ? 0 : transform.fold().degrees();
-      boolean poseChanged =
-          Double.compare(appliedAngle, nextAngle) != 0
-              || Double.compare(appliedHinge, hingePosition) != 0;
-      for (var w : encoded.widgets()) {
-        var pair = panels.get(w.id());
-        double factor = w.visualScale(), scale = .32 * factor;
-        var b = w.bounds();
-        double angle = transform.planeFor(b) == transform ? 0 : Math.toRadians(nextAngle);
-        for (int side = 0; side < 2; side++) {
-          var d = pair.get(side);
-          boolean back = side == 1;
-          var meta = (TextDisplayMeta) d.entity.getEntityMeta();
-          meta.setText(back ? w.back() : w.front());
-          meta.setTransformationInterpolationStartDelta(-1);
-          meta.setTransformationInterpolationDuration(
-              poseChanged ? 0 : (int) Math.ceil(w.transition().toMillis() / 50d));
-          double turn = (back ? Math.PI : 0) - angle;
-          meta.setLeftRotation(
-              new float[] {0, (float) Math.sin(turn / 2), 0, (float) Math.cos(turn / 2)});
-          meta.setScale(new Vec(scale, scale, scale));
-          // Native one-line origin: x=1-width/2; y=-9 + bitmap bearing 7 = -2.
-          double x =
-              (b.x() + b.width() / 2 - 160 + (back ? factor : -factor)) * NpcPanelTransform.UNIT;
-          double z = back ? -.012 : 0;
-          double hinge =
-              transform.fold() == null
-                  ? 0
-                  : (transform.fold().pivot() - 160) * NpcPanelTransform.UNIT;
-          double rotatedX =
-              angle == 0 ? x : hinge + (x - hinge) * Math.cos(angle) - z * Math.sin(angle);
-          double rotatedZ = angle == 0 ? z : (x - hinge) * Math.sin(angle) + z * Math.cos(angle);
-          meta.setTranslation(
-              new Vec(
-                  rotatedX,
-                  (transform.speechHeight()
-                          - b.y()
-                          + b.height() * (factor - 1) / 2
-                          - (2 + w.paintBaseline()) * factor)
-                      * NpcPanelTransform.UNIT,
-                  rotatedZ));
-          meta.setTransformationInterpolationStartDelta(0);
-          d.entity.addViewer(player);
+    void apply(Map<PanelSlot, EncodedFrame.EncodedWidget> slots) {
+      player.sendPacket(new BundlePacket());
+      try {
+        for (var cached : panels.entrySet())
+          if (!slots.containsKey(cached.getKey()) && cached.getValue().shown) {
+            for (var display : cached.getValue().displays)
+              display.entity.editEntityMeta(
+                  TextDisplayMeta.class,
+                  meta -> {
+                    meta.setText(Component.empty());
+                    meta.setTransformationInterpolationDuration(0);
+                  });
+            cached.getValue().shown = false;
+          }
+        double nextAngle = transform.fold() == null ? 0 : transform.fold().degrees();
+        boolean poseChanged =
+            Double.compare(appliedAngle, nextAngle) != 0
+                || Double.compare(appliedHinge, hingePosition) != 0;
+        for (var entry : slots.entrySet()) {
+          var w = entry.getValue();
+          var pair = panels.get(entry.getKey());
+          boolean contentChanged = !pair.shown || !Objects.equals(pair.choice, w.choiceId());
+          double factor = w.visualScale(), scale = .32 * factor;
+          var b = w.bounds();
+          double angle = transform.planeFor(b) == transform ? 0 : Math.toRadians(nextAngle);
+          for (int side = 0; side < 2; side++) {
+            var d = pair.displays.get(side);
+            boolean back = side == 1;
+            d.entity.editEntityMeta(
+                TextDisplayMeta.class,
+                meta -> {
+                  meta.setText(back ? w.back() : w.front());
+                  meta.setTransformationInterpolationStartDelta(-1);
+                  meta.setTransformationInterpolationDuration(
+                      poseChanged || contentChanged
+                          ? 0
+                          : (int) Math.ceil(w.transition().toMillis() / 50d));
+                  double turn = (back ? Math.PI : 0) - angle;
+                  meta.setLeftRotation(
+                      new float[] {0, (float) Math.sin(turn / 2), 0, (float) Math.cos(turn / 2)});
+                  meta.setScale(new Vec(scale, scale, scale));
+                  // Native one-line origin: x=1-width/2; y=-9 + bitmap bearing 7 = -2.
+                  double x =
+                      (b.x() + b.width() / 2 - 160 + (back ? factor : -factor))
+                          * NpcPanelTransform.UNIT;
+                  double z = back ? -.012 : 0;
+                  double hinge =
+                      transform.fold() == null
+                          ? 0
+                          : (transform.fold().pivot() - 160) * NpcPanelTransform.UNIT;
+                  double rotatedX =
+                      angle == 0 ? x : hinge + (x - hinge) * Math.cos(angle) - z * Math.sin(angle);
+                  double rotatedZ =
+                      angle == 0 ? z : (x - hinge) * Math.sin(angle) + z * Math.cos(angle);
+                  meta.setTranslation(
+                      new Vec(
+                          rotatedX,
+                          (transform.speechHeight()
+                                  - b.y()
+                                  + b.height() * (factor - 1) / 2
+                                  - (2 + w.paintBaseline()) * factor)
+                              * NpcPanelTransform.UNIT,
+                          rotatedZ));
+                  meta.setTransformationInterpolationStartDelta(0);
+                });
+            d.entity.addViewer(player);
+          }
         }
-      }
-      appliedAngle = nextAngle;
-      appliedHinge = hingePosition;
-      if (backdrop != null) {
-        var meta = (TextDisplayMeta) backdrop.entity.getEntityMeta();
-        meta.setScale(new Vec(.6, .6, .6));
-        meta.setTranslation(new Vec(-.0075, -.93, -.55));
-        meta.setText(
-            Component.text("\ue300")
-                .font(Key.key("dialogue:focus"))
-                .color(TextColor.color(0xffffff))
-                .shadowColor(ShadowColor.none()));
-        backdrop.entity.addViewer(player);
+        for (var entry : slots.entrySet()) {
+          var pair = panels.get(entry.getKey());
+          pair.shown = true;
+          pair.choice = entry.getValue().choiceId();
+        }
+        appliedAngle = nextAngle;
+        appliedHinge = hingePosition;
+        if (backdrop != null) {
+          var meta = (TextDisplayMeta) backdrop.entity.getEntityMeta();
+          meta.setScale(new Vec(.6, .6, .6));
+          meta.setTranslation(new Vec(-.0075, -.93, -.55));
+          meta.setText(
+              Component.text("\ue300")
+                  .font(Key.key("dialogue:focus"))
+                  .color(TextColor.color(0xffffff))
+                  .shadowColor(ShadowColor.none()));
+          backdrop.entity.addViewer(player);
+        }
+      } finally {
+        player.sendPacket(new BundlePacket());
       }
     }
 
@@ -541,8 +634,8 @@ public final class NpcDialogueSurface implements DialogueSurface {
                     var moves = new ArrayList<CompletableFuture<?>>();
                     try {
                       for (var pair : panels.values())
-                        for (var d : pair)
-                          if (!d.entity.getPosition().equals(position))
+                        for (var d : pair.displays)
+                          if (d != null && !d.entity.getPosition().equals(position))
                             moves.add(d.entity.teleport(position));
                       if (backdrop != null && !backdrop.entity.getPosition().equals(position))
                         moves.add(backdrop.entity.teleport(position));
