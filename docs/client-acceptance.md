@@ -46,9 +46,9 @@ reports under `.evidence` deliberately set `visual_client_verified=false`.
 | NPC: closed backs, no Z-fighting, hover and selection growth | Pending | Pending |
 | Seven answers reachable through three cards; disabled/occluded/back targets | Pending | Pending |
 | Chat: complete sections, all choices, current/stale click behaviour | Pending | Targeted pass4e5c121: non-first answer and stale links; full matrix still open |
-| Use/Attack/Swap with empty hands, main/offhand items and shield | Pending | Empty-hand HUD pass1ff1860: Use in air, Attack, Swap and matching hints; items/shield pending |
+| Use/Attack/Swap with empty hands, main/offhand items and shield | Pending | Empty-hand HUD pass1ff1860; Use with main/offhand/shield pass7186e71; Attack/Swap with items pending |
 | Held button, fast clicks, scroll and jitter without accidental confirmation | Pending | Targeted empty-hand HUD pass1ff1860: fast clicks, held confirmation and wheel; other cases pending |
-| Current inventory and server slot preserved; visible vs covered hotbar | Pending | Pending |
+| Current inventory and server slot preserved; visible vs covered hotbar | Pending | HUD Use main/offhand/shield PASS7186e71 after cancellation and normal end; covered comparison/other bindings pending |
 | Language switch during reveal and action wait | Pending | Accepted4e5c121 in HUD/NPC, no restart/duplicate task |
 | Optional cover/vignette/backdrop toggled independently | Vignette unsupported | Pending |
 | Ordinary hearts/hunger/hotbar covered; extra-heart limits noted | Pending | Pending |
@@ -291,3 +291,16 @@ Run each mode with `/confirm use|attack|swap` followed by `/dialogue`. Repeat
 with visible HUD and `/hidehud` enabled, including scrolling/confirmation and
 normal end/cancellation. Actual client hand rendering and behavior remain a
 manual check; server comparison alone is not visual acceptance.
+
+## HUD Use with items and inventory accepted (2026-11-16)
+
+On demo-App `7186e71624ab6bc48a1b7dac3edd3f578efd22ba`, the user confirmed
+Use/right-click with all three `/testitems main|offhand|shield` setups, scrolling
+and confirmation without item use/placement, and `/checkitems` PASS following
+cancellation: “Alle drei funktionieren und PASS”. The separate normal-completion
+check also passed: “Ja, PASS nach normalem Ende”. This confirms the scoped
+server item/cursor/selected-slot comparison and client input behavior; it does
+not replace Attack/Swap-with-items or visible/covered-HUD comparison. The demo
+uses exactly the accepted 1ff1860 library JARs and15a7eaf6 pack listed above.
+[Demo CI](https://github.com/groundsgg/library-dialogue/actions/runs/43930630173)
+passed both required jobs. No new product fix was needed after the client check.
