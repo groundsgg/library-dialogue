@@ -432,7 +432,7 @@ public final class DialoguePresenter implements DialogueRenderer {
               text,
               lines.get(n),
               cards ? 9 : 0,
-              cards ? (bounds.height() - lines.get(n).height()) / 2 : 0,
+              cards ? centeredInkInset(lines.get(n), metrics, bounds.height()) : 0,
               Graphemes.split(text.plain()).size(),
               c.id().equals(v.selectedChoiceId()),
               c.availability() == DialogueView.Availability.AVAILABLE,
@@ -498,6 +498,24 @@ public final class DialoguePresenter implements DialogueRenderer {
       scrollbar = scrollbar(window, track);
     }
     return new WidgetFrame(v, widgets, metrics.pin(), p.theme(), chrome, scrollbar);
+  }
+
+  private static double centeredInkInset(
+      TextLayout.TextLayoutResult text, FontMetrics metrics, double height) {
+    double top = Double.POSITIVE_INFINITY, bottom = Double.NEGATIVE_INFINITY;
+    for (int line = 0; line < text.lines().size(); line++)
+      for (var grapheme : text.lines().get(line).graphemes()) {
+        var ink = metrics.inkBounds(grapheme);
+        if (ink.bottom() > ink.top()) {
+          top = Math.min(top, line * metrics.lineHeight() + ink.top());
+          bottom = Math.max(bottom, line * metrics.lineHeight() + ink.bottom());
+        }
+      }
+    // Native bitmap fonts use integral ascents. Quantize once, after measuring
+    // the full foreground block; spaces and transparent cell padding do not count.
+    return Double.isFinite(top)
+        ? Math.round(height / 2 - (top + bottom) / 2)
+        : (height - text.height()) / 2;
   }
 
   private static WidgetFrame.Scrollbar scrollbar(ChoiceViewport.ChoiceWindow window, Rect track) {

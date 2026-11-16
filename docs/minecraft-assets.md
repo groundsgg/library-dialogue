@@ -37,3 +37,13 @@ pixel-drawn chevrons. The existing even-ascent native fonts register its private
 E780/E781 glyphs; frozen normal-text metrics and existing HUD/panel artwork are
 unchanged. The encoder tints enabled/disabled icons and centers the visible ink
 inside larger hit rectangles. Asset generation remains maintenance-only.
+
+The compact HUD uses its own frozen 75% prototype bitmap. Its verified
+`hud_metrics.properties` stores optional `ink.<codepoint>=<top>,<bottom>` bounds
+in scaled GUI pixels, measured from foreground alpha during maintenance generation.
+Individual answer cards use these bounds for vertical alignment; line advance
+and horizontal widths remain independent. The generator freezes the required
+integral ascent variants for local widgets and the combined HUD. No runtime
+rasterization occurs. Existing font providers and textures are preserved; the
+additional ascent definitions and metrics change the pack hash and require a
+fresh client pack load. Profiles without ink metadata retain line-box alignment.

@@ -38,6 +38,140 @@ class MinecraftWidgetEncoderTest {
         component.children().stream().flatMap(MinecraftWidgetEncoderTest::parts));
   }
 
+  static double[] actualHudInk(gg.grounds.dialogue.minestom.asset.AssetBundle bundle, String text)
+      throws Exception {
+    var spec =
+        com.google.gson.JsonParser.parseString(
+                new String(
+                    bundle.entries().get("assets/dialogue/font/hud_a_0.json"),
+                    java.nio.charset.StandardCharsets.UTF_8))
+            .getAsJsonObject()
+            .getAsJsonArray("providers")
+            .get(0)
+            .getAsJsonObject();
+    var image =
+        javax.imageio.ImageIO.read(
+            new java.io.ByteArrayInputStream(
+                bundle.entries().get("assets/dialogue/textures/font/hud_letters.png")));
+    double scale = spec.get("height").getAsDouble() / 256;
+    double min = Double.POSITIVE_INFINITY, max = Double.NEGATIVE_INFINITY;
+    for (int cp : text.codePoints().toArray()) {
+      for (int row = 0; row < spec.getAsJsonArray("chars").size(); row++) {
+        int[] codes = spec.getAsJsonArray("chars").get(row).getAsString().codePoints().toArray();
+        for (int col = 0; col < codes.length; col++)
+          if (codes[col] == cp)
+            for (int y = 0; y < 256; y++)
+              for (int x = 0; x < 12; x++)
+                if ((image.getRGB(col * 12 + x, row * 256 + y) >>> 24) != 0) {
+                  min = Math.min(min, y * scale);
+                  max = Math.max(max, (y + 1) * scale);
+                }
+      }
+    }
+    return new double[] {min, max};
+  }
+
+  @Test
+  void hudCardsCenterActualBitmapInkRatherThanEmptyLineBoxPadding() throws Exception {
+    for (var profile :
+        List.of(
+            gg.grounds.dialogue.minestom.asset.MinecraftPackProfile.public262(),
+            gg.grounds.dialogue.minestom.asset.MinecraftPackProfile.grounds263())) {
+      var assets = gg.grounds.dialogue.minestom.asset.AssetBundle.loadDefault(profile);
+      for (var position : LayoutProfile.ChoicePlacement.values())
+        for (boolean wrapped : List.of(false, true)) {
+          var base = RenderFixtures.view("Hello", 5);
+          var choices = new ArrayList<gg.grounds.dialogue.core.runtime.DialogueView.ChoiceView>();
+          var texts =
+              wrapped
+                  ? List.of("Über diesen\nOrt", "Aufgabe\nabwarten", "> Noch ein\nGruß")
+                  : List.of("Über diesen Ort", "Aufgabe abwarten", "Noch ein Gruß");
+          for (int i = 0; i < texts.size(); i++)
+            choices.add(
+                new gg.grounds.dialogue.core.runtime.DialogueView.ChoiceView(
+                    "c" + i,
+                    texts.get(i),
+                    gg.grounds.dialogue.core.runtime.DialogueView.Availability.AVAILABLE,
+                    ""));
+          var view =
+              new gg.grounds.dialogue.core.runtime.DialogueView(
+                  base.sessionId(),
+                  base.contentPin(),
+                  base.nodeId(),
+                  base.nodeVisitId(),
+                  base.state(),
+                  base.stateRevision(),
+                  base.renderRevision(),
+                  base.localeTag(),
+                  base.speaker(),
+                  base.text(),
+                  choices,
+                  "c2",
+                  base.totalGraphemes(),
+                  base.revealedGraphemes(),
+                  base.hint(),
+                  base.notice(),
+                  base.pendingAction());
+          gg.grounds.dialogue.core.port.DialogueScheduler clock =
+              new gg.grounds.dialogue.core.port.DialogueScheduler() {
+                public void execute(Runnable r) {
+                  r.run();
+                }
+
+                public ScheduledTask schedule(java.time.Duration d, Runnable r) {
+                  return () -> {};
+                }
+
+                public long nanoTime() {
+                  return 0;
+                }
+              };
+          var presenter =
+              new DialoguePresenter(
+                  Map.of(
+                      "hud",
+                      new DialoguePresenter.SurfaceProfile(
+                          c ->
+                              java.util.concurrent.CompletableFuture.failedFuture(
+                                  new UnsupportedOperationException()),
+                          LayoutProfile.compactHud(position, LayoutProfile.Style.HUD_CARDS),
+                          DialogueTheme.hudPrototype(),
+                          assets.hudMetrics(),
+                          false)),
+                  clock);
+          var frame =
+              presenter.compose(
+                  view, "hud", gg.grounds.dialogue.core.runtime.PresentationPreferences.defaults());
+          var encoded = new MinecraftWidgetEncoder().encode(frame, assets);
+          for (var widget : frame.widgets())
+            if (widget.kind() == WidgetFrame.Kind.CHOICE) {
+              var lines = widget.layout().visible(widget.visibleGraphemes());
+              double min = Double.POSITIVE_INFINITY, max = Double.NEGATIVE_INFINITY;
+              for (var part : parts(encoded.hud()).toList())
+                if (part instanceof TextComponent t
+                    && lines.contains(t.content())
+                    && part.font() != null
+                    && part.font().asString().startsWith("dialogue:hud_a_")) {
+                  double ascent =
+                      Double.parseDouble(part.font().value().substring("hud_a_".length()));
+                  var ink = actualHudInk(assets, t.content());
+                  min = Math.min(min, frame.chrome().baseline() - ascent + ink[0]);
+                  max = Math.max(max, frame.chrome().baseline() - ascent + ink[1]);
+                }
+              assertTrue(Double.isFinite(min));
+              assertEquals(
+                  widget.bounds().y() + widget.bounds().height() / 2,
+                  (min + max) / 2,
+                  .501,
+                  position
+                      + " visible ink should be vertically centered: "
+                      + widget.text().plain());
+              assertEquals(widget.bounds().x() + 9, widget.textBounds().x(), .001);
+            }
+        }
+    }
+  }
+
   @Test
   void scrollbarBackMatchesFrontTrackAfterNativeHalfTurn() {
     var base = RenderFixtures.frame("npc", "Hello", 5);

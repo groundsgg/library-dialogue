@@ -12,8 +12,9 @@ replace the rows below with headless, packet or source-inspection evidence.
 Accepted HUD client result (2026-11-15): the user confirmed the fixed
 three-slot HUD card viewport on Grounds 26.3, build `70f7e67`. Only existing
 cards are painted, unused slots remain transparent, the scrollbar sits outside,
-and speech/footer positions stay fixed on the last page. Card text remains
-left-aligned and vertically centered. This accepts that targeted layout check;
+and speech/footer positions stay fixed on the last page. Card text was accepted as left-aligned and vertically centered in that earlier
+check; the later screenshot below reopens foreground vertical alignment. This
+accepts the fixed-viewport layout check;
 the full matrix below, including public 26.2 and GUI-scale/two-client cases,
 remains open. [CI for the tested build](https://github.com/groundsgg/library-dialogue/actions/runs/43741285806)
 passed both required jobs.
@@ -39,7 +40,7 @@ reports under `.evidence` deliberately set `visual_client_verified=false`.
 | Pack accept, decline, download failure and removal | Pending | Pending |
 | No pack request when opening/reopening a dialogue | Pending | Pending |
 | HUD: fonts, centering, typewriter, choices and final End hint | Pending | Pending |
-| GUI scale 1/2/3/Auto, window sizes and screen-edge clipping | Pending | Pending |
+| GUI scale 1/2/3/Auto, window sizes and screen-edge clipping | Pending | Targeted layout pass4e5c121 for left/right cards at scales1/2/3/Auto and smaller window; foreground vertical alignment reopened |
 | NPC: fixed world size, body-front yaw limit and near-head spacing | Pending | Pending |
 | NPC: closed backs, no Z-fighting, hover and selection growth | Pending | Pending |
 | Seven answers reachable through three cards; disabled/occluded/back targets | Pending | Pending |
@@ -230,3 +231,18 @@ in HUD/NPC during reveal/action wait without restart or duplicate execution.
 Accepted demo-App build:4e5c121; library JARs and pack are unchanged from the
 accepted6e3c91c runtime. [Its CI](https://github.com/groundsgg/library-dialogue/actions/runs/43917885891)
 passed both jobs. Other client-matrix rows remain open.
+
+## HUD foreground alignment follow-up (2026-11-16)
+
+The user confirmed the targeted left/right card GUI-scale and smaller-window
+layout check on the existing 4e5c121 preview, then supplied a screenshot showing
+that answer glyphs sit too low. That correction supersedes the vertical-alignment
+part of the earlier positive feedback. The new candidate centers actual frozen
+foreground bitmap ink, rather than the font line box, across one- and two-line
+answers, accents and descenders. Text remains left-aligned; card geometry, the
+three reserved slots, scrollbar and speech/footer positions are unchanged. NPC
+rendering is unchanged. The new metrics/ascent files require a new pack load.
+The automated test reads actual atlas pixels and emitted native font ascents;
+it permits at most half a GUI pixel from integral-ascent rounding. This is
+automated evidence, not acceptance of the corrected visual position. The new
+client check remains pending.

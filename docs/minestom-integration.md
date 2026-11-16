@@ -287,8 +287,11 @@ All three work below, left and right. `/hudstyle shared|split|cards` changes the
 current demo live, preserving selection, reveal and the current node. Separated
 below layouts leave a 6px gap after the speech; individual cards add 10px vertical
 padding and 3px gaps. Columns and bitmap text metrics stay the same. The individual-card variant
-centers its text vertically while keeping all lines left-aligned with a 9px
-inner margin. Every background is a precomposed texture contribution,
+centers the visible foreground glyphs vertically while keeping all lines left-aligned
+with a 9px inner margin. Frozen per-glyph ink bounds exclude transparent font-cell
+padding and spaces; the complete wrapped block is centered once and rounded to
+the native integral ascent. Custom metrics without ink bounds retain line-box
+centering through the default `FontMetrics.inkBounds` method. Every background is a precomposed texture contribution,
 with real transparent gaps instead of
 layered coplanar rectangles. Unknown style values use the typed chat fallback.
 

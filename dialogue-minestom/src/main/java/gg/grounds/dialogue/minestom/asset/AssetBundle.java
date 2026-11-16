@@ -48,6 +48,7 @@ public final class AssetBundle {
         throw new IllegalArgumentException("HUD_METRICS", e);
       }
       var widths = new HashMap<Integer, Integer>();
+      var ink = new HashMap<Integer, gg.grounds.dialogue.presentation.FontMetrics.InkBounds>();
       for (String k : properties.stringPropertyNames())
         if (k.startsWith("glyph.")) {
           int cp = Integer.parseInt(k.substring(6)),
@@ -55,6 +56,17 @@ public final class AssetBundle {
           if (!Character.isValidCodePoint(cp) || width < 1 || width > 17 || widths.size() >= 512)
             throw new IllegalArgumentException("HUD_METRICS");
           widths.put(cp, width);
+        } else if (k.startsWith("ink.")) {
+          int cp = Integer.parseInt(k.substring(4));
+          var values = properties.getProperty(k).split(",", -1);
+          if (!Character.isValidCodePoint(cp) || values.length != 2 || ink.size() >= 512)
+            throw new IllegalArgumentException("HUD_INK_METRICS");
+          var bounds =
+              new gg.grounds.dialogue.presentation.FontMetrics.InkBounds(
+                  Double.parseDouble(values[0]), Double.parseDouble(values[1]));
+          if (bounds.top() < 0 || bounds.bottom() > 192)
+            throw new IllegalArgumentException("HUD_INK_METRICS");
+          ink.put(cp, bounds);
         } else if (k.startsWith("backdrop.")) {
           int width = Integer.parseInt(properties.getProperty(k));
           if (!k.matches("backdrop\\.[a-z0-9_]+\\.[01]")
@@ -64,13 +76,16 @@ public final class AssetBundle {
             throw new IllegalArgumentException("HUD_BACKDROP_METRICS");
           backdropAdvances.put(k.substring(9), width);
         }
+      if (!widths.keySet().containsAll(ink.keySet()))
+        throw new IllegalArgumentException("HUD_INK_METRICS");
       if (!properties.getProperty("lineHeight", "").equals("10"))
         throw new IllegalArgumentException("HUD_METRICS");
       hudMetrics =
           new MinecraftFontMetrics(
               ContentFingerprint.hash(("hud:" + pin).getBytes(StandardCharsets.UTF_8)).sha256(),
               widths,
-              10);
+              10,
+              ink);
     }
     hudBackdropAdvances = Map.copyOf(backdropAdvances);
   }

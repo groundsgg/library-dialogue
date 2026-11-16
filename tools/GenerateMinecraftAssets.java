@@ -56,6 +56,8 @@ class GenerateMinecraftAssets {
     var letters =
         new BufferedImage(original.getWidth(), rows.size() * 256, BufferedImage.TYPE_INT_ARGB);
     var chars = new ArrayList<String>();
+    var inkTops = new TreeSet<Double>();
+    var inkBottoms = new TreeSet<Double>();
     var properties = new StringBuilder("lineHeight=10\nglyph.32=3\nglyph.160=3\n");
     for (int row = 0; row < rows.size(); row++) {
       var grid = rows.get(row).split(" ");
@@ -63,12 +65,16 @@ class GenerateMinecraftAssets {
       for (int col = 0; col < grid.length; col++) {
         int cp = Integer.parseInt(grid[col], 16);
         text.appendCodePoint(cp == 160 ? 0 : cp);
-        int right = -1;
+        int right = -1, top = 128, bottom = 0;
         for (int y = 0; y < 128; y++)
           for (int x = 0; x < 12; x++) {
             int pixel = original.getRGB(col * 12 + x, row * 128 + y);
             letters.setRGB(col * 12 + x, row * 256 + y, pixel);
-            if ((pixel >>> 24) != 0) right = Math.max(right, x);
+            if ((pixel >>> 24) != 0) {
+              right = Math.max(right, x);
+              top = Math.min(top, y);
+              bottom = Math.max(bottom, y + 1);
+            }
           }
         if (cp != 0 && cp != 160)
           properties
@@ -77,6 +83,22 @@ class GenerateMinecraftAssets {
               .append('=')
               .append(Math.round((right + 1) * .75f) + 1)
               .append('\n');
+        if (cp != 0 && cp != 160) {
+          double inkTop = right < 0 ? 0 : top * .75;
+          double inkBottom = right < 0 ? 0 : bottom * .75;
+          properties
+              .append("ink.")
+              .append(cp)
+              .append('=')
+              .append(inkTop)
+              .append(',')
+              .append(inkBottom)
+              .append('\n');
+          if (inkBottom > inkTop) {
+            inkTops.add(inkTop);
+            inkBottoms.add(inkBottom);
+          }
+        }
       }
       chars.add(text.toString());
     }
@@ -147,6 +169,25 @@ class GenerateMinecraftAssets {
                   for (int line = 0; line < lines; line++)
                     ascents.add(baseline - (below ? 54 : 0) - slot * step - inset - line * 10);
                 }
+            }
+            if (cards) {
+              var insets = new TreeSet<Integer>();
+              for (int lineCount = 1; lineCount <= rowHeight / 10; lineCount++)
+                for (int firstLine = 0; firstLine < lineCount; firstLine++)
+                  for (int lastLine = firstLine; lastLine < lineCount; lastLine++)
+                    for (double inkTop : inkTops)
+                      for (double inkBottom : inkBottoms) {
+                        double first = firstLine * 10 + inkTop, last = lastLine * 10 + inkBottom;
+                        if (last > first)
+                          insets.add((int) Math.round((rowHeight + 10) / 2d - (first + last) / 2));
+                      }
+              for (int inset : insets)
+                for (int line = 0; line < rowHeight / 10; line++)
+                  ascents.add(-inset - line * 10); // Local widget components use baseline zero.
+              for (int slot = 0; slot < count; slot++)
+                for (int inset : insets)
+                  for (int line = 0; line < rowHeight / 10; line++)
+                    ascents.add(baseline - (below ? 54 : 0) - slot * step - inset - line * 10);
             }
             String key = "hud_" + style + "_" + placement + "_" + rowHeight + "_" + count;
             int width =
