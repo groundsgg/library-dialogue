@@ -53,7 +53,7 @@ reports under `.evidence` deliberately set `visual_client_verified=false`.
 | Optional cover/vignette/backdrop toggled independently | Vignette unsupported | Targeted NPC pass7186e71: backdrop remains while vignette/cover toggle; cancel clears all effects/panels |
 | Ordinary hearts/hunger/hotbar covered; extra-heart limits noted | Pending | Targeted Use+shield HUD cover, controls and return accepted7186e71; extra-heart variants not client-tested |
 | Normal looking remains open; strong turn/distance ends after grace | Pending | Targeted NPC pass7186e71: normal gaze/answers remain open, strong turn/distance end and restore play |
-| Two visible clients: private gesture/sound and shared restoration | Pending | Pending |
+| Two visible clients: private gesture/sound and shared restoration | Pending | Accepted7186e71: A-only personalwave private to A; sequential cancel restores shared without disturbing other dialogue |
 | Disconnect/instance change during active/preparing dialogue | Pending | Disconnect during reveal/reconnect clean pass7186e71; preparing/instance change pending |
 
 Suggested first pass: accept the new pack, `/dialogue`, then `/renderer npc` and
@@ -357,3 +357,16 @@ expected manifest ready and requested/effective surface NPC. No product, pack
 or runtime change was made to obtain that result; it is not a claim about Stage
 pack behavior. The two subsequent explicit replies above accept these scoped
 local checks. Pack decline/failure/removal and the rest of the matrix remain open.
+
+## Two visible clients accepted (2026-11-16)
+
+On the unchanged7186e71 demo with the recorded library JARs/pack, the user
+tested two visible nearby clients, each with its own NPC dialogue. After the
+initial greeting, only A executed `/personalwave`: only A saw/heard the personal
+gesture and B retained its independent presentation. Cancelling A restored
+the common NPC for A without disturbing B's ongoing private dialogue; then
+cancelling B restored the common NPC for B. Reply: “Mit zwei Clients getestet:
+Trennung und Rückkehr passen”. This accepts that real two-client private
+render/sound/restoration case, not the remaining public26.2, pack-failure,
+preparation-interruption or instance-change cases. No product change or
+restart was required.
