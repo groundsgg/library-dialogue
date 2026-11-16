@@ -52,9 +52,9 @@ reports under `.evidence` deliberately set `visual_client_verified=false`.
 | Language switch during reveal and action wait | Pending | Accepted4e5c121 in HUD/NPC, no restart/duplicate task |
 | Optional cover/vignette/backdrop toggled independently | Vignette unsupported | Pending |
 | Ordinary hearts/hunger/hotbar covered; extra-heart limits noted | Pending | Targeted Use+shield HUD cover, controls and return accepted7186e71; extra-heart variants not client-tested |
-| Normal looking remains open; strong turn/distance ends after grace | Pending | Pending |
+| Normal looking remains open; strong turn/distance ends after grace | Pending | Targeted NPC pass7186e71: normal gaze/answers remain open, strong turn/distance end and restore play |
 | Two visible clients: private gesture/sound and shared restoration | Pending | Pending |
-| Disconnect/instance change during active/preparing dialogue | Pending | Pending |
+| Disconnect/instance change during active/preparing dialogue | Pending | Disconnect during reveal/reconnect clean pass7186e71; preparing/instance change pending |
 
 Suggested first pass: accept the new pack, `/dialogue`, then `/renderer npc` and
 `/renderer chat`; switch `/lang de` and `/lang en` during reveal and the task wait.
@@ -321,3 +321,18 @@ not every binding/equipment/extra-heart combination or other renderer. Runtime
 JARs and pack are identical to the preceding accepted7186e71 checks. The rest
 of the public26.2/Grounds26.3 client matrix remains open; no product change or
 restart was needed.
+
+## NPC leave policy and reconnect accepted (2026-11-16)
+
+On unchanged demo-App7186e71, the user confirmed that ordinary looking and
+viewing the NPC answer panels keep the dialogue open, while separately testing
+a strong turn and walking beyond the dialogue range ends it, removes the panels
+and restores normal play: “Beide Abbrucharten und Rückkehr passen”.
+
+The user also disconnected while text was revealing and reconnected: the normal
+HUD returned, old panels were absent and a new nearby `/dialogue` worked cleanly.
+Reply: “Wiederverbinden ist sauber”. This accepts disconnection during active
+reveal and the clean reconnect, not interruption during preparation or an
+instance change. Runtime JARs and pack match the previous7186e71 acceptance
+records; the remaining client matrix stays open. No product change or restart
+was needed for these results.
