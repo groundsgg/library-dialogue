@@ -88,8 +88,13 @@ the mouse wheel continues to change selection. The selected answer must remain
 selected even offscreen, with no highlight on unrelated pages. The screenshot
 also showed a mirrored scrollbar crossing closed answer-panel backs. The new
 candidate separates the viewport from semantic selection, rejects confirms of
-invisible selections, keeps wheel/hover selection behaviour, and removes the
-back component's scrollbar paint. Both corrections need targeted client checks.
+invisible selections, keeps wheel/hover selection behaviour, and corrects the
+back component's incorrect horizontal placement. The first correction 02ef31f
+hid that component entirely; the user requested its visible back. The follow-up
+restores it with horizontally reflected ink coordinates so the native back
+rotation returns it to the same world track. Tests reconstruct actual font
+spacing, entity rotations and folded world positions. The selection refinement
+and corrected visible back still need targeted client checks.
 
 ## Earlier iteration history
 

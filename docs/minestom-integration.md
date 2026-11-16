@@ -238,9 +238,11 @@ core state/render revisions are unchanged. A selected but offscreen answer is
 never confirmed invisibly. Disabled end controls consume confirmation.
 
 Arrow glyphs use a dedicated frozen32×256 two-cell atlas in the existing native
-font positions. The scrollbar/arrow component is painted only on the front; no
-mirrored bar is drawn across the closed panel backs. The existing display pair
-and per-connection budget remain unchanged.
+font positions. The scrollbar is visible on both faces. Its back ink is reflected
+inside the full component bounds before the native180-degree turn, so the track
+occupies the same world position on both sides (only the0.012-block back depth
+differs). Arrows remain front-facing controls. The existing display pair and
+per-connection budget remain unchanged.
 The default native world scrollbar supports track heights up to192 GUI
 pixels; unsupported custom geometry falls back intact to chat. All displays
 remain inside the shared per-connection32 budget, including pending/closing ones.

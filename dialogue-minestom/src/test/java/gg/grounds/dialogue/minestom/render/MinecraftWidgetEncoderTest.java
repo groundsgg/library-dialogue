@@ -15,6 +15,23 @@ class MinecraftWidgetEncoderTest {
     return s.toString();
   }
 
+  static double barOffset(Component component) {
+    double cursor = 0;
+    for (var part : parts(component).toList())
+      if (part instanceof TextComponent text) {
+        for (int cp : text.content().codePoints().toArray()) {
+          if (part.font() != null && part.font().asString().equals("dialogue:spacing")) {
+            if (cp >= 0xf810 && cp < 0xf820) cursor += 1 << (cp - 0xf810);
+            else if (cp >= 0xf830 && cp < 0xf840) cursor -= 1 << (cp - 0xf830);
+            else if (cp == 0xf801) cursor += .5;
+            else if (cp == 0xf802) cursor -= .5;
+            else if (cp == 0xf800) cursor--;
+          } else if (cp >= 0xe700 && cp < 0xe780) return cursor;
+        }
+      }
+    throw new AssertionError("No scrollbar ink in component");
+  }
+
   static java.util.stream.Stream<Component> parts(Component component) {
     return java.util.stream.Stream.concat(
         java.util.stream.Stream.of(component),
@@ -22,11 +39,17 @@ class MinecraftWidgetEncoderTest {
   }
 
   @Test
-  void scrollbarIsFrontOnlyAndCannotMirrorAcrossPanelBacks() {
+  void scrollbarBackMatchesFrontTrackAfterNativeHalfTurn() {
     var base = RenderFixtures.frame("npc", "Hello", 5);
     var scroll =
         new WidgetFrame.Scrollbar(
-            new WidgetFrame.Rect(600, 0, 2, 132), new WidgetFrame.Rect(600, 0, 2, 56));
+            new WidgetFrame.Rect(600, 0, 2, 132),
+            new WidgetFrame.Rect(600, 0, 2, 56),
+            List.of(
+                WidgetFrame.NavigationButton.page(
+                    WidgetFrame.NavigationDirection.PREVIOUS,
+                    new WidgetFrame.Rect(430, -28, 64, 24),
+                    null)));
     var f =
         new WidgetFrame(
             base.semantic(), base.widgets(), base.fontPin(), base.theme(), null, scroll);
@@ -37,9 +60,17 @@ class MinecraftWidgetEncoderTest {
                 .findFirst()
                 .orElseThrow();
     assertTrue(plain(bar.front()).codePoints().anyMatch(c -> c >= 0xe700 && c < 0xe780));
-    assertFalse(
-        plain(bar.back()).codePoints().anyMatch(c -> c >= 0xe700 && c <= 0xe781),
-        "The rotated back must not paint a mirrored bar through the closed panel backs");
+    assertTrue(
+        plain(bar.back()).codePoints().anyMatch(c -> c >= 0xe700 && c < 0xe780),
+        "The indicator must have a visible back");
+    double frontInk = barOffset(bar.front());
+    double backInk = barOffset(bar.back());
+    assertEquals(
+        bar.bounds().width() - frontInk - 2,
+        backInk,
+        1e-8,
+        "Native yaw180 must return the back ink to the front track's world X");
+    assertFalse(plain(bar.back()).contains("\ue780"));
   }
 
   @Test

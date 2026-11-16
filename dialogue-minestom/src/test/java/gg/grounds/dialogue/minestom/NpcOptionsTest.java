@@ -97,8 +97,7 @@ class NpcOptionsTest {
                             .codePoints()
                             .anyMatch(c -> c >= 0xe700 && c < 0xe780))
                 .toList();
-        assertEquals(
-            1, bars.size(), "Scrollbar paint is front-only; no mirrored bar on panel backs");
+        assertEquals(2, bars.size(), "Both indicator faces remain visible on the same track");
         assertTrue(bars.stream().allMatch(e -> e.getViewers().equals(Set.of(f.player))));
         assertEquals(visit, h.snapshot().nodeVisitId());
         assertEquals("npc", ticket.status().effectiveSurface());

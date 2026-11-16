@@ -270,6 +270,42 @@ class NpcDialogueSurfaceTest {
         bp.distance(
             transform.planeFor(bar.bounds()).widgetToWorld(bar.bounds().x(), bar.bounds().y())),
         1e-6);
+    var backEntity =
+        f.displays().stream()
+            .filter(
+                e -> {
+                  var m = (TextDisplayMeta) e.getEntityMeta();
+                  return m.getText().equals(bar.back()) && m.getLeftRotation()[1] > 0;
+                })
+            .findFirst()
+            .orElseThrow();
+    var backMeta = (TextDisplayMeta) backEntity.getEntityMeta();
+    double backUnit = .025 * backMeta.getScale().x();
+    double backInk = MinecraftWidgetEncoderTest.barOffset(bar.back());
+    var track = frame.scrollbar().track();
+    var localBack =
+        backMeta
+            .getTranslation()
+            .add(
+                rotate(
+                    new Vec(
+                        (1 - bar.bounds().width() / 2 + backInk + track.width()) * backUnit,
+                        (2 + bar.paintBaseline() - (track.y() - bar.bounds().y())) * backUnit,
+                        0),
+                    backMeta.getLeftRotation()));
+    var actualBack =
+        backEntity
+            .getPosition()
+            .add(transform.right().mul(localBack.x()))
+            .add(0, localBack.y(), 0)
+            .add(transform.normal().mul(localBack.z()));
+    var plane = transform.planeFor(bar.bounds());
+    var expectedBack = plane.widgetToWorld(track.x(), track.y()).sub(plane.normal().mul(.012));
+    assertEquals(
+        0,
+        actualBack.distance(expectedBack),
+        1e-6,
+        "Both indicator faces must occupy the same folded track, separated only by back depth");
     done(env, h.closeAsync());
     assertTrue(f.displays().isEmpty());
   }

@@ -79,8 +79,26 @@ public final class MinecraftWidgetEncoder {
       var back = new Canvas(bundle, false);
       local.scrollbar(frame.scrollbar(), left, paintBaseline + top, frame.theme());
       local.navigation(frame.scrollbar(), left, paintBaseline + top, frame.theme());
-      // Indicators are front-only: rotating their asymmetric component mirrors
-      // the bar into the middle of the otherwise closed panel backs.
+      // The back entity turns180 degrees. Reflect its asymmetric ink inside
+      // the full component width so both faces occupy the same world track.
+      var thumb = frame.scrollbar().thumb();
+      var backTrack =
+          new Rect(
+              left + outer.width() - (track.x() - left) - track.width(),
+              track.y(),
+              track.width(),
+              track.height());
+      var backThumb =
+          new Rect(
+              left + outer.width() - (thumb.x() - left) - thumb.width(),
+              thumb.y(),
+              thumb.width(),
+              thumb.height());
+      back.scrollbar(
+          new WidgetFrame.Scrollbar(backTrack, backThumb),
+          left,
+          paintBaseline + top,
+          frame.theme());
       local.move(outer.width());
       back.move(outer.width());
       widgets.add(
