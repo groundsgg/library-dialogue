@@ -454,3 +454,29 @@ migration c6fce6a selects published NPC1.0.0 in source; fetching/fast-forwarding
 that commit did not rebuild, change or restart this tested process. Do not
 label this client result as an NPC1.0.0 visual acceptance. The remaining client
 matrix and separate demo SIGTERM-cleanup observation remain open.
+
+## Active-dialogue SIGTERM cleanup regression
+
+The earlier demo shutdown observation was reproduced with an explicit server-side
+`--shutdown-probe` connection and active NPC dialogue. Minestom's default signal
+hook stopped its scheduler before the concurrent application hook completed
+dialogue cleanup, producing DEMO_CLEANUP_FAILED/TimeoutException. This is a demo
+process-ownership issue, not permission to stop the engine from the library.
+
+The standalone app now sets `minestom.shutdown-on-signal=false` before Minestom
+startup properties initialize. Its single application hook awaits host/NPC
+cleanup, prints DEMO_RESOURCES_CLOSED only on success, then stops Minestom.
+`tools/minestom_smoke.py --active-shutdown` starts an active server-side
+dialogue, sends real SIGTERM and requires successful resource-close output
+before engine stop, with no cleanup failure. The probe simulates pack readiness
+and does not count as a visual client result. CI exercises this path for both
+the basic app and the optional personal-NPC consumer. Real-process verification
+is recorded separately from ordinary completed-session smoke teardown.
+
+Active-dialogue signal verification passed for all four app/runtime combinations:
+public26.2 basic365ms, public26.2 personal-NPC365ms, Grounds26.3 basic415ms,
+Grounds26.3 personal-NPC415ms. Each log shows DEMO_RESOURCES_CLOSED before
+Minestom stopping, with no cleanup timeout. The optional consumer here uses
+published NPC1.0.0. These are real child-process SIGTERM checks with simulated
+pack readiness, not client visuals. This corrects the separately recorded
+shutdown-order observation; it does not complete the remaining client matrix.

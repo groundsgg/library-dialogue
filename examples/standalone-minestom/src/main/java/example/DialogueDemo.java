@@ -55,6 +55,9 @@ public final class DialogueDemo {
       Map<String, byte[]> packAssets,
       DialoguePostEffects effects)
       throws Exception {
+    // This standalone application releases its owned resources before stopping the engine.
+    // Set before Minestom initializes its immutable startup properties.
+    System.setProperty("minestom.shutdown-on-signal", "false");
     var profile =
         switch (System.getProperty("dialogue.profile", "public-26.2")) {
           case "public-26.2" -> MinecraftPackProfile.public262();
@@ -136,6 +139,10 @@ public final class DialogueDemo {
               + pack.sha256()
               + " manifestPin="
               + assets.pin());
+      if (Arrays.asList(args).contains("--shutdown-probe")) {
+        app.prepareShutdownProbe();
+        System.out.println("DIALOGUE_DEMO_ACTIVE_SHUTDOWN_READY");
+      }
       if (smoke) {
         app.smoke();
         System.out.println("DIALOGUE_DEMO_SMOKE_OK");
@@ -666,6 +673,23 @@ public final class DialogueDemo {
       }
     }
 
+    void prepareShutdownProbe() throws Exception {
+      var player = smokePlayer(world);
+      var live = players.get(player);
+      if (live == null) live = connect(player);
+      // Simulated readiness is confined to this server-side lifecycle probe.
+      host.packState()
+          .observe(
+              player,
+              1,
+              pack.packId(),
+              assets.pin(),
+              net.kyori.adventure.resource.ResourcePackStatus.SUCCESSFULLY_LOADED);
+      live.renderer = "npc";
+      live.begin().toCompletableFuture().get(5, TimeUnit.SECONDS);
+      if (live.handle == null) throw new AssertionError("Shutdown probe dialogue did not start");
+    }
+
     void smoke() throws Exception {
       for (int i = 0; i < 2; i++) {
         var player = smokePlayer(world);
@@ -730,6 +754,7 @@ public final class DialogueDemo {
       try {
         host.closeAsync().toCompletableFuture().get(35, TimeUnit.SECONDS);
         if (npc != null) npc.close().get().toCompletableFuture().get(35, TimeUnit.SECONDS);
+        System.out.println("DEMO_RESOURCES_CLOSED");
       } catch (Exception error) {
         System.err.println("DEMO_CLEANUP_FAILED: " + error);
       } finally {

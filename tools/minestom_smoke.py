@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Loopback status/ping + exact demo-pack download. This is not visual client acceptance."""
+"""Protocol/pack smoke and optional real SIGTERM with active dialogue. Never visual acceptance."""
 import argparse
 import hashlib
 import io
@@ -104,6 +104,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--profile', choices=PROFILES, default='public-26.2')
     parser.add_argument('--consumer', choices=['basic', 'npc'], default='basic')
+    parser.add_argument('--active-shutdown', action='store_true', help='Terminate with an active server-side dialogue and verify cleanup ordering')
     parser.add_argument('--grounds-classpath-file', type=Path)
     parser.add_argument('--client', type=Path, help='Optional exact installed client JAR metadata check')
     parser.add_argument('--java')
@@ -135,6 +136,8 @@ def main():
     while port == pack_port:
         pack_port = free_port()
     command = [java, '-Djava.net.preferIPv4Stack=true', '-Ddialogue.profile=' + args.profile, '-Ddialogue.port=' + str(port), '-Ddialogue.packPort=' + str(pack_port), '-cp', os.pathsep.join(map(str, classpath)), main_class]
+    if args.active_shutdown:
+        command.append('--shutdown-probe')
     evidence = ROOT / '.evidence'
     evidence.mkdir(exist_ok=True)
     log_path = evidence / ('smoke-' + args.profile + '-' + args.consumer + '.log')
@@ -143,7 +146,8 @@ def main():
         process = subprocess.Popen(command, cwd=project, stdout=log, stderr=subprocess.STDOUT)
         try:
             deadline = time.monotonic() + 25
-            while 'DIALOGUE_DEMO_READY' not in log_path.read_text():
+            ready_marker = 'DIALOGUE_DEMO_ACTIVE_SHUTDOWN_READY' if args.active_shutdown else 'DIALOGUE_DEMO_READY'
+            while ready_marker not in log_path.read_text():
                 if process.poll() is not None:
                     raise RuntimeError('Demo exited before readiness; inspect ' + str(log_path))
                 if time.monotonic() >= deadline:
@@ -188,6 +192,10 @@ def main():
             report['shutdown_ms'] = round((time.monotonic() - stop_started) * 1000)
     output = log_path.read_text()
     assert 'DEMO_CLEANUP_FAILED' not in output and 'Minestom server stopped successfully' in output, 'Inspect ' + str(log_path)
+    if args.active_shutdown:
+        assert 'DEMO_RESOURCES_CLOSED' in output, 'Active dialogue resources not closed; inspect ' + str(log_path)
+        assert output.index('DEMO_RESOURCES_CLOSED') < output.index('Stopping Minestom server.'), 'Engine stopped before owned dialogue resources'
+    report['active_dialogue_shutdown_verified'] = args.active_shutdown
     path = evidence / ('smoke-' + args.profile + '-' + args.consumer + '.json')
     path.write_text(json.dumps(report, indent=2) + '\n')
     print('MINESTOM_SMOKE_OK ' + args.profile + ' ' + args.consumer + ' pack=' + report['pack']['sha256'])

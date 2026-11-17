@@ -327,3 +327,12 @@ Existing constructors keep fixed-profile behaviour. `LayoutProfile.Style.PANELS`
 and shared padding remain the default for existing consumers, including NPC.
 `choicePadding()` remains available for custom panel profiles. Only explicitly
 nondefault style/padding contributes additional profile-pin fields.
+
+The standalone demo application owns engine shutdown: it configures
+`minestom.shutdown-on-signal=false` before Minestom initializes, then its single
+application signal hook awaits dialogue-host and NPC cleanup before stopping
+Minestom. Competing engine/application hooks can otherwise stop the scheduler
+before asynchronous resource release completes. This setting belongs to the
+standalone application; the library never stops a borrowed Minestom engine.
+The optional `--shutdown-probe` plus `tools/minestom_smoke.py --active-shutdown`
+verifies that order with an active server-side dialogue and a real SIGTERM.

@@ -32,7 +32,7 @@ jobs:
       - name: Run credential-free Minestom application and protocol smoke
         run: |
           ./gradlew -p examples/standalone-minestom test installDist run --args=--smoke "-PdialogueRepository=file:${GITHUB_WORKSPACE}/.evidence/maven"
-          python3 tools/minestom_smoke.py --profile public-26.2
+          python3 tools/minestom_smoke.py --profile public-26.2 --active-shutdown
       - run: ./gradlew :examples:headless-dialogue:run --args=--smoke
       - run: ./gradlew :examples:headless-dialogue:run --args=--presentation-smoke
 
@@ -54,4 +54,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
       - run: ./gradlew publishAllPublicationsToReviewRepository
       - name: Test selected NPC integration with actual personal actors
-        run: ./gradlew -p fixtures/npc-dialogue-consumer test run --args=--smoke "-PdialogueRepository=file:${GITHUB_WORKSPACE}/.evidence/maven"
+        run: |
+          ./gradlew -p fixtures/npc-dialogue-consumer test installDist run --args=--smoke "-PdialogueRepository=file:${GITHUB_WORKSPACE}/.evidence/maven"
+          python3 tools/verify_public_artifacts.py
+          python3 tools/minestom_smoke.py --profile public-26.2 --consumer npc --active-shutdown
