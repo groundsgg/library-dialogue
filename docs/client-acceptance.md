@@ -9,6 +9,18 @@ matrix is **pending**. Earlier 25570/25572/25576 prototype feedback is design
 evidence, not acceptance of these new Maven artifacts. No merge/release claim may
 replace the rows below with headless, packet or source-inspection evidence.
 
+## Current public26.2 acceptance scope
+
+On2026-11-17 the user explicitly stopped additional26.2 client testing:
+“26:.2 brauchen wir nicht weiter testen. das passt”. The already recorded
+26.2 results stand; all remaining additional26.2 manual checks are waived and
+are no longer acceptance blockers. Do not ask for the outstanding active-session
+or two-client26.2 tests, or propose further26.2 client checks, unless the user
+reopens that scope. Untested cases remain untested, not newly passed.
+This does not stop26.3 work, merge/release the PR or change library support.
+Historical pending26.2 statements below describe their earlier state and are
+superseded by this decision.
+
 Accepted HUD client result (2026-11-15): the user confirmed the fixed
 three-slot HUD card viewport on Grounds 26.3, build `70f7e67`. Only existing
 cards are painted, unused slots remain transparent, the scrollbar sits outside,
@@ -44,17 +56,17 @@ reports under `.evidence` deliberately set `visual_client_verified=false`.
 | GUI scale 1/2/3/Auto, window sizes and screen-edge clipping | Representative Cards left/right at1/2/3/Auto and smaller window readable/aligned accepted60fd5c2; not exhaustive cross-product | Targeted layout pass4e5c121 for left/right cards at scales1/2/3/Auto and smaller window; foreground vertical alignment subsequently accepted1ff1860 |
 | NPC: fixed world size, body-front yaw limit and near-head spacing | Fixed size/anchor through movement/offscreen and limited follow rotation accepted60fd5c2 | Fixed size while moving/offscreen confirmed70f7e67; selection-safe gap/fold acceptedeb8cb5e; body-front yaw limit not separately confirmed on library artifacts |
 | NPC: closed backs, no Z-fighting, hover and selection growth | Hover/growth and closed backs without text bleed/flicker accepted60fd5c2 | Hover/growth and scrollbar back accepted through6e3c91c; closed speech/name/answer backs without text bleed/flicker and front-hover return accepted60fd5c2 |
-| Seven answers reachable through three cards; disabled/occluded/back targets | All7 reachable, stable3-slot HUD, arrow selection retention and wheel selection accepted60fd5c2; disabled/occluded/back-target cases remain open | Three-slot paging, partial last page, stable answer identity and wheel selection accepted6e3c91c; disabled/occluded/back-target client cases remain open |
+| Seven answers reachable through three cards; disabled/occluded/back targets | All7 reachable, stable3-slot HUD, arrow selection retention and wheel selection accepted60fd5c2; additional disabled/occluded/back-target tests waived by user2026-11-17 | Three-slot paging, partial last page, stable answer identity and wheel selection accepted6e3c91c; disabled/occluded/back-target client cases remain open |
 | Chat: complete sections, all choices, current/stale click behaviour | All7 readable, nonfirst click works and stale links inert accepted60fd5c2 | Targeted pass4e5c121: non-first answer and stale links; full matrix still open |
-| Use/Attack/Swap with empty hands, main/offhand items and shield | All9 equipped main/offhand/shield combinations accepted60fd5c2; empty-hand variants not separately confirmed | Targeted HUD pass: empty hands1ff1860; Use/Attack/Swap with main/offhand/shield7186e71 |
-| Held button, fast clicks, scroll and jitter without accidental confirmation | Equipped HUD fast/brief-held confirm and scrolling controlled60fd5c2; other cases remain separate | Targeted empty-hand HUD pass1ff1860: fast clicks, held confirmation and wheel; other cases pending |
+| Use/Attack/Swap with empty hands, main/offhand items and shield | All9 equipped main/offhand/shield combinations accepted60fd5c2; additional empty-hand tests waived by user2026-11-17 | Targeted HUD pass: empty hands1ff1860; Use/Attack/Swap with main/offhand/shield7186e71 |
+| Held button, fast clicks, scroll and jitter without accidental confirmation | Equipped HUD fast/brief-held confirm and scrolling controlled60fd5c2; additional cases waived by user2026-11-17 | Targeted empty-hand HUD pass1ff1860: fast clicks, held confirmation and wheel; other cases pending |
 | Current inventory and server slot preserved; visible vs covered hotbar | Inventory check PASS for all9 equipped HUD combinations60fd5c2; Use+shield covered-HUD/normal-end return and direct PASS also accepted60fd5c2 | HUD inventory/cursor/slot PASS7186e71 for all bindings and item modes; Use+shield covered-HUD return also confirmed |
 | Language switch during reveal and action wait | HUD/NPC de/en during reveal and action wait without restart/duplicate action accepted60fd5c2 | Accepted4e5c121 in HUD/NPC, no restart/duplicate task |
 | Optional cover/vignette/backdrop toggled independently | Vignette unsupported | Targeted NPC pass7186e71: backdrop remains while vignette/cover toggle; cancel clears all effects/panels |
-| Ordinary hearts/hunger/hotbar covered; extra-heart limits noted | Use+shield HUD cover stable at least15s, controls/return accepted60fd5c2; extra-heart variants untested | Targeted Use+shield HUD cover, controls and return accepted7186e71; extra-heart variants not client-tested |
-| Normal looking remains open; strong turn/distance ends after grace | Pending | Targeted NPC pass7186e71: normal gaze/answers remain open, strong turn/distance end and restore play |
-| Two visible clients: private gesture/sound and shared restoration | Pending | Accepted7186e71: A-only personalwave private to A; sequential cancel restores shared without disturbing other dialogue |
-| Disconnect/instance change during active/preparing dialogue | Preparing cancel/instance/disconnect and clean reopening accepted60fd5c2; active-dialogue cases pending | Active instance travel with cover, preparing cancel/instance/disconnect and reopening accepted60fd5c2; earlier reveal/reconnect accepted7186e71 |
+| Ordinary hearts/hunger/hotbar covered; extra-heart limits noted | Use+shield HUD cover stable at least15s, controls/return accepted60fd5c2; extra-heart variants untested; additional client tests waived by user2026-11-17 | Targeted Use+shield HUD cover, controls and return accepted7186e71; extra-heart variants not client-tested |
+| Normal looking remains open; strong turn/distance ends after grace | Additional26.2 test waived by user2026-11-17; not run | Targeted NPC pass7186e71: normal gaze/answers remain open, strong turn/distance end and restore play |
+| Two visible clients: private gesture/sound and shared restoration | Additional26.2 test waived by user2026-11-17; not run | Accepted7186e71: A-only personalwave private to A; sequential cancel restores shared without disturbing other dialogue |
+| Disconnect/instance change during active/preparing dialogue | Preparing cancel/instance/disconnect and clean reopening accepted60fd5c2; additional active-dialogue tests waived by user2026-11-17 | Active instance travel with cover, preparing cancel/instance/disconnect and reopening accepted60fd5c2; earlier reveal/reconnect accepted7186e71 |
 
 Suggested first pass: accept the new pack, `/dialogue`, then `/renderer npc` and
 `/renderer chat`; switch `/lang de` and `/lang en` during reveal and the task wait.
