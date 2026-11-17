@@ -37,14 +37,14 @@ reports under `.evidence` deliberately set `visual_client_verified=false`.
 
 | Check | Public 26.2 client | Grounds 26.3 client |
 |---|---|---|
-| Actual client metadata and correct pack formats | Installed protocol776/pack88.0 verified; targeted rendered-client basic pass2c0c0fd | Pending visual run |
+| Actual client metadata and correct pack formats | Installed protocol776/pack88.0 verified; targeted rendered-client basic pass2c0c0fd | Grounds26.3/protocol777/pack97.1 demo; repeated targeted graphics checks through60fd5c2, scoped below |
 | Pack accept, decline, download failure and removal | Initial pack load/basic rendering accepted2c0c0fd; decline/failure/removal pending | Explicit decline/re-allow acceptedb133d53; live owned removal, actual404 failure and graphical recovery accepted8b3f8c0 |
 | No pack request when opening/reopening a dialogue | Pending | Accepted7186e71: reopen/cancel and HUD/NPC/chat switching within one connection without request/download/interruption |
-| HUD: fonts, centering, typewriter, choices and final End hint | Basic fonts/panels/selection/confirmation pass2c0c0fd; full details pending | Pending |
+| HUD: fonts, centering, typewriter, choices and final End hint | Basic fonts/panels/selection/confirmation pass2c0c0fd; full details pending | Layout/styles/cards and frozen foreground alignment accepted1ff1860; final End hint not separately confirmed on these library artifacts |
 | GUI scale 1/2/3/Auto, window sizes and screen-edge clipping | Pending | Targeted layout pass4e5c121 for left/right cards at scales1/2/3/Auto and smaller window; foreground vertical alignment subsequently accepted1ff1860 |
-| NPC: fixed world size, body-front yaw limit and near-head spacing | Basic NPC panels visible pass2c0c0fd; full pose/size cases pending | Pending |
-| NPC: closed backs, no Z-fighting, hover and selection growth | Pending | Pending |
-| Seven answers reachable through three cards; disabled/occluded/back targets | Pending | Pending |
+| NPC: fixed world size, body-front yaw limit and near-head spacing | Basic NPC panels visible pass2c0c0fd; full pose/size cases pending | Fixed size while moving/offscreen confirmed70f7e67; selection-safe gap/fold acceptedeb8cb5e; body-front yaw limit not separately confirmed on library artifacts |
+| NPC: closed backs, no Z-fighting, hover and selection growth | Pending | Hover/growth and scrollbar back accepted through6e3c91c; full panel-back/Z-fighting check remains open |
+| Seven answers reachable through three cards; disabled/occluded/back targets | Pending | Three-slot paging, partial last page, stable answer identity and wheel selection accepted6e3c91c; disabled/occluded/back-target client cases remain open |
 | Chat: complete sections, all choices, current/stale click behaviour | Basic clickable choices pass2c0c0fd; stale/complete-choice cases pending | Targeted pass4e5c121: non-first answer and stale links; full matrix still open |
 | Use/Attack/Swap with empty hands, main/offhand items and shield | Pending | Targeted HUD pass: empty hands1ff1860; Use/Attack/Swap with main/offhand/shield7186e71 |
 | Held button, fast clicks, scroll and jitter without accidental confirmation | Pending | Targeted empty-hand HUD pass1ff1860: fast clicks, held confirmation and wheel; other cases pending |
@@ -54,7 +54,7 @@ reports under `.evidence` deliberately set `visual_client_verified=false`.
 | Ordinary hearts/hunger/hotbar covered; extra-heart limits noted | Pending | Targeted Use+shield HUD cover, controls and return accepted7186e71; extra-heart variants not client-tested |
 | Normal looking remains open; strong turn/distance ends after grace | Pending | Targeted NPC pass7186e71: normal gaze/answers remain open, strong turn/distance end and restore play |
 | Two visible clients: private gesture/sound and shared restoration | Pending | Accepted7186e71: A-only personalwave private to A; sequential cancel restores shared without disturbing other dialogue |
-| Disconnect/instance change during active/preparing dialogue | Pending | Disconnect during reveal/reconnect clean pass7186e71; preparing/instance change pending |
+| Disconnect/instance change during active/preparing dialogue | Pending | Active instance travel with cover, preparing cancel/instance/disconnect and reopening accepted60fd5c2; earlier reveal/reconnect accepted7186e71 |
 
 Suggested first pass: accept the new pack, `/dialogue`, then `/renderer npc` and
 `/renderer chat`; switch `/lang de` and `/lang en` during reveal and the task wait.
@@ -583,3 +583,29 @@ Core/presentation hashes are unchanged; pack SHA-256
 [CI for the tested correction](https://github.com/groundsgg/library-dialogue/actions/runs/44155247219)
 passed both jobs. This records feedback without code/pack changes or a server
 restart; the full client matrix and draft PR remain open.
+
+## Instance travel and preparation interruptions accepted (2026-11-17)
+
+On the unchanged running `60fd5c2` Grounds26.3 personal-NPC demo at
+localhost:25578 the user confirmed the following targeted checks:
+
+- Active NPC dialogue with HUD cover: `/instance away` removes panels and cover
+  in the stone test world; toggling cover off, `/instance home` and a new
+  `/dialogue` work cleanly without another pack prompt. Reply: “Ja”.
+- `/preparetest cancel` and `/preparetest instance` both report PASS after the
+  delayed actual-actor handoff, with activated=0, cues=0 and closed=true, no late
+  panels/gestures, and successful dialogue reopening after returning home.
+  Reply to that combined test: “Geht”.
+- `/preparetest disconnect` actually disconnects during actor preparation. After
+  waiting at least5 seconds and reconnecting, old panels/gestures are absent and
+  a new dialogue works. Reply: “Trennung und Wiederverbinden passen”.
+
+This closes the targeted Grounds26.3 active/preparing disconnect/instance row.
+It does not transfer these cases to the public26.2 client or complete the other
+detailed rendering/input matrix rows. Existing accepted rendering results are
+now reflected in their individual table cells without accepting untested parts.
+
+Tested runtime remains `60fd5c20473ec39a1e86ec92be28336aae7ec873`, NPC1.0.0,
+with the identical library/pack hashes recorded in the idle-cover acceptance
+above. No product change, pack rebuild or process restart was needed for these
+replies. Draft PR3 remains unmerged and no release is implied.
