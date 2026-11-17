@@ -38,7 +38,7 @@ reports under `.evidence` deliberately set `visual_client_verified=false`.
 | Check | Public 26.2 client | Grounds 26.3 client |
 |---|---|---|
 | Actual client metadata and correct pack formats | Installed protocol776/pack88.0 verified; targeted rendered-client basic pass2c0c0fd | Grounds26.3/protocol777/pack97.1 demo; repeated targeted graphics checks through60fd5c2, scoped below |
-| Pack accept, decline, download failure and removal | Initial pack load/basic rendering accepted2c0c0fd; decline/failure/removal pending | Explicit decline/re-allow acceptedb133d53; live owned removal, actual404 failure and graphical recovery accepted8b3f8c0 |
+| Pack accept, decline, download failure and removal | Initial pack load/basic rendering accepted2c0c0fd; live owned removal, actual404 failure and same-dialogue graphical recovery accepted60fd5c2; explicit decline pending | Explicit decline/re-allow acceptedb133d53; live owned removal, actual404 failure and graphical recovery accepted8b3f8c0 |
 | No pack request when opening/reopening a dialogue | Pending | Accepted7186e71: reopen/cancel and HUD/NPC/chat switching within one connection without request/download/interruption |
 | HUD: fonts, centering, typewriter, choices and final End hint | Basic fonts/panels/selection/confirmation pass2c0c0fd; full details pending | Layout/styles/cards and frozen foreground alignment accepted1ff1860; binding-appropriate final End hint and one-confirm close accepted60fd5c2 |
 | GUI scale 1/2/3/Auto, window sizes and screen-edge clipping | Pending | Targeted layout pass4e5c121 for left/right cards at scales1/2/3/Auto and smaller window; foreground vertical alignment subsequently accepted1ff1860 |
@@ -54,7 +54,7 @@ reports under `.evidence` deliberately set `visual_client_verified=false`.
 | Ordinary hearts/hunger/hotbar covered; extra-heart limits noted | Pending | Targeted Use+shield HUD cover, controls and return accepted7186e71; extra-heart variants not client-tested |
 | Normal looking remains open; strong turn/distance ends after grace | Pending | Targeted NPC pass7186e71: normal gaze/answers remain open, strong turn/distance end and restore play |
 | Two visible clients: private gesture/sound and shared restoration | Pending | Accepted7186e71: A-only personalwave private to A; sequential cancel restores shared without disturbing other dialogue |
-| Disconnect/instance change during active/preparing dialogue | Pending | Active instance travel with cover, preparing cancel/instance/disconnect and reopening accepted60fd5c2; earlier reveal/reconnect accepted7186e71 |
+| Disconnect/instance change during active/preparing dialogue | Preparing cancel/instance/disconnect and clean reopening accepted60fd5c2; active-dialogue cases pending | Active instance travel with cover, preparing cancel/instance/disconnect and reopening accepted60fd5c2; earlier reveal/reconnect accepted7186e71 |
 
 Suggested first pass: accept the new pack, `/dialogue`, then `/renderer npc` and
 `/renderer chat`; switch `/lang de` and `/lang en` during reveal and the task wait.
@@ -631,3 +631,27 @@ No code, pack or process was changed for this feedback. This does not accept
 back-face confirmation rejection, disabled/occluded targets or the separate
 public26.2 detailed cases. The existing independent review remains valid;
 the full client matrix and draft PR are still open.
+
+## Public26.2 pack lifecycle and preparation interruptions accepted (2026-11-17)
+
+The user tested the unchanged `60fd5c2` public26.2 personal-NPC demo at
+localhost:25580 and confirmed both targeted questions with “Ja”:
+
+- In an open NPC dialogue, owned pack removal and the intentional actual
+  download failure each switch to usable chat. Restoring the healthy pack
+  returns graphical output at the same dialogue point in both cases.
+- `/preparetest cancel` and `/preparetest instance` each report PASS with
+  activated=0, cues=0 and closed=true after the delayed actual-actor handoff.
+  `/preparetest disconnect` really disconnects during preparation; after waiting
+  at least5 seconds and reconnecting, no old panels/gestures remain and a new
+  dialogue opens cleanly.
+
+Exact runtime: `60fd5c20473ec39a1e86ec92be28336aae7ec873`, public Minestom26.2,
+protocol776, pack88.0, published NPC1.0.0. Native adapter SHA-256
+`7e5dcff7b28c60323aeb90417c5bac31cbfe99afc050aeab3983da11e15a2081`;
+public NPC pack SHA-256
+`4481b9e50751cba9ed1e35d59714fd91196fa9b195bdbbe26bf2a911f6578682`.
+Core/presentation and installed NPC JARs remain unchanged. Runtime/actual JAR
+origins were verified before recording this feedback. No code, pack or process
+change was needed; this does not accept the remaining individual public26.2
+cases, explicit decline or active-instance travel by implication. PR3 stays draft.
