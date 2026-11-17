@@ -38,7 +38,7 @@ reports under `.evidence` deliberately set `visual_client_verified=false`.
 | Check | Public 26.2 client | Grounds 26.3 client |
 |---|---|---|
 | Actual client metadata and correct pack formats | Pending visual run | Pending visual run |
-| Pack accept, decline, download failure and removal | Pending | Explicit decline/chat fallback and re-allow/graphical return acceptedb133d53; download failure and removal pending |
+| Pack accept, decline, download failure and removal | Pending | Explicit decline/re-allow acceptedb133d53; live owned removal, actual404 failure and graphical recovery accepted8b3f8c0 |
 | No pack request when opening/reopening a dialogue | Pending | Accepted7186e71: reopen/cancel and HUD/NPC/chat switching within one connection without request/download/interruption |
 | HUD: fonts, centering, typewriter, choices and final End hint | Pending | Pending |
 | GUI scale 1/2/3/Auto, window sizes and screen-edge clipping | Pending | Targeted layout pass4e5c121 for left/right cards at scales1/2/3/Auto and smaller window; foreground vertical alignment subsequently accepted1ff1860 |
@@ -433,3 +433,24 @@ unchanged session, node visit and selection. Real-client recovery and the
 separate failed-download check still require confirmation. The b4a0296 public
 CI job also reported Java formatting; the correction must pass the exact
 format check before pushing.
+
+## Live pack removal, failed download and recovery accepted (2026-11-17)
+
+On demo8b3f8c0, the user confirmed visible NPC panels and continuation at the
+same dialogue point after application-requested removal, chat fallback and
+explicit restoration: “Ja, Tafeln korrekt und Dialog fortgesetzt”. The previous
+status screenshot also shows SUCCESSFULLY_LOADED, ready=true, requested=npc,
+output=npc. The separate real HTTP404 download test was then accepted for
+FAILED_DOWNLOAD, ready=false, output=chat, usable chat and subsequent graphical
+return with `/packtest restore`: “Fehlerstatus, Chat-Fallback und grafische
+Rückkehr passen”. [The tested correction CI](https://github.com/groundsgg/library-dialogue/actions/runs/44132066011)
+passed both jobs. This accepts the explicit demo-owned removal/failure/recovery
+path; detection of an unsolicited external removal is not inferred.
+
+Exact running commit: `8b3f8c0d6a380f8f6ab60bdfc5da26d31b66c2e4`, Grounds26.3,
+localhost:25578, unchanged1ff1860 dialogue JARs and15a7eaf6 pack listed above.
+This live demo still uses NPC0.2.0. The separately merged optional consumer
+migration c6fce6a selects published NPC1.0.0 in source; fetching/fast-forwarding
+that commit did not rebuild, change or restart this tested process. Do not
+label this client result as an NPC1.0.0 visual acceptance. The remaining client
+matrix and separate demo SIGTERM-cleanup observation remain open.
