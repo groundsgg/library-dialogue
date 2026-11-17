@@ -40,11 +40,11 @@ reports under `.evidence` deliberately set `visual_client_verified=false`.
 | Actual client metadata and correct pack formats | Installed protocol776/pack88.0 verified; targeted rendered-client basic pass2c0c0fd | Grounds26.3/protocol777/pack97.1 demo; repeated targeted graphics checks through60fd5c2, scoped below |
 | Pack accept, decline, download failure and removal | Initial pack load/basic rendering accepted2c0c0fd; owned removal, actual404 failure, same-dialogue recovery and explicit Prompt decline/re-allow accepted60fd5c2 | Explicit decline/re-allow acceptedb133d53; live owned removal, actual404 failure and graphical recovery accepted8b3f8c0 |
 | No pack request when opening/reopening a dialogue | Pending | Accepted7186e71: reopen/cancel and HUD/NPC/chat switching within one connection without request/download/interruption |
-| HUD: fonts, centering, typewriter, choices and final End hint | Basic fonts/panels/selection/confirmation pass2c0c0fd; final binding-appropriate End hint and clean normal completion accepted60fd5c2; detailed layout variants remain separate | Layout/styles/cards and frozen foreground alignment accepted1ff1860; binding-appropriate final End hint and one-confirm close accepted60fd5c2 |
-| GUI scale 1/2/3/Auto, window sizes and screen-edge clipping | Pending | Targeted layout pass4e5c121 for left/right cards at scales1/2/3/Auto and smaller window; foreground vertical alignment subsequently accepted1ff1860 |
-| NPC: fixed world size, body-front yaw limit and near-head spacing | Basic NPC panels visible pass2c0c0fd; full pose/size cases pending | Fixed size while moving/offscreen confirmed70f7e67; selection-safe gap/fold acceptedeb8cb5e; body-front yaw limit not separately confirmed on library artifacts |
-| NPC: closed backs, no Z-fighting, hover and selection growth | Pending | Hover/growth and scrollbar back accepted through6e3c91c; closed speech/name/answer backs without text bleed/flicker and front-hover return accepted60fd5c2 |
-| Seven answers reachable through three cards; disabled/occluded/back targets | Pending | Three-slot paging, partial last page, stable answer identity and wheel selection accepted6e3c91c; disabled/occluded/back-target client cases remain open |
+| HUD: fonts, centering, typewriter, choices and final End hint | Basic rendering pass2c0c0fd; HUD styles/positions, stable viewport and final End/normal close accepted60fd5c2 | Layout/styles/cards and frozen foreground alignment accepted1ff1860; binding-appropriate final End hint and one-confirm close accepted60fd5c2 |
+| GUI scale 1/2/3/Auto, window sizes and screen-edge clipping | Representative Cards left/right at1/2/3/Auto and smaller window readable/aligned accepted60fd5c2; not exhaustive cross-product | Targeted layout pass4e5c121 for left/right cards at scales1/2/3/Auto and smaller window; foreground vertical alignment subsequently accepted1ff1860 |
+| NPC: fixed world size, body-front yaw limit and near-head spacing | Fixed size/anchor through movement/offscreen and limited follow rotation accepted60fd5c2 | Fixed size while moving/offscreen confirmed70f7e67; selection-safe gap/fold acceptedeb8cb5e; body-front yaw limit not separately confirmed on library artifacts |
+| NPC: closed backs, no Z-fighting, hover and selection growth | Hover/growth and closed backs without text bleed/flicker accepted60fd5c2 | Hover/growth and scrollbar back accepted through6e3c91c; closed speech/name/answer backs without text bleed/flicker and front-hover return accepted60fd5c2 |
+| Seven answers reachable through three cards; disabled/occluded/back targets | All7 reachable, stable3-slot HUD, arrow selection retention and wheel selection accepted60fd5c2; disabled/occluded/back-target cases remain open | Three-slot paging, partial last page, stable answer identity and wheel selection accepted6e3c91c; disabled/occluded/back-target client cases remain open |
 | Chat: complete sections, all choices, current/stale click behaviour | Basic clickable choices pass2c0c0fd; stale/complete-choice cases pending | Targeted pass4e5c121: non-first answer and stale links; full matrix still open |
 | Use/Attack/Swap with empty hands, main/offhand items and shield | All9 equipped main/offhand/shield combinations accepted60fd5c2; empty-hand variants not separately confirmed | Targeted HUD pass: empty hands1ff1860; Use/Attack/Swap with main/offhand/shield7186e71 |
 | Held button, fast clicks, scroll and jitter without accidental confirmation | Equipped HUD fast/brief-held confirm and scrolling controlled60fd5c2; other cases remain separate | Targeted empty-hand HUD pass1ff1860: fast clicks, held confirmation and wheel; other cases pending |
@@ -716,3 +716,26 @@ pack SHA-256
 `4481b9e50751cba9ed1e35d59714fd91196fa9b195bdbbe26bf2a911f6578682`.
 No product/pack change or process restart. Empty-hand variants, extra-heart
 limits and other individual client-matrix cases remain separate; PR3 stays draft.
+
+## Public26.2 HUD layouts and NPC panels accepted (2026-11-17)
+
+On unchanged demo `60fd5c2` at localhost:25580 the user answered both
+targeted layout questions positively (“Passt.” / “Passt”):
+
+- HUD shared/split/cards and below/left/right were compared. Representative
+  Cards left/right at GUI scales1/2/3/Auto and in a smaller window remain
+  readable/aligned. Paging to answer7 keeps speech/hints fixed, unused card
+  slots transparent and the scrollbar outside. This is representative layout
+  coverage, not every possible scale/window/style cross-product.
+- NPC hover grows smoothly; arrows page without changing semantic selection,
+  while the wheel changes selection. World size and NPC anchoring remain stable
+  while moving and partly offscreen, rotation follows only slightly, backs
+  stay closed without text bleed/flicker, and all7 answers are reachable.
+
+Tested runtime remains `60fd5c20473ec39a1e86ec92be28336aae7ec873`, public26.2,
+NPC1.0.0. Native adapter SHA-256
+`7e5dcff7b28c60323aeb90417c5bac31cbfe99afc050aeab3983da11e15a2081`;
+pack SHA-256
+`4481b9e50751cba9ed1e35d59714fd91196fa9b195bdbbe26bf2a911f6578682`.
+No code, pack or process changes. Disabled/occluded/back-target rejection,
+other individually open checks and draft PR3 remain separate.
