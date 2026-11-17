@@ -1,26 +1,31 @@
 # Package C client acceptance
 
-Status: automated implementation candidate. The independent whole-branch review
-found one Critical and ten Important issues; all are covered by regression-first
-corrections in the candidate. The minor required-module completeness improvement
-for the consumer-origin checker remains deferred; current consumer logs contain
-all expected module origins. The extracted library's real-client
-matrix is **pending**. Earlier 25570/25572/25576 prototype feedback is design
-evidence, not acceptance of these new Maven artifacts. No merge/release claim may
-replace the rows below with headless, packet or source-inspection evidence.
+Status: Package C implementation and the agreed client-acceptance scope are
+complete as of2026-11-17. The independent whole-branch review found one Critical
+and ten Important issues; all have regression-first corrections. The minor
+required-module completeness improvement for the consumer-origin checker stays
+deferred; current logs contain all expected origins. Additional26.2 manual
+cases were explicitly waived by the user, as recorded below.
 
-## Current remaining26.3 client scope
+## Final26.3 acceptance result
 
-The remaining focused check is NPC confirmation against unavailable, occluded
-and back-facing cards on the corrected candidate below, together with the
-bounded front-follow rotation. Chat nonfirst/stale-link behaviour is already
-accepted; only explicit visibility of all7 chat choices remains to confirm.
-Do not repeat accepted inventory, controls, layout, lifecycle, pack or
-two-client cases. Fast/held/wheel input and manual-hover priority already have
-scoped client results; exact movement thresholds also have native tests.
-Extra/stacked heart rows are outside the documented initial cover claim, rather
-than an outstanding promise to hide arbitrary HUD extensions. Public26.2
-additional manual testing remains closed by the user's decision below.
+The corrected `dc5440a` candidate passed the focused NPC unavailable/occluded/
+back-face confirmation check, bounded front-follow rotation and explicit
+visibility of all7 chat choices. Wheel selection remains available independently
+of sightline; confirmation is blocked for fully occluded or back-facing targets.
+Normal front selection remains usable. Existing accepted layout, input,
+inventory, lifecycle, pack and private two-client results remain scoped to their
+actual tested artifacts. Exact movement thresholds have native tests; additional
+or stacked heart rows are outside the documented initial cover claim.
+
+Current implementation verification:253 library tests,142 exact-fork tests,
+independent Maven artifact/API/origin checks, both app fixtures on both runtimes
+and all four protocol/pack/active-SIGTERM checks pass.
+[Correction CI](https://github.com/groundsgg/library-dialogue/actions/runs/44170668966)
+passed both jobs. The final documentation-head CI remains the merge gate.
+Earlier pending statements below are iteration history and are superseded by
+this final result and the explicit26.2 scope decision; prototype feedback is
+still design evidence rather than acceptance of these Maven artifacts.
 
 ## Current public26.2 acceptance scope
 
@@ -67,10 +72,10 @@ reports under `.evidence` deliberately set `visual_client_verified=false`.
 | No pack request when opening/reopening a dialogue | Reopen/cancel and HUD/NPC/chat switching without pack prompt/loading accepted60fd5c2 | Accepted7186e71: reopen/cancel and HUD/NPC/chat switching within one connection without request/download/interruption |
 | HUD: fonts, centering, typewriter, choices and final End hint | Basic rendering pass2c0c0fd; HUD styles/positions, stable viewport and final End/normal close accepted60fd5c2 | Layout/styles/cards and frozen foreground alignment accepted1ff1860; binding-appropriate final End hint and one-confirm close accepted60fd5c2 |
 | GUI scale 1/2/3/Auto, window sizes and screen-edge clipping | Representative Cards left/right at1/2/3/Auto and smaller window readable/aligned accepted60fd5c2; not exhaustive cross-product | Targeted layout pass4e5c121 for left/right cards at scales1/2/3/Auto and smaller window; foreground vertical alignment subsequently accepted1ff1860 |
-| NPC: fixed world size, body-front yaw limit and near-head spacing | Fixed size/anchor through movement/offscreen and limited follow rotation accepted60fd5c2 | Fixed size while moving/offscreen confirmed70f7e67; selection-safe gap/fold acceptedeb8cb5e; body-front yaw limit not separately confirmed on library artifacts |
+| NPC: fixed world size, body-front yaw limit and near-head spacing | Fixed size/anchor through movement/offscreen and limited follow rotation accepted60fd5c2 | Fixed size/offscreen accepted70f7e67; gap/fold acceptedeb8cb5e; bounded front-follow rotation accepteddc5440a |
 | NPC: closed backs, no Z-fighting, hover and selection growth | Hover/growth and closed backs without text bleed/flicker accepted60fd5c2 | Hover/growth and scrollbar back accepted through6e3c91c; closed speech/name/answer backs without text bleed/flicker and front-hover return accepted60fd5c2 |
-| Seven answers reachable through three cards; disabled/occluded/back targets | All7 reachable, stable3-slot HUD, arrow selection retention and wheel selection accepted60fd5c2; additional disabled/occluded/back-target tests waived by user2026-11-17 | Three-slot paging, partial last page, stable answer identity and wheel selection accepted6e3c91c; three confirmation defects reproduced and corrected; focused26.3 client check remains open |
-| Chat: complete sections, all choices, current/stale click behaviour | All7 readable, nonfirst click works and stale links inert accepted60fd5c2 | Nonfirst answer/stale links accepted4e5c121; explicit all7-choice visibility remains open |
+| Seven answers reachable through three cards; disabled/occluded/back targets | All7 reachable, stable3-slot HUD, arrow selection retention and wheel selection accepted60fd5c2; additional disabled/occluded/back-target tests waived by user2026-11-17 | Three-slot paging, partial last page, stable answer identity and wheel selection accepted6e3c91c; corrected unavailable/occluded/back-face confirmation accepteddc5440a |
+| Chat: complete sections, all choices, current/stale click behaviour | All7 readable, nonfirst click works and stale links inert accepted60fd5c2 | Nonfirst/stale links accepted4e5c121; all7 choices fully visible accepteddc5440a |
 | Use/Attack/Swap with empty hands, main/offhand items and shield | All9 equipped main/offhand/shield combinations accepted60fd5c2; additional empty-hand tests waived by user2026-11-17 | Targeted HUD pass: empty hands1ff1860; Use/Attack/Swap with main/offhand/shield7186e71 |
 | Held button, fast clicks, scroll and jitter without accidental confirmation | Equipped HUD fast/brief-held confirm and scrolling controlled60fd5c2; additional cases waived by user2026-11-17 | Fast/held/wheel control accepted1ff1860; manual-hover priority/paging accepted6e3c91c; exact movement thresholds native-tested |
 | Current inventory and server slot preserved; visible vs covered hotbar | Inventory check PASS for all9 equipped HUD combinations60fd5c2; Use+shield covered-HUD/normal-end return and direct PASS also accepted60fd5c2 | HUD inventory/cursor/slot PASS7186e71 for all bindings and item modes; Use+shield covered-HUD return also confirmed |
@@ -819,3 +824,31 @@ adapter JAR is now
 Core/presentation JAR hashes, NPC1.0.0 pins and pack bytes are unchanged.
 Existing client acceptances remain attached to their actual earlier native JARs;
 the focused new26.3 confirmation/rotation/chat-completeness check stays open.
+
+## Corrected NPC confirmation and final26.3 fields accepted (2026-11-17)
+
+On actual running `dc5440abf52db5195f2f18f41563e914da26598e`, localhost:25578,
+Grounds26.3/NPC1.0.0, the user first reported selection behaving correctly
+while the mouse wheel still worked. The clarification explicitly confirmed
+“Nur Auswahlwechsel; Bestätigung blockiert” for fully pillar-occluded and
+back-facing targets. The wheel intentionally changes available selection;
+that alone cannot execute a blocked answer. This completes the focused
+`/targettest` case together with the initial correct-selection feedback.
+
+The user also confirmed NPC-front anchoring/slight follow rotation during
+side movement (“Ja bleiben sie”) and, separately, all7 chat choices fully
+visible (“Ja, alle sieben sichtbar”). No further check of already accepted
+controls, inventory, layouts or lifecycle was requested.
+
+Exact native JAR SHA-256
+`e1b1d32888e8e685775b3a50c89ebd55d124ea5a0f14f35e9d76eafcb3523f70`,
+Grounds NPC pack SHA-256
+`15a7eaf6163538a695ed859013e0a13e7e0f10a57d588062dd635d49a62ee1dc`;
+core/presentation and published NPC1.0.0 JARs remain unchanged. Actual live
+process and installed library hashes were verified when recording. Code, pack
+and process were not changed for these replies.
+
+All requested client gates are now resolved within the agreed scope. Additional
+26.2 manual cases remain waived by the user's explicit instruction, not marked
+passed. The PR may proceed through final green-head CI and the planned squash
+merge; this does not authorize or perform a release/tag/Packages publication.
