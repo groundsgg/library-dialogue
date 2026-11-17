@@ -46,9 +46,9 @@ reports under `.evidence` deliberately set `visual_client_verified=false`.
 | NPC: closed backs, no Z-fighting, hover and selection growth | Pending | Hover/growth and scrollbar back accepted through6e3c91c; closed speech/name/answer backs without text bleed/flicker and front-hover return accepted60fd5c2 |
 | Seven answers reachable through three cards; disabled/occluded/back targets | Pending | Three-slot paging, partial last page, stable answer identity and wheel selection accepted6e3c91c; disabled/occluded/back-target client cases remain open |
 | Chat: complete sections, all choices, current/stale click behaviour | Basic clickable choices pass2c0c0fd; stale/complete-choice cases pending | Targeted pass4e5c121: non-first answer and stale links; full matrix still open |
-| Use/Attack/Swap with empty hands, main/offhand items and shield | Pending | Targeted HUD pass: empty hands1ff1860; Use/Attack/Swap with main/offhand/shield7186e71 |
-| Held button, fast clicks, scroll and jitter without accidental confirmation | Pending | Targeted empty-hand HUD pass1ff1860: fast clicks, held confirmation and wheel; other cases pending |
-| Current inventory and server slot preserved; visible vs covered hotbar | Pending | HUD inventory/cursor/slot PASS7186e71 for all bindings and item modes; Use+shield covered-HUD return also confirmed |
+| Use/Attack/Swap with empty hands, main/offhand items and shield | All9 equipped main/offhand/shield combinations accepted60fd5c2; empty-hand variants not separately confirmed | Targeted HUD pass: empty hands1ff1860; Use/Attack/Swap with main/offhand/shield7186e71 |
+| Held button, fast clicks, scroll and jitter without accidental confirmation | Equipped HUD fast/brief-held confirm and scrolling controlled60fd5c2; other cases remain separate | Targeted empty-hand HUD pass1ff1860: fast clicks, held confirmation and wheel; other cases pending |
+| Current inventory and server slot preserved; visible vs covered hotbar | Inventory check PASS for all9 equipped HUD combinations60fd5c2; covered-HUD and normal-end checks remain separate | HUD inventory/cursor/slot PASS7186e71 for all bindings and item modes; Use+shield covered-HUD return also confirmed |
 | Language switch during reveal and action wait | Basic live de switch pass2c0c0fd; reveal/action-wait variants pending | Accepted4e5c121 in HUD/NPC, no restart/duplicate task |
 | Optional cover/vignette/backdrop toggled independently | Vignette unsupported | Targeted NPC pass7186e71: backdrop remains while vignette/cover toggle; cancel clears all effects/panels |
 | Ordinary hearts/hunger/hotbar covered; extra-heart limits noted | Pending | Targeted Use+shield HUD cover, controls and return accepted7186e71; extra-heart variants not client-tested |
@@ -655,3 +655,23 @@ Core/presentation and installed NPC JARs remain unchanged. Runtime/actual JAR
 origins were verified before recording this feedback. No code, pack or process
 change was needed; this does not accept the remaining individual public26.2
 cases, explicit decline or active-instance travel by implication. PR3 stays draft.
+
+## Public26.2 equipped HUD input and inventory accepted (2026-11-17)
+
+On the unchanged `60fd5c2` public26.2 demo at localhost:25580, the user tested
+all nine combinations of `/confirm use|attack|swap` with
+`/testitems main|offhand|shield`, scrolling/confirming in HUD dialogue and then
+`/checkitems`. Every combination reported “Inventory check PASS” without
+unintended item use or swapping. Fast clicks and briefly held confirmation
+also remained controlled. Reply: “Alle neun PASS, Bedienung kontrolliert”.
+The requested final `/testitems restore` returns the original test inventory.
+
+This accepts those equipped-input, inventory/cursor/server-slot comparison and
+controlled-input checks. It does not imply separate empty-hand, covered-HUD or
+normal-dialogue-end inventory checks. Runtime and pack remain exactly the
+`60fd5c2` public26.2/NPC1.0.0 artifacts recorded above: native adapter SHA-256
+`7e5dcff7b28c60323aeb90417c5bac31cbfe99afc050aeab3983da11e15a2081`,
+pack SHA-256
+`4481b9e50751cba9ed1e35d59714fd91196fa9b195bdbbe26bf2a911f6578682`.
+No product change, rebuild or restart was needed. Other individual matrix
+cases remain open; draft PR3 stays unmerged.
