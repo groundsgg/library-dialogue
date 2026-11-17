@@ -265,6 +265,7 @@ public final class DialogueDemo {
     final Map<Player, Live> players = Collections.synchronizedMap(new IdentityHashMap<>());
     final AtomicBoolean stopped = new AtomicBoolean();
     DemoNpc npc;
+    Instance lifecycleWorld;
 
     App(Instance world, AssetBundle assets, DemoPackHost pack, DialoguePostEffects effects) {
       this.world = world;
@@ -293,6 +294,18 @@ public final class DialogueDemo {
                   Duration.ofMillis(600)));
     }
 
+    synchronized Instance lifecycleWorld() {
+      if (lifecycleWorld == null) {
+        var testWorld = MinecraftServer.getInstanceManager().createInstanceContainer();
+        testWorld.setChunkSupplier(LightingChunk::new);
+        testWorld.setTime(6000);
+        testWorld.defaultClock().pause();
+        testWorld.setGenerator(unit -> unit.modifier().fillHeight(0, 40, Block.STONE));
+        lifecycleWorld = testWorld;
+      }
+      return lifecycleWorld;
+    }
+
     Live connect(Player p) {
       var live = new Live(p);
       players.put(p, live);
@@ -302,7 +315,8 @@ public final class DialogueDemo {
           "/dialogue · /renderer hud|npc|chat · /hudchoices below|left|right · /lang en|de ·"
               + " /confirm use|attack|swap · /hidehud · /vignette · /npcbackdrop · /cancel ·"
               + " /personalwave · /testitems main|offhand|shield|restore · /checkitems · /packtest"
-              + " remove|fail|restore|status");
+              + " remove|fail|restore|status · /instance away|home · /preparetest"
+              + " cancel|disconnect|instance|status");
       return live;
     }
 
@@ -417,6 +431,28 @@ public final class DialogueDemo {
               throw new IllegalArgumentException("/packtest remove|fail|restore|status");
             return l.testPack(args[1]);
           });
+      command(
+          "instance",
+          (l, args) -> {
+            if (args.length != 2 || !Set.of("away", "home").contains(args[1]))
+              throw new IllegalArgumentException("/instance away|home");
+            return l.changeInstance(args[1]);
+          });
+      command(
+          "preparetest",
+          (l, args) -> {
+            if (args.length != 2
+                || !Set.of("cancel", "disconnect", "instance", "status").contains(args[1]))
+              throw new IllegalArgumentException("/preparetest cancel|disconnect|instance|status");
+            if (args[1].equals("status")) {
+              l.reply(
+                  l.preparationProbe == null
+                      ? "No preparation test on this connection."
+                      : l.preparationProbe.status());
+              return CompletableFuture.completedFuture(null);
+            }
+            return l.preparationTest(args[1]);
+          });
       command("personalwave", (l, args) -> npc.wave().apply(l.player));
     }
 
@@ -477,17 +513,105 @@ public final class DialogueDemo {
       String renderer = "hud";
       InputProfile controls = InputProfile.defaults();
       final Map<String, String> effects = new HashMap<>();
-      MinestomDialogueStart ticket;
-      DialogueHandle handle;
+      volatile MinestomDialogueStart ticket;
+      volatile DialogueHandle handle;
       InventorySnapshot originalItems, expectedItems;
       String itemMode;
       UUID packId = pack.packId();
       String packStatus = "REQUESTED";
       boolean packTesting, restoreGraphics;
       long packOperation;
+      volatile DemoPreparationProbe preparationProbe;
 
       Live(Player player) {
         this.player = player;
+      }
+
+      void reply(String message) {
+        System.out.println("DEMO_LIFECYCLE: " + message);
+        if (player.isOnline()) player.sendMessage(message);
+      }
+
+      CompletionStage<Void> changeInstance(String direction) {
+        var destination = direction.equals("home") ? world : lifecycleWorld();
+        if (player.getInstance() == destination) return CompletableFuture.completedFuture(null);
+        // Deliberately do not cancel first: the host must detect the actual instance change.
+        return player
+            .setInstance(destination, new Pos(0, 40, 4, 180, 0))
+            .thenRun(
+                () ->
+                    reply(
+                        direction.equals("home")
+                            ? "Returned to the NPC world. /dialogue can start again."
+                            : "Moved to the stone test world. /instance home returns."));
+      }
+
+      synchronized CompletionStage<Void> preparationTest(String mode) {
+        if (player.getInstance() != world)
+          return CompletableFuture.failedFuture(
+              new IllegalStateException("Use /instance home before a preparation test."));
+        var actors = npc.actors().apply(player);
+        if (actors == null)
+          return CompletableFuture.failedFuture(
+              new IllegalStateException("Preparation probe requires the personal-NPC demo."));
+        var previous = ticket;
+        return cancelForItems().thenCompose(v -> startPreparationProbe(mode, actors, previous));
+      }
+
+      private synchronized CompletionStage<Void> interruptPreparationProbe(
+          String mode, MinestomDialogueStart target) {
+        if (target == null || ticket != target || !player.isOnline())
+          return CompletableFuture.failedFuture(
+              new CancellationException("Preparation probe superseded"));
+        return switch (mode) {
+          case "cancel" -> target.cancel(DialogueEndReason.CANCELLED);
+          case "instance" -> changeInstance("away");
+          case "disconnect" -> {
+            player.kick(
+                Component.text("Preparation disconnect test. Reconnect after a few seconds."));
+            yield CompletableFuture.completedFuture(null);
+          }
+          default -> throw new IllegalArgumentException("Unknown preparation probe");
+        };
+      }
+
+      private synchronized CompletionStage<Void> startPreparationProbe(
+          String mode, ActorPort actors, MinestomDialogueStart previous) {
+        if (ticket != previous)
+          return CompletableFuture.failedFuture(
+              new CancellationException("Preparation probe superseded"));
+        var owned = new AtomicReference<MinestomDialogueStart>();
+        var probe =
+            new DemoPreparationProbe(
+                mode, actors, () -> interruptPreparationProbe(mode, owned.get()), this::reply);
+        preparationProbe = probe;
+        var opening = begin(probe);
+        var target = ticket;
+        owned.set(target);
+        return opening
+            .thenCompose(ignored -> target.result())
+            .thenCompose(
+                result -> {
+                  if (!(result instanceof DialogueStartResult.Rejected rejected)
+                      || rejected.code().contains("CLEANUP")
+                      || !probe.validHandoff()) {
+                    return target
+                        .cancel(DialogueEndReason.CANCELLED)
+                        .thenCompose(
+                            ignored ->
+                                CompletableFuture.failedFuture(
+                                    new IllegalStateException(
+                                        "Preparation test FAIL: " + probe.status())));
+                  }
+                  return CompletableFuture.allOf(probe.closed, probe.interrupted)
+                      .thenRun(
+                          () -> {
+                            if (!probe.passed())
+                              throw new IllegalStateException(
+                                  "Preparation test FAIL: " + probe.status());
+                            reply("Preparation test PASS: " + probe.status());
+                          });
+                });
       }
 
       CompletionStage<Void> testPack(String mode) {
@@ -594,6 +718,10 @@ public final class DialogueDemo {
       }
 
       CompletionStage<Void> begin() {
+        return begin(npc.actors().apply(player));
+      }
+
+      synchronized CompletionStage<Void> begin(ActorPort actors) {
         handle = null;
         var dialogue = content();
         var action =
@@ -630,7 +758,7 @@ public final class DialogueDemo {
                     locale,
                     preferences(),
                     Map.of("mechanic", npc.binding()),
-                    npc.actors().apply(player),
+                    actors,
                     controls,
                     0));
         ticket = start;
@@ -741,12 +869,73 @@ public final class DialogueDemo {
         npc.forget().accept(player);
         player.remove();
       }
+      lifecycleSmoke();
       if (world.getEntities().stream()
           .anyMatch(
               e ->
                   e.getEntityType() == EntityType.TEXT_DISPLAY
                       || e.getEntityType() == EntityType.INTERACTION))
         throw new AssertionError("Dialogue entities leaked");
+    }
+
+    void lifecycleSmoke() throws Exception {
+      var player = smokePlayer(world);
+      var live = players.get(player);
+      if (live == null) live = connect(player);
+      host.packState()
+          .observe(
+              player,
+              1,
+              pack.packId(),
+              assets.pin(),
+              net.kyori.adventure.resource.ResourcePackStatus.SUCCESSFULLY_LOADED);
+      live.begin().toCompletableFuture().get(5, TimeUnit.SECONDS);
+      var oldSession = live.handle;
+      live.changeInstance("away").toCompletableFuture().get(5, TimeUnit.SECONDS);
+      var ended = oldSession.completion().toCompletableFuture().get(5, TimeUnit.SECONDS);
+      if (ended.reason() != DialogueEndReason.HOST_CHANGED)
+        throw new AssertionError("Instance change did not invalidate the active dialogue");
+      live.changeInstance("home").toCompletableFuture().get(5, TimeUnit.SECONDS);
+      if (npc.actors().apply(player) != null) {
+        for (String mode : List.of("cancel", "instance")) {
+          live.preparationTest(mode).toCompletableFuture().get(8, TimeUnit.SECONDS);
+          if (!live.preparationProbe.passed())
+            throw new AssertionError(
+                "Late actor handoff failed: " + live.preparationProbe.status());
+          live.changeInstance("home").toCompletableFuture().get(5, TimeUnit.SECONDS);
+        }
+      }
+      if (npc.actors().apply(player) != null) {
+        var obsolete = live.preparationTest("disconnect");
+        var obsoleteProbe = live.preparationProbe;
+        obsoleteProbe.prepared.get(5, TimeUnit.SECONDS);
+        live.begin().toCompletableFuture().get(8, TimeUnit.SECONDS);
+        try {
+          obsolete.toCompletableFuture().get(8, TimeUnit.SECONDS);
+          throw new AssertionError("Superseded preparation test reported success");
+        } catch (ExecutionException | CancellationException expected) {
+          // The old timer must not kick/cancel the new session.
+        }
+        if (!obsoleteProbe.closed.isDone() || obsoleteProbe.closed.isCompletedExceptionally())
+          throw new AssertionError("Superseded preparation did not release its late actor");
+        if (!player.isOnline() || live.handle == null)
+          throw new AssertionError("Old preparation timer affected the new session");
+        System.out.println(
+            "DEMO_LIFECYCLE: Superseded disconnect probe left the new session online.");
+        live.ticket
+            .cancel(DialogueEndReason.CANCELLED)
+            .toCompletableFuture()
+            .get(5, TimeUnit.SECONDS);
+      }
+      live.begin().toCompletableFuture().get(5, TimeUnit.SECONDS);
+      if (live.handle == null) throw new AssertionError("Could not reopen after lifecycle tests");
+      live.ticket
+          .cancel(DialogueEndReason.CANCELLED)
+          .toCompletableFuture()
+          .get(5, TimeUnit.SECONDS);
+      players.remove(player);
+      npc.forget().accept(player);
+      player.remove();
     }
 
     void close() {

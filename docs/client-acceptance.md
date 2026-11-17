@@ -514,3 +514,26 @@ Dialogue JAR hashes match the accepted1ff1860 artifacts above; actual installed
 NPC1.0.0 JAR names/hashes are preserved in runtime evidence. The server and
 pack were not changed or restarted for this result. Preparation interruption,
 instance change and the remaining detailed matrix checks remain open.
+
+## Preparation and instance-change client helpers
+
+The shared demo now offers `/instance away|home`. `away` moves the same player
+to a separate lit stone-floor instance without first cancelling the dialogue;
+the host must observe the actual world change and clean up. `home` returns to
+the NPC world. It does not request a pack or create a second dialogue host.
+
+The personal-NPC demo offers `/preparetest cancel|disconnect|instance|status`.
+A real NPC actor is prepared, but its handoff to the core is held for3 seconds.
+After1 second the command actually cancels its own ticket, kicks the actual
+connection, or changes the player's instance. It reports PASS only after
+the late handle has been closed, the intended cancellation was observed,
+and activation/cue counts stay0. Cleanup errors and a superseded test cannot
+report PASS or act on a newer ticket. The original core5s preparation budget
+is unchanged. Return `/instance home` before the next preparation test.
+
+The real application smoke covers active instance change and, with the actual
+NPC provider, cancelled/instance-changed preparation, late handoff, cleanup
+and reopening. The headless fake connection does not substitute for a real
+disconnect test; that remains a specific client gate. These helpers do not
+change ordinary `/dialogue`, the library API or pack files. Actual-client
+preparation/instance results remain pending until confirmed.
