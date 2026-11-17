@@ -12,11 +12,12 @@ import sys
 import xml.etree.ElementTree as ET
 import zipfile
 
-MODULES = ('dialogue-core', 'dialogue-json', 'dialogue-presentation')
+MODULES = ('dialogue-core', 'dialogue-json', 'dialogue-presentation', 'dialogue-minestom')
 EXPECTED = {
     'dialogue-core': set(),
     'dialogue-json': {'gg.grounds:dialogue-core', 'com.google.code.gson:gson'},
     'dialogue-presentation': {'gg.grounds:dialogue-core'},
+    'dialogue-minestom': {'gg.grounds:dialogue-core', 'gg.grounds:dialogue-presentation', 'com.google.code.gson:gson'},
 }
 NS = {'m': 'http://maven.apache.org/POM/4.0.0'}
 
@@ -53,6 +54,7 @@ def main():
         directory = args.repository / 'gg/grounds' / module / args.version
         pom = artifact(directory, module, args.version, 'pom')
         root = ET.parse(pom).getroot()
+        require(not any(n.tag.endswith('systemPath') or (n.text and ('file:' in n.text or '/home/' in n.text or 'C:\\' in n.text)) for n in root.iter()), 'NONPORTABLE_PUBLICATION', module)
         dependencies = {f'{d.findtext("m:groupId", namespaces=NS)}:{d.findtext("m:artifactId", namespaces=NS)}'
                         for d in root.findall('m:dependencies/m:dependency', NS)}
         require(dependencies == EXPECTED[module], 'POM_DEPENDENCIES', f'{module}: {dependencies}')
@@ -69,19 +71,37 @@ def main():
                     continue
                 data = archive.read(name)
                 require(struct.unpack('>H', data[6:8])[0] == 69, 'BYTECODE_TARGET', name)
-                if module != 'dialogue-json':
-                    for forbidden in (b'com/google/gson', b'net/minestom', b'kotlin/', b'gg/grounds/scene'):
-                        require(forbidden not in data, 'FORBIDDEN_CLASS_REFERENCE', f'{module}: {name} {forbidden!r}')
+                forbidden = [b'kotlin/',b'gg/grounds/scene',b'gg/grounds/npc',b'gg/grounds/runtime',b'probe/',b'java/awt']
+                if module not in ('dialogue-json','dialogue-minestom'):forbidden.append(b'com/google/gson')
+                if module != 'dialogue-minestom':forbidden.append(b'net/minestom')
+                for reference in forbidden:
+                    require(reference not in data, 'FORBIDDEN_CLASS_REFERENCE', f'{module}: {name} {reference!r}')
                 classes.append(name[:-6].replace('/', '.'))
             if module == 'dialogue-presentation':
                 require('default-theme/FONT-LICENSE.txt' in archive.namelist(), 'FONT_LICENSE', module)
                 require('default-theme/metrics.properties' in archive.namelist(), 'FONT_METRICS', module)
+            if module == 'dialogue-minestom':
+                for profile in ('public-26.2','grounds-26.3'):
+                    base = 'default-minecraft/'+profile+'/'
+                    manifest = json.loads(archive.read(base+'manifest.json'))
+                    require(manifest['profile']==profile, 'FONT_PROFILE', profile)
+                    require('assets/dialogue/font-source/font-license.txt' in manifest['files'], 'FONT_LICENSE', profile)
+                    total=0
+                    for path, digest in manifest['files'].items():
+                        require(path.startswith('assets/dialogue/') and '..' not in path, 'ASSET_PATH', path)
+                        payload=archive.read(base+path);total+=len(payload)
+                        require(hashlib.sha256(payload).hexdigest()==digest,'ASSET_HASH',path)
+                    require(total<=32*1024*1024,'ASSET_LIMIT',profile)
+                    canonical=json.dumps({'profile':profile,'files':manifest['files'],'glyphs':manifest['glyphs']},sort_keys=True,ensure_ascii=False,separators=(',',':')).encode()
+                    require(hashlib.sha256(canonical).hexdigest()==manifest['pin'],'FONT_PIN',profile)
         publications[module] = {'jar': str(jar.resolve()), 'sha256': hashlib.sha256(jar.read_bytes()).hexdigest(), 'classes': classes}
     classpath = os.pathsep.join(item['jar'] for item in publications.values())
     for module, item in publications.items():
         result = subprocess.run([javap, '-public', '-classpath', classpath, *item['classes']], capture_output=True, text=True)
         require(result.returncode == 0, 'API_INSPECTION', result.stderr)
-        for forbidden in ('com.google.gson', 'net.minestom', 'kotlin.', 'gg.grounds.scene'):
+        forbidden_types=['com.google.gson','kotlin.','gg.grounds.scene','gg.grounds.npc','gg.grounds.runtime','java.awt']
+        if module!='dialogue-minestom':forbidden_types.append('net.minestom')
+        for forbidden in forbidden_types:
             require(forbidden not in result.stdout, 'EXPOSED_PUBLIC_TYPE', f'{module}: {forbidden}')
         print(f'PUBLIC_ARTIFACT {module} {args.version} sha256={item["sha256"]}')
     output = args.repository.parent / 'public-artifacts.json'

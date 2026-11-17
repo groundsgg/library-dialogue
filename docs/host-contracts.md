@@ -49,3 +49,22 @@ Default budgets: text/conditions 2 s, preparation/reconfiguration 5 s, action/ou
 Public lifecycle stages are read-only observations: completing, cancelling or timing out an observer does not stop the owned operation. Use the explicit stop/cancellation API. Frame coalescing acknowledges a real successful surface write, never a discarded intermediate frame. Each reconfiguration receives a fresh absolute preparation deadline and the configured runtime budgets. Frames include the immutable theme palette; graphical surfaces need no parallel theme registry.
 
 Dispatch admission is ordered against stop immediately before calling an action/outcome port, without invoking foreign code under a monitor. If stop wins, no new effect is dispatched. If dispatch wins, the host owns durable reconciliation even if cancellation follows before the result. An optional preparation that cannot confirm cleanup is a cleanup failure, not ordinary actor unavailability.
+
+Actor preparation remains hidden. After renderer and actor preparation, the runtime calls `ActorHandle.activate()` once before the first node, cue or external dispatch. Existing adapters inherit a successful default activation. A personal NPC adapter maps it to its existing publication operation. Locale and surface changes never activate again. An optional activation failure continues only after confirmed release; required actors reject, and unconfirmed cleanup remains a failure.
+
+## Native Minestom host
+
+The optional adapter now supplies HUD/NPC/chat output and a concrete connection
+owner. It retains the same core action/idempotency contracts. Borrowed speaker
+anchors are checked before entry effects, personal actors activate before cues,
+and declared generations remain trusted host authority rather than live-handle
+hashes. Native input stamps come only from acknowledged targets. Pack UUID and
+manifest registrations must precede application pack sends; only loaded exact
+registrations permit graphics. Backend/proxy transfer ends the local owner.
+
+Read [Minestom integration](minestom-integration.md) for the output coordinator,
+control/leave policy, explicit profiles and limits. Output priority participants
+must share `OutputChannels`; a suppressing HUD coordinator must implement
+`HudLease.visible()`. Unregistered external HUD/effect writers cannot be restored
+reliably. Three public headless modules still need no Minestom runtime. Native
+visual acceptance remains [pending separately](client-acceptance.md).

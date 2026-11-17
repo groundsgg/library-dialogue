@@ -48,6 +48,7 @@ public final class SessionDriver implements DialogueHandle {
       actorReady,
       actorSkipped,
       activated,
+      activating,
       closing,
       translating,
       switching;
@@ -319,9 +320,45 @@ public final class SessionDriver implements DialogueHandle {
   }
 
   private void tryReady() {
-    if (!active() || activated || !rendererReady || !actorReady) return;
-    activated = true;
-    enter(nodeId);
+    if (!active() || activated || activating || !rendererReady || !actorReady) return;
+    if (actor == null) {
+      activated = true;
+      enter(nodeId);
+      return;
+    }
+    activating = true;
+    var prepared = actor;
+    await(
+        call(prepared::activate),
+        options.budgets().prepare(),
+        (v, error) -> {
+          if (!active()) return;
+          if (error == null) {
+            activating = false;
+            activated = true;
+            enter(nodeId);
+            return;
+          }
+          if (start.content().definition().capabilities().required().contains("actor.gesture")) {
+            fail("ACTOR_ACTIVATION_FAILED");
+            return;
+          }
+          actor = null;
+          actorSkipped = true;
+          await(
+              scope.release(prepared),
+              options.budgets().cleanup(),
+              (ignored, cleanup) -> {
+                if (!active()) return;
+                if (cleanup != null) {
+                  fail("ACTOR_CLEANUP_FAILED");
+                  return;
+                }
+                activating = false;
+                activated = true;
+                enter(nodeId);
+              });
+        });
   }
 
   private void enter(String target) {

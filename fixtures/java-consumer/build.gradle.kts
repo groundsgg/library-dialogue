@@ -2,7 +2,7 @@ plugins { application }
 repositories {
     val source = maven {
         url = uri(providers.gradleProperty("dialogueRepository").get())
-        if (url.scheme == "https") credentials {
+        if (url.toString() == "https://maven.pkg.github.com/groundsgg/library-dialogue") credentials {
             username = providers.gradleProperty("github.user").orNull ?: System.getenv("GITHUB_ACTOR")
             password = providers.gradleProperty("github.token").orNull ?: System.getenv("GITHUB_TOKEN")
         }
@@ -18,3 +18,5 @@ dependencies {
     implementation("gg.grounds:dialogue-presentation:${dialogueVersion.get()}")
 }
 application { mainClass.set("example.Consumer") }
+
+configurations.configureEach {resolutionStrategy.cacheChangingModulesFor(0,"seconds")}

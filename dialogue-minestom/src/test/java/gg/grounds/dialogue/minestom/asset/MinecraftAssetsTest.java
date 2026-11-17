@@ -1,0 +1,216 @@
+package gg.grounds.dialogue.minestom.asset;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+import java.io.*;
+import java.util.*;
+import javax.imageio.ImageIO;
+import org.junit.jupiter.api.Test;
+
+class MinecraftAssetsTest {
+  @Test
+  void navigationChevronsAreCompactTransparentMirrorsInBothProfiles() throws Exception {
+    for (var profile :
+        List.of(MinecraftPackProfile.public262(), MinecraftPackProfile.grounds263())) {
+      var bundle = AssetBundle.loadDefault(profile);
+      var bytes = bundle.entries().get("assets/dialogue/textures/font/navigation.png");
+      assertNotNull(bytes, "Page controls use hand-drawn chevrons rather than text arrows");
+      var image = ImageIO.read(new ByteArrayInputStream(bytes));
+      assertEquals(32, image.getWidth());
+      assertEquals(256, image.getHeight());
+      int ink = 0;
+      for (int y = 0; y < 256; y++)
+        for (int x = 0; x < 16; x++) {
+          int pixel = image.getRGB(x, y);
+          if (pixel >>> 24 != 0) {
+            ink++;
+            assertTrue(y < 8);
+          }
+          if (y < 8) assertEquals(pixel, image.getRGB(16 + x, 7 - y));
+          else assertEquals(0, image.getRGB(16 + x, y));
+        }
+      assertTrue(ink > 16 && ink < 100);
+      assertEquals(0, image.getRGB(0, 0));
+      assertEquals(0xffffffff, image.getRGB(7, 0));
+      var providers =
+          com.google.gson.JsonParser.parseString(
+                  new String(
+                      bundle.entries().get("assets/dialogue/font/a_212.json"),
+                      java.nio.charset.StandardCharsets.UTF_8))
+              .getAsJsonObject()
+              .getAsJsonArray("providers");
+      assertTrue(
+          java.util.stream.StreamSupport.stream(providers.spliterator(), false)
+              .map(com.google.gson.JsonElement::getAsJsonObject)
+              .anyMatch(
+                  v ->
+                      v.has("file")
+                          && v.get("file").getAsString().equals("dialogue:font/navigation.png")
+                          && v.getAsJsonArray("chars")
+                              .get(0)
+                              .getAsString()
+                              .equals("\ue780\ue781")));
+    }
+  }
+
+  @Test
+  void belowHudKeepsTheExactOriginalPreviewPixels() throws Exception {
+    var b = AssetBundle.loadDefault(MinecraftPackProfile.public262());
+    var original = b.entries().get("assets/dialogue/font-source/prototype_hud_panel.png");
+    assertNotNull(
+        original, "Retain the actual preview source rather than guessing its proportions");
+    var source = ImageIO.read(new ByteArrayInputStream(original));
+    var generated =
+        ImageIO.read(
+            new ByteArrayInputStream(
+                b.entries().get("assets/dialogue/textures/font/hud_below_10_3.png")));
+    for (int y = 0; y < 128; y++)
+      for (int x = 0; x < 320; x++) assertEquals(source.getRGB(x, y), generated.getRGB(x, y));
+    assertTrue(b.hudMetrics().width("A") < b.metrics().width("A"));
+    assertEquals(10, b.hudMetrics().lineHeight());
+  }
+
+  @Test
+  void splitAndCardBackgroundsHaveRealTransparentGaps() throws Exception {
+    var assets = AssetBundle.loadDefault(MinecraftPackProfile.public262()).entries();
+    var images = new HashMap<String, java.awt.image.BufferedImage>();
+    for (String prefix : List.of("hud", "hud_split", "hud_cards")) {
+      var data = assets.get("assets/dialogue/textures/font/" + prefix + "_below_10_3.png");
+      assertNotNull(data, prefix);
+      images.put(prefix, ImageIO.read(new ByteArrayInputStream(data)));
+    }
+    assertTrue((images.get("hud").getRGB(160, 68) >>> 24) > 0);
+    assertEquals(0, images.get("hud_split").getRGB(160, 68) >>> 24);
+    assertEquals(0, images.get("hud_cards").getRGB(160, 68) >>> 24);
+    assertTrue((images.get("hud_split").getRGB(160, 100) >>> 24) > 0);
+    assertEquals(0, images.get("hud_cards").getRGB(160, 100) >>> 24);
+  }
+
+  @Test
+  void cardTexturesDoNotPaintUnusedAnswerSlots() throws Exception {
+    var entries = AssetBundle.loadDefault(MinecraftPackProfile.public262()).entries();
+    for (int count : List.of(0, 1, 2, 3)) {
+      var data = entries.get("assets/dialogue/textures/font/hud_cards_below_10_" + count + ".png");
+      assertNotNull(data, "Card count " + count);
+      var image = ImageIO.read(new ByteArrayInputStream(data));
+      for (int slot = 0; slot < 3; slot++) {
+        int y = (int) Math.round((54 + slot * 23 + 10) * 4d / 3);
+        assertEquals(slot < count, (image.getRGB(160, y) >>> 24) > 0);
+      }
+    }
+  }
+
+  @Test
+  void previewTileImagesHaveBoundedDecodedMemory() throws Exception {
+    var bundle = AssetBundle.loadDefault(MinecraftPackProfile.public262());
+    long decoded = 0;
+    for (String style : List.of("normal", "selected", "back")) {
+      var image =
+          ImageIO.read(
+              new ByteArrayInputStream(
+                  bundle.entries().get("assets/dialogue/textures/font/panels-" + style + ".png")));
+      decoded += (long) image.getWidth() * image.getHeight() * 4;
+    }
+    assertTrue(
+        decoded <= 2 * 1024 * 1024,
+        "Each ascent loads bitmap images; do not multiply large transparent atlases across native"
+            + " fonts");
+  }
+
+  @Test
+  void bakedPanelsPreservePreviewFrameAndFillPixels() throws Exception {
+    var bundle = AssetBundle.loadDefault(MinecraftPackProfile.grounds263());
+    var normal =
+        ImageIO.read(
+            new ByteArrayInputStream(
+                bundle.entries().get("assets/dialogue/textures/font/panels-normal.png")));
+    var selected =
+        ImageIO.read(
+            new ByteArrayInputStream(
+                bundle.entries().get("assets/dialogue/textures/font/panels-selected.png")));
+    // First cell is the original 4px left edge of the 28px preview name/answer frame.
+    assertEquals(0, normal.getRGB(0, 0));
+    assertEquals(0xff4e687f, normal.getRGB(2, 0));
+    assertEquals(0xff223445, normal.getRGB(3, 3));
+    assertEquals(0xff82683e, selected.getRGB(3, 3));
+    assertEquals(0xffffcd75, selected.getRGB(2, 0));
+    // The preview painter overlaps two alpha-240 fills: 240 + 240*(15/255) = 254.
+    assertEquals(0xfe080f18, normal.getRGB(2, 10));
+  }
+
+  @Test
+  void nativeManifestDescribesActualRasterAndOptionalEffects() {
+    var publicBundle = AssetBundle.loadDefault(MinecraftPackProfile.public262());
+    var metadata =
+        com.google.gson.JsonParser.parseString(
+                new String(publicBundle.manifestBytes(), java.nio.charset.StandardCharsets.UTF_8))
+            .getAsJsonObject();
+    assertEquals(-64, metadata.get("minAscent").getAsInt());
+    var grounds = AssetBundle.loadDefault(MinecraftPackProfile.grounds263());
+    assertTrue(grounds.hasEntry("assets/dialogue/post_effect/vignette.json"));
+    assertTrue(grounds.hasEntry("assets/dialogue/shaders/post/vignette.fsh"));
+  }
+
+  @Test
+  void bitmapAdvancesMatchFrozenAtlas() throws Exception {
+    var bundle = AssetBundle.loadDefault(MinecraftPackProfile.grounds263());
+    var image =
+        ImageIO.read(
+            new ByteArrayInputStream(
+                bundle.entries().get("assets/dialogue/textures/font/letters.png")));
+    var spec = bundle.glyphs().get((int) 'A');
+    int right = -1;
+    for (int x = 0; x < 16; x++)
+      for (int y = 0; y < 256; y++)
+        if ((image.getRGB(spec.column() * 16 + x, spec.row() * 256 + y) >>> 24) != 0)
+          right = Math.max(right, x);
+    assertEquals(right + 2, bundle.metrics().width("A"));
+    assertEquals(4, bundle.metrics().width(" "));
+    assertTrue(bundle.metrics().width("ä") > 0);
+    assertThrows(IllegalArgumentException.class, () -> bundle.metrics().width("\ud83d\ude00"));
+  }
+
+  @Test
+  void deterministicBundlePinAndProfiles() {
+    var a = AssetBundle.loadDefault(MinecraftPackProfile.grounds263());
+    var b = AssetBundle.loadDefault(MinecraftPackProfile.grounds263());
+    assertEquals(a.pin(), b.pin());
+    assertEquals(a.pin(), a.metrics().pin());
+    assertEquals(777, a.profile().protocol());
+    assertEquals(97, a.profile().packMajor());
+    assertEquals(1, a.profile().packMinor());
+    var old = AssetBundle.loadDefault(MinecraftPackProfile.public262());
+    assertEquals(776, old.profile().protocol());
+    assertFalse(old.profile().postEffects());
+    assertTrue(a.entries().keySet().stream().noneMatch(k -> k.startsWith("assets/minecraft/")));
+  }
+
+  @Test
+  void wrongPinAndTamperedAtlasAreRejected() {
+    var a = AssetBundle.loadDefault(MinecraftPackProfile.grounds263());
+    var map = new TreeMap<>(a.entries());
+    var copy = map.get("assets/dialogue/textures/font/letters.png").clone();
+    copy[copy.length - 1] ^= 1;
+    map.put("assets/dialogue/textures/font/letters.png", copy);
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> AssetBundle.load(a.profile(), a.manifestBytes(), map));
+  }
+
+  @Test
+  void entriesAndManifestAreDefensivelyCopied() {
+    var a = AssetBundle.loadDefault(MinecraftPackProfile.public262());
+    var first = a.entries();
+    first.values().iterator().next()[0] ^= 1;
+    assertEquals(a.pin(), AssetBundle.loadDefault(MinecraftPackProfile.public262()).pin());
+    assertThrows(UnsupportedOperationException.class, () -> first.put("x", new byte[0]));
+  }
+
+  @Test
+  void frozenGlyphAdvanceFixtures() {
+    var a = AssetBundle.loadDefault(MinecraftPackProfile.public262());
+    assertEquals(9, a.metrics().width("A"));
+    assertEquals(4, a.metrics().width(" "));
+    assertTrue(a.entries().containsKey("assets/dialogue/font/spacing.json"));
+  }
+}

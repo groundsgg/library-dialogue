@@ -19,7 +19,23 @@ public final class DialoguePresenter implements DialogueRenderer {
       LayoutProfile layout,
       DialogueTheme theme,
       FontMetrics metrics,
-      boolean semanticOnly) {
+      boolean semanticOnly,
+      java.util.function.Function<PresentationPreferences, LayoutProfile> layoutResolver) {
+    public SurfaceProfile(
+        DialogueSurface surface,
+        LayoutProfile layout,
+        DialogueTheme theme,
+        FontMetrics metrics,
+        boolean semanticOnly) {
+      this(surface, layout, theme, metrics, semanticOnly, null);
+    }
+
+    public LayoutProfile resolveLayout(PresentationPreferences preferences) {
+      return layoutResolver == null
+          ? layout
+          : Objects.requireNonNull(layoutResolver.apply(preferences));
+    }
+
     public SurfaceProfile {
       Objects.requireNonNull(surface);
       if (!semanticOnly) {
@@ -59,6 +75,7 @@ public final class DialoguePresenter implements DialogueRenderer {
   private final Map<String, SurfaceProfile> profiles;
   private final DialogueScheduler clock;
   private final Controls controls;
+  private final UiLabelSource labels;
 
   public DialoguePresenter(Map<String, SurfaceProfile> profiles, DialogueScheduler scheduler) {
     this(profiles, scheduler, Controls.defaults());
@@ -66,9 +83,18 @@ public final class DialoguePresenter implements DialogueRenderer {
 
   public DialoguePresenter(
       Map<String, SurfaceProfile> profiles, DialogueScheduler scheduler, Controls controls) {
+    this(profiles, scheduler, controls, UiLabelSource.defaults());
+  }
+
+  public DialoguePresenter(
+      Map<String, SurfaceProfile> profiles,
+      DialogueScheduler scheduler,
+      Controls controls,
+      UiLabelSource labels) {
     this.profiles = Map.copyOf(profiles);
     clock = Objects.requireNonNull(scheduler);
     this.controls = Objects.requireNonNull(controls);
+    this.labels = Objects.requireNonNull(labels);
   }
 
   private SurfaceProfile profile(String key) {
@@ -86,11 +112,27 @@ public final class DialoguePresenter implements DialogueRenderer {
   }
 
   public WidgetFrame compose(DialogueView view, String key, PresentationPreferences preferences) {
+    return compose(view, key, preferences, null);
+  }
+
+  public WidgetFrame compose(
+      DialogueView view, String key, PresentationPreferences preferences, Integer choiceStart) {
     var p = profile(key);
     if (p.semanticOnly()) return new WidgetFrame(view, List.of(), "semantic", "semantic");
-    var l = p.layout();
+    var l = p.resolveLayout(preferences);
     var metrics = p.metrics();
     var widgets = new ArrayList<Widget>();
+    var reasons = new LinkedHashMap<String, String>();
+    view.choices().stream()
+        .filter(c -> c.availability() != DialogueView.Availability.AVAILABLE)
+        .forEach(c -> reasons.put(c.id(), c.unavailableReason()));
+    var ui =
+        Objects.requireNonNull(
+            labels.resolve(
+                new UiLabelSource.LabelRequest(
+                    view.localeTag(), view.hint(), controls, view.notice(), reasons)));
+    if (l.style() != LayoutProfile.Style.PANELS)
+      return composePrototypeHud(view, p, l, preferences, ui);
     var text = new ResolvedText(view.text(), view.localeTag());
     var body = layout(text, metrics, l.width() - 2 * l.padding(), l.maxTextLines());
     double bodyHeight = body.height() + 2 * l.padding();
@@ -130,21 +172,56 @@ public final class DialoguePresenter implements DialogueRenderer {
             p,
             preferences));
     var window =
-        new ChoiceViewport().window(view.choices(), view.selectedChoiceId(), l.choiceCapacity());
+        new ChoiceViewport()
+            .window(view.choices(), view.selectedChoiceId(), l.choiceCapacity(), choiceStart);
     var labels =
-        window.choices().stream().map(c -> new ResolvedText(c.label(), view.localeTag())).toList();
+        window.choices().stream()
+            .map(
+                c -> {
+                  String reason =
+                      c.availability() == DialogueView.Availability.AVAILABLE
+                          ? ""
+                          : ui.choiceReasons().getOrDefault(c.id(), "");
+                  return new ResolvedText(
+                      c.label() + (reason.isEmpty() ? "" : "\n" + reason), view.localeTag());
+                })
+            .toList();
     var layouts =
         labels.stream()
-            .map(t -> layout(t, metrics, l.choiceWidth() - 2 * l.padding(), l.maxChoiceLines()))
+            .map(
+                t ->
+                    layout(t, metrics, l.choiceWidth() - 2 * l.choicePadding(), l.maxChoiceLines()))
             .toList();
-    double cardHeight =
+    double maxLabelHeight =
         layouts.stream()
-                .mapToDouble(TextLayout.TextLayoutResult::height)
-                .max()
-                .orElse(metrics.lineHeight())
-            + 2 * l.padding();
-    double x = l.placement() == LayoutProfile.ChoicePlacement.RIGHT ? l.width() + l.gap() : 0;
-    double y = l.placement() == LayoutProfile.ChoicePlacement.RIGHT ? 0 : bodyHeight + l.gap();
+            .mapToDouble(TextLayout.TextLayoutResult::height)
+            .max()
+            .orElse(metrics.lineHeight());
+    if (l.navigationButtons())
+      for (var choice : view.choices()) {
+        String reason =
+            choice.availability() == DialogueView.Availability.AVAILABLE
+                ? ""
+                : ui.choiceReasons().getOrDefault(choice.id(), "");
+        var label =
+            new ResolvedText(
+                choice.label() + (reason.isEmpty() ? "" : "\n" + reason), view.localeTag());
+        maxLabelHeight =
+            Math.max(
+                maxLabelHeight,
+                layout(label, metrics, l.choiceWidth() - 2 * l.choicePadding(), l.maxChoiceLines())
+                    .height());
+      }
+    double cardHeight = maxLabelHeight + 2 * l.choicePadding();
+    double growth = Math.ceil(l.choiceWidth() * (p.theme().selectedScale() - 1) / 2);
+    double columnGap = l.columnGap() + growth;
+    double x =
+        switch (l.placement()) {
+          case BELOW -> (l.width() - l.choiceWidth()) / 2;
+          case RIGHT -> l.width() + columnGap;
+          case LEFT -> -l.choiceWidth() - columnGap;
+        };
+    double y = l.placement() != LayoutProfile.ChoicePlacement.BELOW ? 0 : bodyHeight + l.gap();
     for (int i = 0; i < window.choices().size(); i++) {
       var c = window.choices().get(i);
       var bounds = new Rect(x, y + i * (cardHeight + l.gap()), l.choiceWidth(), cardHeight);
@@ -155,24 +232,26 @@ public final class DialoguePresenter implements DialogueRenderer {
               bounds,
               labels.get(i),
               layouts.get(i),
-              l.padding(),
+              l.choicePadding(),
               (cardHeight - layouts.get(i).height()) / 2,
-              Graphemes.split(c.label()).size(),
+              Graphemes.split(labels.get(i).plain()).size(),
               c.id().equals(view.selectedChoiceId()),
               c.availability() == DialogueView.Availability.AVAILABLE,
               c.id(),
               p,
               preferences));
     }
-    String hint = hint(view, controls);
+    String hint = ui.hint();
     var hintText = new ResolvedText(hint, view.localeTag());
     double hintWidth =
-        l.placement() == LayoutProfile.ChoicePlacement.RIGHT ? l.choiceWidth() : l.width();
+        l.placement() != LayoutProfile.ChoicePlacement.BELOW ? l.choiceWidth() : l.width();
     var hintLayout = layout(hintText, metrics, hintWidth, 2);
-    double hintX = l.placement() == LayoutProfile.ChoicePlacement.RIGHT ? x : 0;
+    double hintX = l.placement() != LayoutProfile.ChoicePlacement.BELOW ? x : 0;
     double hintY =
-        l.placement() == LayoutProfile.ChoicePlacement.RIGHT
-            ? -hintLayout.height() - l.gap()
+        l.placement() != LayoutProfile.ChoicePlacement.BELOW
+            ? -hintLayout.height()
+                - l.gap()
+                - (l.navigationButtons() && window.total() > l.choiceCapacity() ? 28 : 0)
             : y + window.choices().size() * (cardHeight + l.gap()) + l.gap();
     widgets.add(
         widget(
@@ -189,7 +268,267 @@ public final class DialoguePresenter implements DialogueRenderer {
             null,
             p,
             preferences));
-    return new WidgetFrame(view, widgets, metrics.pin(), p.theme());
+    if (!ui.notice().isEmpty()) {
+      var statusText = new ResolvedText(ui.notice(), view.localeTag());
+      var statusLayout = layout(statusText, metrics, hintWidth, 2);
+      double statusY = hintY + hintLayout.height() + l.gap();
+      if (l.placement() != LayoutProfile.ChoicePlacement.BELOW)
+        statusY = y + window.choices().size() * (cardHeight + l.gap()) + l.gap();
+      widgets.add(
+          widget(
+              "status",
+              Kind.HINT,
+              new Rect(hintX, statusY, hintWidth, statusLayout.height()),
+              statusText,
+              statusLayout,
+              0,
+              0,
+              Graphemes.split(statusText.plain()).size(),
+              false,
+              true,
+              null,
+              p,
+              preferences));
+    }
+    WidgetFrame.Scrollbar scroll =
+        window.total() > l.choiceCapacity()
+            ? scrollbar(
+                window,
+                new Rect(
+                    x + l.choiceWidth() + growth + 8,
+                    y,
+                    2,
+                    l.choiceCapacity() * cardHeight + (l.choiceCapacity() - 1) * l.gap()))
+            : null;
+    if (scroll != null && l.navigationButtons()) {
+      var track = scroll.track();
+      var buttons =
+          List.of(
+              WidgetFrame.NavigationButton.page(
+                  WidgetFrame.NavigationDirection.PREVIOUS,
+                  new Rect(x + (l.choiceWidth() - 64) / 2, track.y() - 28, 64, 24),
+                  window.start() > 0 ? window.start() - l.choiceCapacity() : null),
+              WidgetFrame.NavigationButton.page(
+                  WidgetFrame.NavigationDirection.NEXT,
+                  new Rect(x + (l.choiceWidth() - 64) / 2, track.y() + track.height() + 4, 64, 24),
+                  window.start() + l.choiceCapacity() < window.total()
+                      ? window.start() + l.choiceCapacity()
+                      : null));
+      scroll = new WidgetFrame.Scrollbar(track, scroll.thumb(), buttons);
+    }
+    return new WidgetFrame(view, widgets, metrics.pin(), p.theme(), null, scroll);
+  }
+
+  private static WidgetFrame composePrototypeHud(
+      DialogueView v,
+      SurfaceProfile p,
+      LayoutProfile l,
+      PresentationPreferences preferences,
+      UiLabelSource.UiLabels ui) {
+    var metrics = p.metrics();
+    if (metrics.lineHeight() != 10
+        || l.choiceCapacity() != 3
+        || l.maxTextLines() > 3
+        || l.maxChoiceLines() > 2) throw new FallbackRequired("UNSUPPORTED_RASTER");
+    var widgets = new ArrayList<Widget>();
+    var body = new ResolvedText(v.text(), v.localeTag());
+    var bodyLayout = layout(body, metrics, l.width() - 18, 3);
+    widgets.add(
+        widget(
+            "text",
+            Kind.TEXT,
+            new Rect(0, 0, l.width(), 48),
+            body,
+            bodyLayout,
+            9,
+            17,
+            v.revealedGraphemes(),
+            false,
+            true,
+            null,
+            p,
+            preferences));
+    var name = new ResolvedText(v.speaker(), v.localeTag());
+    var nameLayout = layout(name, metrics, l.width() - 18, 1);
+    widgets.add(
+        widget(
+            "speaker",
+            Kind.SPEAKER,
+            new Rect(9, 7, l.width() - 18, 10),
+            name,
+            nameLayout,
+            0,
+            0,
+            Graphemes.split(name.plain()).size(),
+            false,
+            true,
+            null,
+            p,
+            preferences));
+    var window = new ChoiceViewport().window(v.choices(), v.selectedChoiceId(), 3);
+    var labels = new ArrayList<ResolvedText>();
+    var lines = new ArrayList<TextLayout.TextLayoutResult>();
+    for (var c : window.choices()) {
+      String reason =
+          c.availability() == DialogueView.Availability.AVAILABLE
+              ? ""
+              : ui.choiceReasons().getOrDefault(c.id(), "");
+      String prefix = c.id().equals(v.selectedChoiceId()) ? "> " : "  ";
+      var text =
+          new ResolvedText(
+              prefix + c.label() + (reason.isEmpty() ? "" : "\n  " + reason), v.localeTag());
+      labels.add(text);
+      lines.add(layout(text, metrics, l.choiceWidth(), 2));
+    }
+    double rowHeight =
+        lines.stream().mapToDouble(TextLayout.TextLayoutResult::height).max().orElse(10);
+    boolean below = l.placement() == LayoutProfile.ChoicePlacement.BELOW;
+    boolean shared = l.style() == LayoutProfile.Style.HUD;
+    boolean cards = l.style() == LayoutProfile.Style.HUD_CARDS;
+    int count = window.choices().size();
+    if (cards) {
+      // Reserve the largest offered answer, including its selection marker, across all pages.
+      for (var c : v.choices()) {
+        String reason =
+            c.availability() == DialogueView.Availability.AVAILABLE
+                ? ""
+                : ui.choiceReasons().getOrDefault(c.id(), "");
+        var label =
+            new ResolvedText(
+                "> " + c.label() + (reason.isEmpty() ? "" : "\n  " + reason), v.localeTag());
+        rowHeight = Math.max(rowHeight, layout(label, metrics, l.choiceWidth(), 2).height());
+      }
+    }
+    double gap = cards && l.placement() == LayoutProfile.ChoicePlacement.LEFT ? 15 : l.gap();
+    double columnWidth = l.choiceWidth() + 18;
+    double left = l.placement() == LayoutProfile.ChoicePlacement.LEFT ? -columnWidth - gap : 0;
+    double width = below ? l.width() : l.width() + gap + columnWidth;
+    if (cards && l.placement() != LayoutProfile.ChoicePlacement.LEFT) width += 9;
+    double step = cards ? rowHeight + 13 : rowHeight;
+    double answerHeight = cards ? 3 * (rowHeight + 10) + 6 : 3 * rowHeight + 14;
+    double height =
+        shared
+            ? (below ? 84 + 3 * (rowHeight - 10) : rowHeight == 10 ? 51 : 75)
+            : below ? 54 + answerHeight : Math.max(48, answerHeight);
+    double x =
+        switch (l.placement()) {
+          case BELOW -> 9;
+          case RIGHT -> l.width() + gap + 9;
+          case LEFT -> left + 9;
+        };
+    double y = below ? (shared ? 50 : 61) : 7;
+    for (int n = 0; n < window.choices().size(); n++) {
+      var c = window.choices().get(n);
+      var text = labels.get(n);
+      var bounds =
+          cards
+              ? new Rect(x - 9, y - 7 + n * step, l.choiceWidth() + 18, rowHeight + 10)
+              : new Rect(x, y + n * step, l.choiceWidth(), rowHeight);
+      widgets.add(
+          widget(
+              "choice:" + c.id(),
+              Kind.CHOICE,
+              bounds,
+              text,
+              lines.get(n),
+              cards ? 9 : 0,
+              cards ? centeredInkInset(lines.get(n), metrics, bounds.height()) : 0,
+              Graphemes.split(text.plain()).size(),
+              c.id().equals(v.selectedChoiceId()),
+              c.availability() == DialogueView.Availability.AVAILABLE,
+              c.id(),
+              p,
+              preferences));
+    }
+    var hint = new ResolvedText(ui.hint(), v.localeTag());
+    var hintLayout = layout(hint, metrics, width - 18, 2);
+    widgets.add(
+        widget(
+            "hint",
+            Kind.HINT,
+            new Rect(left + 9, height - 1, width - 18, hintLayout.height()),
+            hint,
+            hintLayout,
+            0,
+            0,
+            Graphemes.split(hint.plain()).size(),
+            false,
+            true,
+            null,
+            p,
+            preferences));
+    if (!ui.notice().isEmpty()) {
+      var notice = new ResolvedText(ui.notice(), v.localeTag());
+      var noticeLayout = layout(notice, metrics, width - 18, 2);
+      widgets.add(
+          widget(
+              "status",
+              Kind.HINT,
+              new Rect(
+                  left + 9,
+                  height - 1 + hintLayout.height() + 4,
+                  width - 18,
+                  noticeLayout.height()),
+              notice,
+              noticeLayout,
+              0,
+              0,
+              Graphemes.split(notice.plain()).size(),
+              false,
+              true,
+              null,
+              p,
+              preferences));
+    }
+    var chrome =
+        new WidgetFrame.Chrome(
+            (shared ? "hud_" : cards ? "hud_cards_" : "hud_split_")
+                + l.placement().name().toLowerCase(Locale.ROOT)
+                + "_"
+                + (int) rowHeight
+                + "_"
+                + (cards ? count : 3),
+            new Rect(left, 0, width, height),
+            height + 10);
+    WidgetFrame.Scrollbar scrollbar = null;
+    if (window.total() > l.choiceCapacity()) {
+      double trackHeight = cards ? answerHeight : 3 * rowHeight;
+      double top = cards ? y - 7 : y;
+      var track = new Rect(x + l.choiceWidth() + (cards ? 14 : 3), top, 2, trackHeight);
+      scrollbar = scrollbar(window, track);
+    }
+    return new WidgetFrame(v, widgets, metrics.pin(), p.theme(), chrome, scrollbar);
+  }
+
+  private static double centeredInkInset(
+      TextLayout.TextLayoutResult text, FontMetrics metrics, double height) {
+    double top = Double.POSITIVE_INFINITY, bottom = Double.NEGATIVE_INFINITY;
+    for (int line = 0; line < text.lines().size(); line++)
+      for (var grapheme : text.lines().get(line).graphemes()) {
+        var ink = metrics.inkBounds(grapheme);
+        if (ink.bottom() > ink.top()) {
+          top = Math.min(top, line * metrics.lineHeight() + ink.top());
+          bottom = Math.max(bottom, line * metrics.lineHeight() + ink.bottom());
+        }
+      }
+    // Native bitmap fonts use integral ascents. Quantize once, after measuring
+    // the full foreground block; spaces and transparent cell padding do not count.
+    return Double.isFinite(top)
+        ? Math.round(height / 2 - (top + bottom) / 2)
+        : (height - text.height()) / 2;
+  }
+
+  private static WidgetFrame.Scrollbar scrollbar(ChoiceViewport.ChoiceWindow window, Rect track) {
+    double thumbHeight =
+        Math.max(6, Math.floor(track.height() * window.choices().size() / window.total()));
+    double offset =
+        window.start() + window.choices().size() == window.total()
+            ? track.height() - thumbHeight
+            : Math.min(
+                track.height() - thumbHeight,
+                Math.round(track.height() * window.start() / window.total()));
+    return new WidgetFrame.Scrollbar(
+        track, new Rect(track.x(), track.y() + offset, track.width(), thumbHeight));
   }
 
   private static TextLayout.TextLayoutResult layout(
@@ -228,50 +567,31 @@ public final class DialoguePresenter implements DialogueRenderer {
         choiceId);
   }
 
-  private static String hint(DialogueView v, Controls c) {
-    boolean de = Locale.forLanguageTag(v.localeTag()).getLanguage().equals("de");
-    String action =
-        switch (c.confirm()) {
-          case ATTACK -> de ? "Angreifen" : "Attack";
-          case USE -> de ? "Benutzen" : "Use";
-          case SWAP_HANDS -> de ? "Offhandwechsel" : "Swap hands";
-        };
-    String verb =
-        switch (v.hint()) {
-          case REVEAL -> de ? "Text anzeigen" : "Reveal text";
-          case CHOOSE -> de ? "Auswählen" : "Select";
-          case CONTINUE -> de ? "Weiter" : "Continue";
-          case FINISH -> de ? "Beenden" : "End";
-          case BUSY -> de ? "Bitte warten" : "Please wait";
-        };
-    return (c.scroll() && v.hint() == DialogueView.HintPhase.CHOOSE
-            ? (de ? "Scrollen · " : "Scroll · ")
-            : "")
-        + action
-        + " · "
-        + verb;
-  }
-
   public CompletionStage<PresentationHandle> prepare(PresentationRequest request) {
     var session = new SurfaceSession(request);
     session.begin();
     return session.ready.minimalCompletionStage();
   }
 
-  private static String profilePin(SurfaceProfile profile) {
+  private static String profilePin(SurfaceProfile profile, PresentationPreferences preferences) {
     if (profile.semanticOnly()) return "semantic";
-    var l = profile.layout();
+    var l = profile.resolveLayout(preferences);
     var t = profile.theme();
     var layout = new LinkedHashMap<String, Object>();
     layout.put("key", l.key());
+    if (l.style() != LayoutProfile.Style.PANELS) layout.put("style", l.style().name());
     layout.put("width", l.width());
     layout.put("choiceWidth", l.choiceWidth());
     layout.put("padding", l.padding());
+    // Preserve existing profile pins when choices retain the legacy shared padding.
+    if (l.choicePadding() != l.padding()) layout.put("choicePadding", l.choicePadding());
     layout.put("maxTextLines", l.maxTextLines());
     layout.put("choiceCapacity", l.choiceCapacity());
     layout.put("maxChoiceLines", l.maxChoiceLines());
     layout.put("placement", l.placement().name().toLowerCase(Locale.ROOT));
     layout.put("gap", l.gap());
+    if (l.columnGap() != l.gap()) layout.put("columnGap", l.columnGap());
+    if (l.navigationButtons()) layout.put("navigationButtons", true);
     return ContentFingerprint.hash(
             ContentFingerprint.canonicalBytes(
                 Map.of(
@@ -292,7 +612,43 @@ public final class DialoguePresenter implements DialogueRenderer {
         .sha256();
   }
 
-  private final class SurfaceSession implements PresentationHandle {
+  private final class SurfaceSession implements PresentationHandle, ChoiceViewport.Controller {
+    final ChoiceViewport.Cursor choiceCursor = new ChoiceViewport.Cursor();
+
+    WidgetFrame composeCurrent(DialogueView view, String key, PresentationPreferences prefs) {
+      if (profile(key).semanticOnly()) return compose(view, key, prefs);
+      var layout = profile(key).resolveLayout(prefs);
+      return compose(
+          view,
+          key,
+          prefs,
+          layout.navigationButtons() ? choiceCursor.startFor(view, layout.choiceCapacity()) : null);
+    }
+
+    public CompletionStage<Boolean> setChoiceStart(DialogueView expected, int start) {
+      var result = new CompletableFuture<Boolean>();
+      queue.execute(
+          () -> {
+            try {
+              if (closed.get() || lastView == null || !lastView.equals(expected)) {
+                result.complete(false);
+                return;
+              }
+              if (profile(surfaceKey).semanticOnly()) {
+                result.complete(false);
+                return;
+              }
+              var layout = profile(surfaceKey).resolveLayout(preferences);
+              result.complete(
+                  layout.navigationButtons()
+                      && choiceCursor.browse(lastView, layout.choiceCapacity(), start));
+            } catch (Throwable failure) {
+              result.completeExceptionally(failure);
+            }
+          });
+      return result.minimalCompletionStage();
+    }
+
     final PresentationRequest request;
     final SerialCommandQueue queue;
     final OwnedScope scope;
@@ -371,7 +727,7 @@ public final class DialoguePresenter implements DialogueRenderer {
                     CompletableFuture.completedFuture(
                         request.cancellation().onCancel(reason -> closeAsync())));
             if (closed.get()) return;
-            var opened = open(surfaceKey, ++generation, request.deadlineNanos());
+            var opened = open(surfaceKey, ++generation, request.deadlineNanos(), preferences);
             waits.add(
                 new PendingOperation<>(
                     queue,
@@ -395,7 +751,8 @@ public final class DialoguePresenter implements DialogueRenderer {
       return Duration.ofNanos(Math.max(1, deadline - clock.nanoTime()));
     }
 
-    CompletionStage<DialogueSurface.SurfaceHandle> open(String key, long gen, long deadline) {
+    CompletionStage<DialogueSurface.SurfaceHandle> open(
+        String key, long gen, long deadline, PresentationPreferences openingPreferences) {
       return scope.prepare(
           () -> {
             var p = profile(key);
@@ -406,10 +763,12 @@ public final class DialoguePresenter implements DialogueRenderer {
                         request.audienceId(),
                         request.hostGeneration(),
                         key,
-                        profilePin(p),
+                        profilePin(p, openingPreferences),
                         request.cancellation(),
                         gen,
-                        deadline));
+                        deadline,
+                        openingPreferences,
+                        request.budgets().cleanup()));
           });
     }
 
@@ -469,7 +828,7 @@ public final class DialoguePresenter implements DialogueRenderer {
       pending = null;
       WidgetFrame widgets;
       try {
-        widgets = compose(frame.view, surfaceKey, preferences);
+        widgets = composeCurrent(frame.view, surfaceKey, preferences);
       } catch (Throwable error) {
         finishFrame(frame, error);
         flush();
@@ -536,8 +895,26 @@ public final class DialoguePresenter implements DialogueRenderer {
               changing = null;
             }
             if (next.surfaceKey().equals(surfaceKey)) {
-              preferences = next;
-              result.complete(null);
+              long configureGeneration = generation;
+              call(() -> surface.configure(next))
+                  .whenComplete(
+                      (v, error) ->
+                          queue.execute(
+                              () -> {
+                                if (closed.get() || configureGeneration != generation) {
+                                  result.completeExceptionally(
+                                      new ReconfigurationRejected(
+                                          "SURFACE_SUPERSEDED",
+                                          new CancellationException(),
+                                          preferences));
+                                  return;
+                                }
+                                if (error != null) result.completeExceptionally(error);
+                                else {
+                                  preferences = next;
+                                  result.complete(null);
+                                }
+                              }));
               return;
             }
             var op = new Switch(generation, deadline, next, result);
@@ -562,7 +939,7 @@ public final class DialoguePresenter implements DialogueRenderer {
                         result.completeExceptionally(cause);
                       } else result.complete(null);
                     }));
-            open(next.surfaceKey(), op.gen, deadline)
+            open(next.surfaceKey(), op.gen, deadline, next)
                 .whenComplete(
                     (value, error) ->
                         queue.execute(
@@ -586,7 +963,7 @@ public final class DialoguePresenter implements DialogueRenderer {
                                 frame =
                                     lastView == null
                                         ? null
-                                        : compose(lastView, next.surfaceKey(), next);
+                                        : composeCurrent(lastView, next.surfaceKey(), next);
                               } catch (Throwable e) {
                                 reject(op, "SURFACE_LAYOUT_REJECTED", e);
                                 return;

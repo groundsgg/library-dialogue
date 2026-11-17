@@ -2,13 +2,14 @@
 
 Java-first dialogue graphs, live language changes and a shared presentation pipeline.
 
-This repository implements the **headless core, JSON authoring and presentation contracts** (D3, packages A/B). HUD and NPC layouts use the same presenter. Their actual Minestom surfaces, resource-pack output and two-client game acceptance belong to the following package C and are not included yet. No Minestom, Scene, Grounds service, database or client extension is required to build or use these three modules.
+This repository provides the **headless core, JSON authoring, shared presentation and an initial Minestom adapter**. HUD panels, NPC panels and chat are three output surfaces on one presentation pipeline. The first three modules remain independent of Minestom; the adapter takes an explicit matching Minestom runtime from its application. No Scene, Grounds service, database or client extension is required. Package C has automated profile/consumer checks; its [real client acceptance](docs/client-acceptance.md) remains a separate release/merge gate.
 
 | Artifact | Responsibility | Runtime dependencies |
 |---|---|---|
 | `gg.grounds:dialogue-core` | Immutable definitions, validation, sessions, choices, reveal, locale and host ports | JDK 25 |
 | `gg.grounds:dialogue-json` | Strict JSON codec, author context, schemas and atomic catalogue reload | Core, internal Gson |
 | `gg.grounds:dialogue-presentation` | Text metrics, widgets, viewport, themes and owned surfaces | Core |
+| `gg.grounds:dialogue-minestom` | Local host, HUD/NPC/chat surfaces, pack status, input and owned native output | Core, Presentation, internal Gson; application-supplied Minestom |
 
 Release Please and GitHub Packages are configured. Until the first release is published, use the source build and its local review repository; do not assume the snapshot already exists on GitHub Packages.
 
@@ -23,6 +24,8 @@ python3 -m unittest discover -s tools -p '*_test.py'
 ./gradlew :examples:headless-dialogue:run --args=--smoke
 ./gradlew :examples:headless-dialogue:run --args=--presentation-smoke
 ```
+
+The [independent Minestom consumer](fixtures/minestom-consumer) and [basic native demo](examples/standalone-minestom) additionally run without GitHub credentials. The [personal NPC consumer](fixtures/npc-dialogue-consumer) uses the exact published NPC 1.0.0 package and needs package-read access.
 
 Expected markers: `PUBLIC_ARTIFACTS_OK`, `CONSUMER_OK java`, `CONSUMER_OK kotlin`, `HEADLESS_DIALOGUE_OK` and `PRESENTATION_OK`. The independent consumers resolve Maven JARs; they do not include the root build or fall back to private Grounds repositories.
 
@@ -54,7 +57,7 @@ A message has either a `next` target or choices. Every choice list must include 
 
 The session owns reveal, selection and input freshness. `DialoguePresenter` creates shared widgets; layout profiles arrange choices below the text or beside it. `DialogueSurface` owns platform output. A semantic surface receives the original `DialogueView` without measuring glyphs. Visual selection growth keeps its hit rectangle fixed. Missing glyphs/overflow raise a typed `FallbackRequired`; the host can choose a semantic/chat renderer. No content is silently cut off.
 
-The supplied glyph profile covers the example's DE/EN characters. Arbitrary Unicode remains valid dialogue content; a graphical font profile must provide its coverage, or the host must choose a semantic fallback. HUD/NPC game geometry and ray tests are part of package C.
+The supplied glyph profile covers the example's DE/EN characters. Arbitrary Unicode remains valid dialogue content; a graphical font profile must provide its coverage, or the host must choose a semantic fallback. The Minestom adapter uses its separately pinned native bitmap metrics, upright fixed-size NPC geometry and unscaled hover rectangles. See [Minestom integration](docs/minestom-integration.md) and the [standalone Java example](examples/standalone-minestom).
 
 ## Host obligations
 

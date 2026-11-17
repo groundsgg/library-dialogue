@@ -21,6 +21,11 @@ public interface ActorPort {
   record ActorCue(String speaker, String gesture, long nodeVisitId, String cueId) {}
 
   interface ActorHandle extends OwnedResource {
+    /** Publish the prepared personal actor once before any node effects or cues. */
+    default CompletionStage<Void> activate() {
+      return java.util.concurrent.CompletableFuture.completedFuture(null);
+    }
+
     CompletionStage<Void> cue(ActorCue cue);
   }
 

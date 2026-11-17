@@ -15,6 +15,14 @@ public record DialogueTheme(
         || transition.isNegative()) throw new IllegalArgumentException("Invalid visual transition");
   }
 
+  public static DialogueTheme hudPrototype() {
+    return new DialogueTheme(
+        "hud-prototype-v1",
+        Map.of("text", 0xf3eee4, "selected", 0xffcd75, "muted", 0xbac5cf, "hint", 0x9ba9b7),
+        1,
+        Duration.ZERO);
+  }
+
   public static DialogueTheme neutral() {
     return new DialogueTheme(
         "neutral-v1",
