@@ -37,19 +37,19 @@ reports under `.evidence` deliberately set `visual_client_verified=false`.
 
 | Check | Public 26.2 client | Grounds 26.3 client |
 |---|---|---|
-| Actual client metadata and correct pack formats | Pending visual run | Pending visual run |
-| Pack accept, decline, download failure and removal | Pending | Explicit decline/re-allow acceptedb133d53; live owned removal, actual404 failure and graphical recovery accepted8b3f8c0 |
+| Actual client metadata and correct pack formats | Installed protocol776/pack88.0 verified; targeted rendered-client basic pass2c0c0fd | Pending visual run |
+| Pack accept, decline, download failure and removal | Initial pack load/basic rendering accepted2c0c0fd; decline/failure/removal pending | Explicit decline/re-allow acceptedb133d53; live owned removal, actual404 failure and graphical recovery accepted8b3f8c0 |
 | No pack request when opening/reopening a dialogue | Pending | Accepted7186e71: reopen/cancel and HUD/NPC/chat switching within one connection without request/download/interruption |
-| HUD: fonts, centering, typewriter, choices and final End hint | Pending | Pending |
+| HUD: fonts, centering, typewriter, choices and final End hint | Basic fonts/panels/selection/confirmation pass2c0c0fd; full details pending | Pending |
 | GUI scale 1/2/3/Auto, window sizes and screen-edge clipping | Pending | Targeted layout pass4e5c121 for left/right cards at scales1/2/3/Auto and smaller window; foreground vertical alignment subsequently accepted1ff1860 |
-| NPC: fixed world size, body-front yaw limit and near-head spacing | Pending | Pending |
+| NPC: fixed world size, body-front yaw limit and near-head spacing | Basic NPC panels visible pass2c0c0fd; full pose/size cases pending | Pending |
 | NPC: closed backs, no Z-fighting, hover and selection growth | Pending | Pending |
 | Seven answers reachable through three cards; disabled/occluded/back targets | Pending | Pending |
-| Chat: complete sections, all choices, current/stale click behaviour | Pending | Targeted pass4e5c121: non-first answer and stale links; full matrix still open |
+| Chat: complete sections, all choices, current/stale click behaviour | Basic clickable choices pass2c0c0fd; stale/complete-choice cases pending | Targeted pass4e5c121: non-first answer and stale links; full matrix still open |
 | Use/Attack/Swap with empty hands, main/offhand items and shield | Pending | Targeted HUD pass: empty hands1ff1860; Use/Attack/Swap with main/offhand/shield7186e71 |
 | Held button, fast clicks, scroll and jitter without accidental confirmation | Pending | Targeted empty-hand HUD pass1ff1860: fast clicks, held confirmation and wheel; other cases pending |
 | Current inventory and server slot preserved; visible vs covered hotbar | Pending | HUD inventory/cursor/slot PASS7186e71 for all bindings and item modes; Use+shield covered-HUD return also confirmed |
-| Language switch during reveal and action wait | Pending | Accepted4e5c121 in HUD/NPC, no restart/duplicate task |
+| Language switch during reveal and action wait | Basic live de switch pass2c0c0fd; reveal/action-wait variants pending | Accepted4e5c121 in HUD/NPC, no restart/duplicate task |
 | Optional cover/vignette/backdrop toggled independently | Vignette unsupported | Targeted NPC pass7186e71: backdrop remains while vignette/cover toggle; cancel clears all effects/panels |
 | Ordinary hearts/hunger/hotbar covered; extra-heart limits noted | Pending | Targeted Use+shield HUD cover, controls and return accepted7186e71; extra-heart variants not client-tested |
 | Normal looking remains open; strong turn/distance ends after grace | Pending | Targeted NPC pass7186e71: normal gaze/answers remain open, strong turn/distance end and restore play |
@@ -497,3 +497,20 @@ deferred the real26.2 check: “26.2 prüfe ich später”. Keep that column pen
 server checks and the installed client metadata do not count as rendered-client
 acceptance. The remaining preparation-interruption/instance-change and other
 client-matrix details likewise remain open.
+
+## Public26.2 targeted basic client check accepted (2026-11-17)
+
+The user subsequently completed the previously deferred public26.2 basic
+check and replied “26.2 geht auch”. In context, this confirms the requested
+localhost:25580 demo/pack load, HUD/NPC/chat text and graphic rendering,
+selection/confirmation, clickable chat choices and basic live `/lang de`
+switching. It is a basic check; it does not mark every detailed public-client
+matrix row complete or transfer all26.3 edge-case results to26.2.
+
+Exact running commit `2c0c0fd8d167caa22048d6b2638eed26850732f7`, public Minestom
+26.2/protocol776, pack88.0; pack SHA-256
+`4481b9e50751cba9ed1e35d59714fd91196fa9b195bdbbe26bf2a911f6578682`.
+Dialogue JAR hashes match the accepted1ff1860 artifacts above; actual installed
+NPC1.0.0 JAR names/hashes are preserved in runtime evidence. The server and
+pack were not changed or restarted for this result. Preparation interruption,
+instance change and the remaining detailed matrix checks remain open.
