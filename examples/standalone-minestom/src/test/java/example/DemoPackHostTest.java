@@ -38,6 +38,37 @@ class DemoPackHostTest {
   }
 
   @Test
+  void failureProbeReturnsReal404WithoutChangingTheHealthyPack() throws Exception {
+    var assets = AssetBundle.loadDefault(MinecraftPackProfile.public262());
+    try (var host = new DemoPackHost(assets, Map.of(), 0)) {
+      var id = UUID.randomUUID();
+      var request = host.request(id, true);
+      var info = request.packs().getFirst();
+      assertEquals(id, info.id());
+      assertFalse(request.required());
+      assertNotEquals(host.request().packs().getFirst().hash(), info.hash());
+      assertNotEquals(host.uri(), info.uri());
+      var client = HttpClient.newHttpClient();
+      assertEquals(
+          404,
+          client
+              .send(
+                  HttpRequest.newBuilder(info.uri()).GET().build(),
+                  HttpResponse.BodyHandlers.discarding())
+              .statusCode());
+      var restored = host.request(UUID.randomUUID(), false).packs().getFirst();
+      assertEquals(host.uri(), restored.uri());
+      assertEquals(host.request().packs().getFirst().hash(), restored.hash());
+      var healthy =
+          client.send(
+              HttpRequest.newBuilder(restored.uri()).GET().build(),
+              HttpResponse.BodyHandlers.ofByteArray());
+      assertEquals(200, healthy.statusCode());
+      assertArrayEquals(host.bytes(), healthy.body());
+    }
+  }
+
+  @Test
   void demoContentIsValidatedForBothLanguages() {
     var content = DialogueDemo.content();
     assertNotNull(content);

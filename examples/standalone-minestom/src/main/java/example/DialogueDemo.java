@@ -100,6 +100,17 @@ public final class DialogueDemo {
                 app.players.remove(e.getPlayer());
                 app.npc.forget().accept(e.getPlayer());
               });
+      MinecraftServer.getGlobalEventHandler()
+          .addListener(
+              PlayerResourcePackStatusEvent.class,
+              e -> {
+                var live = app.players.get(e.getPlayer());
+                if (live != null && e.getPackUuid().equals(live.packId)) {
+                  live.packStatus = e.getStatus().name();
+                  if (live.packTesting)
+                    live.player.sendMessage("Pack test client status: " + live.packStatus);
+                }
+              });
       System.out.println(
           "DIALOGUE_DEMO_READY profile="
               + profile.id()
@@ -271,7 +282,8 @@ public final class DialogueDemo {
       p.sendMessage(
           "/dialogue · /renderer hud|npc|chat · /hudchoices below|left|right · /lang en|de ·"
               + " /confirm use|attack|swap · /hidehud · /vignette · /npcbackdrop · /cancel ·"
-              + " /personalwave · /testitems main|offhand|shield|restore · /checkitems");
+              + " /personalwave · /testitems main|offhand|shield|restore · /checkitems · /packtest"
+              + " remove|fail|restore|status");
       return live;
     }
 
@@ -378,6 +390,14 @@ public final class DialogueDemo {
             return l.cancelForItems().thenRun(() -> l.testItems(args[1]));
           });
       command("checkitems", (l, args) -> l.cancelForItems().thenRun(l::checkItems));
+      command(
+          "packtest",
+          (l, args) -> {
+            if (args.length != 2
+                || !Set.of("remove", "fail", "restore", "status").contains(args[1]))
+              throw new IllegalArgumentException("/packtest remove|fail|restore|status");
+            return l.testPack(args[1]);
+          });
       command("personalwave", (l, args) -> npc.wave().apply(l.player));
     }
 
@@ -442,9 +462,56 @@ public final class DialogueDemo {
       DialogueHandle handle;
       InventorySnapshot originalItems, expectedItems;
       String itemMode;
+      UUID packId = pack.packId();
+      String packStatus = "REQUESTED";
+      boolean packTesting;
+      long packOperation;
 
       Live(Player player) {
         this.player = player;
+      }
+
+      CompletionStage<Void> testPack(String mode) {
+        if (mode.equals("status")) {
+          player.sendMessage(
+              "Pack test: "
+                  + packStatus
+                  + "; ready="
+                  + host.packState().isReady(player, 1, assets.pin())
+                  + "; requested="
+                  + renderer
+                  + "; output="
+                  + (ticket == null ? "no dialogue" : ticket.status().effectiveSurface()));
+          return CompletableFuture.completedFuture(null);
+        }
+        long operation = ++packOperation;
+        packTesting = true;
+        // The application owns this one contribution and knows it has been removed.
+        // Invalidate its readiness before asking the presenter to fall back.
+        host.packState().forget(player);
+        if (packId != null) player.removeResourcePacks(packId);
+        packId = null;
+        packStatus = "REMOVED_BY_TEST";
+        return refresh()
+            .thenRun(
+                () -> {
+                  if (operation != packOperation) return;
+                  if (mode.equals("remove")) {
+                    player.sendMessage(
+                        "Demo pack removed; dialogue uses chat. /packtest restore reloads it.");
+                    return;
+                  }
+                  packId = UUID.randomUUID();
+                  packStatus = "REQUESTED";
+                  host.packState().expect(player, 1, packId, assets.pin());
+                  player.sendResourcePacks(pack.request(packId, mode.equals("fail")));
+                  player.sendMessage(
+                      mode.equals("fail")
+                          ? "Download-failure test requested (real HTTP 404). Allow it if prompted;"
+                                + " /packtest status shows the result."
+                          : "Original demo pack requested. Allow it if prompted; /packtest status"
+                                + " shows readiness.");
+                });
       }
 
       CompletionStage<Void> cancelForItems() {

@@ -88,8 +88,17 @@ public final class DemoPackHost implements AutoCloseable {
   }
 
   public ResourcePackRequest request() {
+    return request(id, false);
+  }
+
+  /** Explicit client-test request; the failure URL is deliberately not served. */
+  ResourcePackRequest request(UUID requestId, boolean failDownload) {
     return ResourcePackRequest.resourcePackRequest()
-        .packs(ResourcePackInfo.resourcePackInfo(id, uri(), sha1))
+        .packs(
+            ResourcePackInfo.resourcePackInfo(
+                requestId,
+                failDownload ? uri().resolve("/missing-demo-pack.zip") : uri(),
+                failDownload ? "0".repeat(40) : sha1))
         .replace(false)
         .required(false)
         .build();

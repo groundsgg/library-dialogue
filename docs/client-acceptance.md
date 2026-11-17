@@ -398,3 +398,20 @@ from declined-pack chat fallback to graphical NPC panels after allowing the
 pack. The running documentation HEADb133d53 still uses the accepted7186e71 app
 source and1ff1860 library JARs/15a7eaf6 pack. Download failure and removal during
 a connection remain separate pending checks. No product fix was required.
+
+## Explicit pack failure/removal helper
+
+`/packtest remove` removes only this connection's demo contribution, invalidates
+its application-owned readiness and refreshes the current dialogue into chat.
+It does not cancel or restart the semantic session. `/packtest fail` then
+requests a fresh optional pack identity at an unserved local HTTP404 URL with
+an uncached hash. Allow the request if prompted: this tests an actual failed
+client download, rather than a fabricated success/failure status.
+`/packtest restore` requests a fresh identity for the original healthy URL/hash;
+client success can restore the preferred graphic surface.
+`/packtest status` reports the last actual client status (or explicit test
+removal), readiness and requested/effective output. Only the test commands
+change the pack: normal connection behavior and dialogue starts are unchanged.
+The removal case explicitly invalidates application-owned pack state; it does
+not prove detection of an unsolicited external removal. Both real-client
+failure/removal/recovery checks remain pending until confirmed.
