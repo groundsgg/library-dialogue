@@ -38,7 +38,7 @@ reports under `.evidence` deliberately set `visual_client_verified=false`.
 | Check | Public 26.2 client | Grounds 26.3 client |
 |---|---|---|
 | Actual client metadata and correct pack formats | Pending visual run | Pending visual run |
-| Pack accept, decline, download failure and removal | Pending | Explicit prompt decline/chat fallback acceptedb133d53; re-enable, download failure and removal pending |
+| Pack accept, decline, download failure and removal | Pending | Explicit decline/chat fallback and re-allow/graphical return acceptedb133d53; download failure and removal pending |
 | No pack request when opening/reopening a dialogue | Pending | Accepted7186e71: reopen/cancel and HUD/NPC/chat switching within one connection without request/download/interruption |
 | HUD: fonts, centering, typewriter, choices and final End hint | Pending | Pending |
 | GUI scale 1/2/3/Auto, window sizes and screen-edge clipping | Pending | Targeted layout pass4e5c121 for left/right cards at scales1/2/3/Auto and smaller window; foreground vertical alignment subsequently accepted1ff1860 |
@@ -388,3 +388,48 @@ Chat-Fallback funktioniert”. This accepts explicit decline and the resulting
 chat fallback. Re-enabling/reconnecting remains a separate pending check, as
 do actual download failure and removal during a session. No product change or
 restart was needed for the successful decline check.
+
+## Re-allowed pack graphical return accepted (2026-11-17)
+
+After the explicit decline check, the user re-enabled/allowed the pack on the
+same visible local server entry, reconnected and opened NPC dialogue again.
+Reply: “Grafische Darstellung funktioniert wieder”. This accepts the return
+from declined-pack chat fallback to graphical NPC panels after allowing the
+pack. The running documentation HEADb133d53 still uses the accepted7186e71 app
+source and1ff1860 library JARs/15a7eaf6 pack. Download failure and removal during
+a connection remain separate pending checks. No product fix was required.
+
+## Explicit pack failure/removal helper
+
+`/packtest remove` removes only this connection's demo contribution, invalidates
+its application-owned readiness and refreshes the current dialogue into chat.
+It does not cancel or restart the semantic session. `/packtest fail` then
+requests a fresh optional pack identity at an unserved local HTTP404 URL with
+an uncached hash. Allow the request if prompted: this tests an actual failed
+client download, rather than a fabricated success/failure status.
+`/packtest restore` requests a fresh identity for the original healthy URL/hash;
+on actual client success, the explicit restore command re-applies the current
+presentation preferences to recover graphics. Normal pack-status handling does
+not automatically leave the sticky chat fallback.
+`/packtest status` reports the last actual client status (or explicit test
+removal), readiness and requested/effective output. Only the test commands
+change the pack: normal connection behavior and dialogue starts are unchanged.
+The removal case explicitly invalidates application-owned pack state; it does
+not prove detection of an unsolicited external removal. Both real-client
+failure/removal/recovery checks remain pending until confirmed.
+
+## Live pack restoration follow-up (2026-11-17)
+
+On demo b4a0296, the user confirmed pack removal switches to chat, but restore
+did not return to graphics. Their screenshot shows SUCCESSFULLY_LOADED,
+ready=true, requested=npc, output=chat. This is not accepted recovery. The
+library intentionally keeps fallback sticky until an explicit preference
+change (see minestom-integration.md); the new demo restore helper had omitted
+that step. The follow-up re-applies current preferences only after the
+explicit restore request's actual SUCCESSFULLY_LOADED event. Library behavior,
+JARs and pack are unchanged. The real demo event-path smoke first reproduced
+the missing graphic recovery, then checks return to the preferred output with
+unchanged session, node visit and selection. Real-client recovery and the
+separate failed-download check still require confirmation. The b4a0296 public
+CI job also reported Java formatting; the correction must pass the exact
+format check before pushing.
