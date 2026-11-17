@@ -38,7 +38,7 @@ reports under `.evidence` deliberately set `visual_client_verified=false`.
 | Check | Public 26.2 client | Grounds 26.3 client |
 |---|---|---|
 | Actual client metadata and correct pack formats | Installed protocol776/pack88.0 verified; targeted rendered-client basic pass2c0c0fd | Grounds26.3/protocol777/pack97.1 demo; repeated targeted graphics checks through60fd5c2, scoped below |
-| Pack accept, decline, download failure and removal | Initial pack load/basic rendering accepted2c0c0fd; live owned removal, actual404 failure and same-dialogue graphical recovery accepted60fd5c2; explicit decline pending | Explicit decline/re-allow acceptedb133d53; live owned removal, actual404 failure and graphical recovery accepted8b3f8c0 |
+| Pack accept, decline, download failure and removal | Initial pack load/basic rendering accepted2c0c0fd; owned removal, actual404 failure, same-dialogue recovery and explicit Prompt decline/re-allow accepted60fd5c2 | Explicit decline/re-allow acceptedb133d53; live owned removal, actual404 failure and graphical recovery accepted8b3f8c0 |
 | No pack request when opening/reopening a dialogue | Pending | Accepted7186e71: reopen/cancel and HUD/NPC/chat switching within one connection without request/download/interruption |
 | HUD: fonts, centering, typewriter, choices and final End hint | Basic fonts/panels/selection/confirmation pass2c0c0fd; full details pending | Layout/styles/cards and frozen foreground alignment accepted1ff1860; binding-appropriate final End hint and one-confirm close accepted60fd5c2 |
 | GUI scale 1/2/3/Auto, window sizes and screen-edge clipping | Pending | Targeted layout pass4e5c121 for left/right cards at scales1/2/3/Auto and smaller window; foreground vertical alignment subsequently accepted1ff1860 |
@@ -675,3 +675,22 @@ pack SHA-256
 `4481b9e50751cba9ed1e35d59714fd91196fa9b195bdbbe26bf2a911f6578682`.
 No product change, rebuild or restart was needed. Other individual matrix
 cases remain open; draft PR3 stays unmerged.
+
+## Public26.2 explicit pack decline and re-allow accepted (2026-11-17)
+
+The user answered the specific second question of the pending pair with
+“Passt alles”: on Minecraft26.2/localhost:25580, setting the actual server-list
+entry to Prompt and explicitly declining the pack gives a complete clickable
+chat dialogue for the requested NPC renderer. Reconnecting and allowing the
+pack again restores correctly rendered NPC panels. This accepts explicit
+decline and re-allow only. The separate first question about covered HUD,
+final End hint, normal completion and inventory return is still unanswered.
+
+Tested runtime remains `60fd5c20473ec39a1e86ec92be28336aae7ec873`, public26.2,
+NPC1.0.0, native adapter SHA-256
+`7e5dcff7b28c60323aeb90417c5bac31cbfe99afc050aeab3983da11e15a2081`,
+pack SHA-256
+`4481b9e50751cba9ed1e35d59714fd91196fa9b195bdbbe26bf2a911f6578682`.
+Actual live process and installed JAR hashes were verified before recording.
+No code/pack change or process restart; remaining matrix cases and draft PR3
+stay open.
