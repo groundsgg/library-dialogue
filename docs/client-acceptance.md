@@ -408,10 +408,28 @@ requests a fresh optional pack identity at an unserved local HTTP404 URL with
 an uncached hash. Allow the request if prompted: this tests an actual failed
 client download, rather than a fabricated success/failure status.
 `/packtest restore` requests a fresh identity for the original healthy URL/hash;
-client success can restore the preferred graphic surface.
+on actual client success, the explicit restore command re-applies the current
+presentation preferences to recover graphics. Normal pack-status handling does
+not automatically leave the sticky chat fallback.
 `/packtest status` reports the last actual client status (or explicit test
 removal), readiness and requested/effective output. Only the test commands
 change the pack: normal connection behavior and dialogue starts are unchanged.
 The removal case explicitly invalidates application-owned pack state; it does
 not prove detection of an unsolicited external removal. Both real-client
 failure/removal/recovery checks remain pending until confirmed.
+
+## Live pack restoration follow-up (2026-11-17)
+
+On demo b4a0296, the user confirmed pack removal switches to chat, but restore
+did not return to graphics. Their screenshot shows SUCCESSFULLY_LOADED,
+ready=true, requested=npc, output=chat. This is not accepted recovery. The
+library intentionally keeps fallback sticky until an explicit preference
+change (see minestom-integration.md); the new demo restore helper had omitted
+that step. The follow-up re-applies current preferences only after the
+explicit restore request's actual SUCCESSFULLY_LOADED event. Library behavior,
+JARs and pack are unchanged. The real demo event-path smoke first reproduced
+the missing graphic recovery, then checks return to the preferred output with
+unchanged session, node visit and selection. Real-client recovery and the
+separate failed-download check still require confirmation. The b4a0296 public
+CI job also reported Java formatting; the correction must pass the exact
+format check before pushing.

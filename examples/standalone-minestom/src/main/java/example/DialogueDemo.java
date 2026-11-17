@@ -109,6 +109,18 @@ public final class DialogueDemo {
                   live.packStatus = e.getStatus().name();
                   if (live.packTesting)
                     live.player.sendMessage("Pack test client status: " + live.packStatus);
+                  if (live.restoreGraphics
+                      && e.getStatus()
+                          == net.kyori.adventure.resource.ResourcePackStatus.SUCCESSFULLY_LOADED) {
+                    live.restoreGraphics = false;
+                    live.refresh()
+                        .whenComplete(
+                            (v, error) -> {
+                              if (error != null)
+                                live.player.sendMessage(
+                                    "Demo pack restore failed: " + error.getMessage());
+                            });
+                  }
                 }
               });
       System.out.println(
@@ -464,7 +476,7 @@ public final class DialogueDemo {
       String itemMode;
       UUID packId = pack.packId();
       String packStatus = "REQUESTED";
-      boolean packTesting;
+      boolean packTesting, restoreGraphics;
       long packOperation;
 
       Live(Player player) {
@@ -486,6 +498,7 @@ public final class DialogueDemo {
         }
         long operation = ++packOperation;
         packTesting = true;
+        restoreGraphics = mode.equals("restore");
         // The application owns this one contribution and knows it has been removed.
         // Invalidate its readiness before asking the presenter to fall back.
         host.packState().forget(player);
@@ -508,9 +521,9 @@ public final class DialogueDemo {
                   player.sendMessage(
                       mode.equals("fail")
                           ? "Download-failure test requested (real HTTP 404). Allow it if prompted;"
-                                + " /packtest status shows the result."
+                              + " /packtest status shows the result."
                           : "Original demo pack requested. Allow it if prompted; /packtest status"
-                                + " shows readiness.");
+                              + " shows readiness.");
                 });
       }
 
@@ -671,6 +684,27 @@ public final class DialogueDemo {
           live.renderer = renderer;
           live.refresh().toCompletableFuture().get(5, TimeUnit.SECONDS);
         }
+        var beforePackTest = live.handle.snapshot();
+        live.testPack("remove").toCompletableFuture().get(5, TimeUnit.SECONDS);
+        if (!live.ticket.status().effectiveSurface().equals("chat"))
+          throw new AssertionError("Pack removal did not fall back to chat");
+        live.testPack("restore").toCompletableFuture().get(5, TimeUnit.SECONDS);
+        // Server-side simulated load exercises the real demo event path, not a visual download.
+        net.minestom.server.event.EventDispatcher.call(
+            new PlayerResourcePackStatusEvent(
+                player,
+                live.packId,
+                net.kyori.adventure.resource.ResourcePackStatus.SUCCESSFULLY_LOADED));
+        long restoredDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (!live.ticket.status().effectiveSurface().equals("hud")
+            && System.nanoTime() < restoredDeadline) Thread.sleep(10);
+        if (!live.ticket.status().effectiveSurface().equals("hud"))
+          throw new AssertionError("Loaded test pack did not restore requested graphics");
+        var afterPackTest = live.handle.snapshot();
+        if (!beforePackTest.sessionId().equals(afterPackTest.sessionId())
+            || beforePackTest.nodeVisitId() != afterPackTest.nodeVisitId()
+            || !Objects.equals(beforePackTest.selectedChoiceId(), afterPackTest.selectedChoiceId()))
+          throw new AssertionError("Pack test restarted or changed the semantic dialogue");
         live.handle
             .refreshLocale(new LocaleContext("de", 1, "en"))
             .toCompletableFuture()
