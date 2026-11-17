@@ -38,7 +38,7 @@ reports under `.evidence` deliberately set `visual_client_verified=false`.
 | Check | Public 26.2 client | Grounds 26.3 client |
 |---|---|---|
 | Actual client metadata and correct pack formats | Pending visual run | Pending visual run |
-| Pack accept, decline, download failure and removal | Pending | Explicit prompt decline/chat fallback acceptedb133d53; re-enable, download failure and removal pending |
+| Pack accept, decline, download failure and removal | Pending | Explicit decline/chat fallback and re-allow/graphical return acceptedb133d53; download failure and removal pending |
 | No pack request when opening/reopening a dialogue | Pending | Accepted7186e71: reopen/cancel and HUD/NPC/chat switching within one connection without request/download/interruption |
 | HUD: fonts, centering, typewriter, choices and final End hint | Pending | Pending |
 | GUI scale 1/2/3/Auto, window sizes and screen-edge clipping | Pending | Targeted layout pass4e5c121 for left/right cards at scales1/2/3/Auto and smaller window; foreground vertical alignment subsequently accepted1ff1860 |
@@ -388,3 +388,13 @@ Chat-Fallback funktioniert”. This accepts explicit decline and the resulting
 chat fallback. Re-enabling/reconnecting remains a separate pending check, as
 do actual download failure and removal during a session. No product change or
 restart was needed for the successful decline check.
+
+## Re-allowed pack graphical return accepted (2026-11-17)
+
+After the explicit decline check, the user re-enabled/allowed the pack on the
+same visible local server entry, reconnected and opened NPC dialogue again.
+Reply: “Grafische Darstellung funktioniert wieder”. This accepts the return
+from declined-pack chat fallback to graphical NPC panels after allowing the
+pack. The running documentation HEADb133d53 still uses the accepted7186e71 app
+source and1ff1860 library JARs/15a7eaf6 pack. Download failure and removal during
+a connection remain separate pending checks. No product fix was required.
