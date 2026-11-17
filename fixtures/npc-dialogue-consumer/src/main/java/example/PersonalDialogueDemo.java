@@ -3,8 +3,15 @@ package example;
 import gg.grounds.dialogue.core.port.ActorPort;
 import gg.grounds.dialogue.minestom.MinestomSpeakerBinding;
 import gg.grounds.dialogue.minestom.render.DialoguePostEffects;
-import gg.grounds.npc.core.*;
+import gg.grounds.npc.core.math.NpcTransform;
+import gg.grounds.npc.core.math.NpcVector3;
 import gg.grounds.npc.minestom.*;
+import gg.grounds.npc.minestom.NpcHandle;
+import gg.grounds.npc.minestom.NpcPrepareResult;
+import gg.grounds.npc.minestom.NpcRenderer;
+import gg.grounds.npc.minestom.NpcSpawnRequest;
+import gg.grounds.npc.minestom.presentation.NpcPresentationOptions;
+import gg.grounds.npc.minestom.transform.NpcRenderTransform;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -41,10 +48,11 @@ public final class PersonalDialogueDemo {
   public static CompletionStage<DialogueDemo.DemoNpc> spawn(Instance world) {
     var start =
         NpcRenderer.prepare(
-            new NpcSpawnRequest(
-                world,
-                DemoNpcModel.model(),
-                new NpcRenderTransform(new NpcTransform(new NpcVector3(0, 40, 0)), null)));
+            NpcSpawnRequest.builder(
+                    world,
+                    DemoNpcModel.model(),
+                    new NpcRenderTransform(new NpcTransform(new NpcVector3(0, 40, 0)), null))
+                .build());
     return start
         .ready()
         .thenCompose(
@@ -104,22 +112,24 @@ public final class PersonalDialogueDemo {
                   p,
                   Map.of("mechanic", parent),
                   recipient ->
-                      new NpcPresentationOptions(
-                          recipient,
-                          operation -> {
-                            operation.run();
-                            return true;
-                          },
-                          (audience, origin, sound) ->
-                              audience.playSound(
-                                  Sound.sound(
-                                      Key.key(sound.getKey()),
-                                      Sound.Source.MASTER,
-                                      (float) sound.getVolume(),
-                                      (float) sound.getPitch()),
-                                  origin.getX(),
-                                  origin.getY(),
-                                  origin.getZ()))));
+                      NpcPresentationOptions.builder(recipient)
+                          .publicationGuard(
+                              operation -> {
+                                operation.run();
+                                return true;
+                              })
+                          .sounds(
+                              (audience, origin, sound) ->
+                                  audience.playSound(
+                                      Sound.sound(
+                                          Key.key(sound.getKey()),
+                                          Sound.Source.MASTER,
+                                          (float) sound.getVolume(),
+                                          (float) sound.getPitch()),
+                                      origin.getX(),
+                                      origin.getY(),
+                                      origin.getZ()))
+                          .build()));
     }
   }
 }

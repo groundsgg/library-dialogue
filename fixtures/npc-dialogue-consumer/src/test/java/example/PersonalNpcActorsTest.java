@@ -13,8 +13,20 @@ import gg.grounds.dialogue.minestom.asset.*;
 import gg.grounds.dialogue.minestom.channel.*;
 import gg.grounds.dialogue.minestom.input.*;
 import gg.grounds.dialogue.presentation.*;
-import gg.grounds.npc.core.*;
+import gg.grounds.npc.core.math.NpcTransform;
+import gg.grounds.npc.core.math.NpcVector3;
 import gg.grounds.npc.minestom.*;
+import gg.grounds.npc.minestom.NpcHandle;
+import gg.grounds.npc.minestom.NpcPrepareResult;
+import gg.grounds.npc.minestom.NpcRenderer;
+import gg.grounds.npc.minestom.NpcSpawnRequest;
+import gg.grounds.npc.minestom.presentation.NpcPresentationChannel;
+import gg.grounds.npc.minestom.presentation.NpcPresentationHandle;
+import gg.grounds.npc.minestom.presentation.NpcPresentationOptions;
+import gg.grounds.npc.minestom.presentation.NpcPresentationResult;
+import gg.grounds.npc.minestom.presentation.NpcPresentationSnapshot;
+import gg.grounds.npc.minestom.presentation.NpcPresentationStart;
+import gg.grounds.npc.minestom.transform.NpcRenderTransform;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.*;
@@ -48,11 +60,12 @@ class PersonalNpcActorsTest {
                   done(
                       env,
                       NpcRenderer.prepare(
-                              new NpcSpawnRequest(
-                                  world,
-                                  DemoNpcModel.model(),
-                                  new NpcRenderTransform(
-                                      new NpcTransform(new NpcVector3(0, 40, 0)), null)))
+                              NpcSpawnRequest.builder(
+                                      world,
+                                      DemoNpcModel.model(),
+                                      new NpcRenderTransform(
+                                          new NpcTransform(new NpcVector3(0, 40, 0)), null))
+                                  .build())
                           .ready()))
               .getHandle();
       done(env, parent.publish());
@@ -63,15 +76,16 @@ class PersonalNpcActorsTest {
           player,
           Map.of("mechanic", parent),
           p ->
-              new NpcPresentationOptions(
-                  p,
-                  operation -> {
-                    operation.run();
-                    return true;
-                  },
-                  (recipient, origin, sound) -> sounds.merge(recipient, 1, Integer::sum)),
+              NpcPresentationOptions.builder(p)
+                  .publicationGuard(
+                      operation -> {
+                        operation.run();
+                        return true;
+                      })
+                  .sounds((recipient, origin, sound) -> sounds.merge(recipient, 1, Integer::sum))
+                  .build(),
           (npc, options) -> {
-            var start = NpcPresentations.prepare(npc, options);
+            var start = npc.preparePresentation(options);
             start
                 .ready()
                 .thenAccept(
@@ -263,7 +277,7 @@ class PersonalNpcActorsTest {
         new PersonalNpcActors(
             f.a,
             Map.of("mechanic", f.parent),
-            NpcPresentationOptions::new,
+            viewerConnection -> NpcPresentationOptions.builder(viewerConnection).build(),
             (parent, options) ->
                 new NpcPresentationStart() {
                   public CompletionStage<NpcPresentationResult> ready() {
@@ -289,9 +303,9 @@ class PersonalNpcActorsTest {
         new PersonalNpcActors(
             f.a,
             Map.of("mechanic", f.parent),
-            NpcPresentationOptions::new,
+            viewerConnection -> NpcPresentationOptions.builder(viewerConnection).build(),
             (parent, options) -> {
-              var start = NpcPresentations.prepare(parent, options);
+              var start = parent.preparePresentation(options);
               request.cancellation().cancel(DialogueEndReason.CANCELLED);
               return start;
             });
@@ -317,8 +331,7 @@ class PersonalNpcActorsTest {
 
   @Test
   void publishedArtifactsAreUsed() {
-    for (var type :
-        List.of(DialogueRuntime.class, MinestomDialogueHost.class, NpcPresentations.class)) {
+    for (var type : List.of(DialogueRuntime.class, MinestomDialogueHost.class, NpcRenderer.class)) {
       var url = type.getProtectionDomain().getCodeSource().getLocation().toString();
       assertTrue(url.endsWith(".jar"), url);
       assertFalse(url.contains("build/classes"));

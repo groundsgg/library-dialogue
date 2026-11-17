@@ -2,6 +2,11 @@ package example;
 
 import gg.grounds.dialogue.core.port.*;
 import gg.grounds.npc.minestom.*;
+import gg.grounds.npc.minestom.NpcHandle;
+import gg.grounds.npc.minestom.presentation.NpcPresentationHandle;
+import gg.grounds.npc.minestom.presentation.NpcPresentationOptions;
+import gg.grounds.npc.minestom.presentation.NpcPresentationResult;
+import gg.grounds.npc.minestom.presentation.NpcPresentationStart;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
@@ -22,7 +27,7 @@ public final class PersonalNpcActors implements ActorPort {
       Player player,
       Map<String, NpcHandle> parents,
       Function<Player, NpcPresentationOptions> options) {
-    this(player, parents, options, NpcPresentations::prepare);
+    this(player, parents, options, NpcHandle::preparePresentation);
   }
 
   PersonalNpcActors(
@@ -91,16 +96,17 @@ public final class PersonalNpcActors implements ActorPort {
           if (base.getPlayer() != player)
             throw new IllegalArgumentException("Wrong presentation connection");
           var guarded =
-              new NpcPresentationOptions(
-                  player,
-                  operation ->
-                      !closing
-                          && !request.cancellation().isCancelled()
-                          && base.getPublicationGuard().runIfCurrent(operation),
-                  base.getSounds(),
-                  base.getIdleClip(),
-                  base.getSampleIntervalMillis(),
-                  base.getClock());
+              NpcPresentationOptions.builder(player)
+                  .publicationGuard(
+                      operation ->
+                          !closing
+                              && !request.cancellation().isCancelled()
+                              && base.getPublicationGuard().runIfCurrent(operation))
+                  .sounds(base.getSounds())
+                  .idleClip(base.getIdleClip())
+                  .sampleIntervalMillis(base.getSampleIntervalMillis())
+                  .clock(base.getClock())
+                  .build();
           slot.complete(Objects.requireNonNull(prepare.apply(parent, guarded)));
         } catch (Throwable error) {
           slot.completeExceptionally(error);

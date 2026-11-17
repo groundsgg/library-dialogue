@@ -2,7 +2,7 @@ plugins { application }
 repositories {
     val dialogue = maven { name="DialogueArtifacts";url=uri(providers.gradleProperty("dialogueRepository").get());if(url.toString()=="https://maven.pkg.github.com/groundsgg/library-dialogue")credentials { username=System.getenv("GITHUB_ACTOR");password=System.getenv("GITHUB_TOKEN") } }
     exclusiveContent { forRepositories(dialogue);filter { includeModule("gg.grounds","dialogue-core");includeModule("gg.grounds","dialogue-presentation");includeModule("gg.grounds","dialogue-minestom") } }
-    val npc=maven {name="NpcArtifacts";url=uri("https://maven.pkg.github.com/groundsgg/library-npc");credentials {username=System.getenv("GITHUB_ACTOR");password=System.getenv("GITHUB_TOKEN")}}
+    val npc=maven {name="NpcArtifacts";url=uri(providers.gradleProperty("npcRepository").orElse("https://maven.pkg.github.com/groundsgg/library-npc").get());if(url.toString()=="https://maven.pkg.github.com/groundsgg/library-npc")credentials {username=System.getenv("GITHUB_ACTOR");password=System.getenv("GITHUB_TOKEN")}}
     exclusiveContent {forRepositories(npc);filter {includeModule("gg.grounds","npc-core");includeModule("gg.grounds","npc-minestom")}}
     mavenCentral()
 }
@@ -12,7 +12,7 @@ configurations.configureEach { resolutionStrategy.cacheChangingModulesFor(0,"sec
 sourceSets.main { java.srcDir("../../examples/standalone-minestom/src/main/java") }
 dependencies {
     implementation("gg.grounds:dialogue-minestom:${providers.gradleProperty("dialogueVersion").orElse("0.1.0-SNAPSHOT").get()}")
-    implementation("gg.grounds:npc-minestom:0.2.0")
+    implementation("gg.grounds:npc-minestom:${providers.gradleProperty("npcVersion").orElse("1.0.0").get()}")
     implementation("net.minestom:minestom:2026.10.07-26.2")
     runtimeOnly("org.slf4j:slf4j-simple:2.0.17")
     testImplementation("net.minestom:testing:2026.10.07-26.2")
