@@ -12,7 +12,7 @@ configurations.configureEach { resolutionStrategy.cacheChangingModulesFor(0,"sec
 sourceSets.main { java.srcDir("../../examples/standalone-minestom/src/main/java") }
 dependencies {
     implementation("gg.grounds:dialogue-minestom:${providers.gradleProperty("dialogueVersion").orElse("0.1.0-SNAPSHOT").get()}")
-    implementation("gg.grounds:npc-minestom:${providers.gradleProperty("npcVersion").orElse("0.3.0-api-review-SNAPSHOT").get()}")
+    implementation("gg.grounds:npc-minestom:${providers.gradleProperty("npcVersion").orElse("1.0.0").get()}")
     implementation("net.minestom:minestom:2026.10.07-26.2")
     runtimeOnly("org.slf4j:slf4j-simple:2.0.17")
     testImplementation("net.minestom:testing:2026.10.07-26.2")

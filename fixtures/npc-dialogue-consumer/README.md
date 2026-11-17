@@ -1,11 +1,10 @@
 # NPC and Dialogue integration consumer
 
-This migration branch uses `gg.grounds:npc-minestom:0.3.0-api-review-SNAPSHOT`
-and its transitive `npc-core`, plus the selected Dialogue Maven artifacts.
-Build the coordinated NPC candidate first and supply `-PnpcRepository=file:///...`.
-`-PnpcVersion=...` selects another compatible candidate. This is a locally
-qualified breaking API migration, not a new package release. Only
-the basic demo's application sources are shared. No library sources or composite
+This consumer uses the released `gg.grounds:npc-minestom:1.0.0` and its
+transitive `npc-core`, plus the selected Dialogue Maven artifacts. NPC resolves
+from its canonical GitHub Packages repository by default. `-PnpcVersion=...`
+and `-PnpcRepository=file:///...` select an explicit compatible local override.
+Only the basic demo's application sources are shared. No library sources or composite
 builds substitute for Maven JARs; tests check the actual class origins.
 
 Supply `GITHUB_ACTOR` and a `GITHUB_TOKEN` with package-read access through your
@@ -16,7 +15,7 @@ repository. From the repository root:
 ./gradlew publishAllPublicationsToReviewRepository
 ./gradlew -p fixtures/npc-dialogue-consumer test run \
   "-PdialogueRepository=file:$PWD/.evidence/maven" \
-  -PnpcRepository=file:///absolute/path/to/npc-review-maven
+  --args=--smoke
 ```
 
 Use `--args=--smoke` for the automated application run. The normal Java demo uses
@@ -43,5 +42,4 @@ is tracked separately; server-side tests are not visual evidence.
 
 The model uses typed loop/interpolation/channel definitions and personal actors
 call `NpcHandle.preparePresentation` directly. Options use named builders. The
-base `dialogue-minestom` module continues to have no NPC dependency. Keep this
-consumer coordinated with the NPC package publication before merging release pins.
+base `dialogue-minestom` module continues to have no NPC dependency. The consumer is pinned to the published NPC 1.0.0 package.
