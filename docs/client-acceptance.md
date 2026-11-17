@@ -480,3 +480,20 @@ Minestom stopping, with no cleanup timeout. The optional consumer here uses
 published NPC1.0.0. These are real child-process SIGTERM checks with simulated
 pack readiness, not client visuals. This corrects the separately recorded
 shutdown-order observation; it does not complete the remaining client matrix.
+
+## Published NPC1.0.0 fixture targeted client check (2026-11-17)
+
+On new demo2c0c0fd at localhost:25578, with installed published npc-core1.0.0
+and npc-minestom1.0.0, the user confirmed figure/panels visible, `/personalwave`
+in an active dialogue and return to the shared NPC on `/cancel`: “NPC1.0.0-Demo
+funktioniert”. This is the scoped single-client fixture migration check; it
+does not relabel the prior two-client0.2.0 result. Dialogue JARs and Grounds
+pack remain unchanged. Actual installed NPC JAR names/hashes are saved with
+the runtime metadata.
+
+The public26.2 personal-NPC demo is also prepared on localhost:25580 (pack25581).
+An installed26.2 client was verified as protocol776/pack88.0. The user explicitly
+deferred the real26.2 check: “26.2 prüfe ich später”. Keep that column pending;
+server checks and the installed client metadata do not count as rendered-client
+acceptance. The remaining preparation-interruption/instance-change and other
+client-matrix details likewise remain open.
