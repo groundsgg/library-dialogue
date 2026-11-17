@@ -563,4 +563,23 @@ The changed `dialogue-minestom` JAR has SHA-256
 The core/presentation JARs and both pack hashes are unchanged. Both basic and
 personal-NPC application smokes pass on public 26.2 and Grounds 26.3, as do
 all four protocol/pack/active-shutdown checks. These remain server-side evidence;
-an idle-cover client retest remains required.
+the separate real-client retest is recorded below.
+
+## Idle NPC HUD-cover correction accepted (2026-11-17)
+
+The user retested the running `60fd5c2` Grounds26.3 demo on localhost:25578
+with `/renderer npc`, `/dialogue` and `/hidehud`. They confirmed that the cover
+remains visible for at least15 seconds during an unchanged open dialogue and
+that `/cancel` clears it immediately without a late return: “Abdeckung bleibt
+sichtbar, Cleanup passt”. This accepts the idle-cover regression and ordinary
+cancel cleanup only. Active instance travel with coverage and the preparation
+cancel/instance/disconnect cases remain pending.
+
+Exact tested runtime: `60fd5c20473ec39a1e86ec92be28336aae7ec873`, Grounds26.3,
+published NPC1.0.0; `dialogue-minestom` SHA-256
+`7e5dcff7b28c60323aeb90417c5bac31cbfe99afc050aeab3983da11e15a2081`.
+Core/presentation hashes are unchanged; pack SHA-256
+`15a7eaf6163538a695ed859013e0a13e7e0f10a57d588062dd635d49a62ee1dc`.
+[CI for the tested correction](https://github.com/groundsgg/library-dialogue/actions/runs/44155247219)
+passed both jobs. This records feedback without code/pack changes or a server
+restart; the full client matrix and draft PR remain open.
