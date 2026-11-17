@@ -38,8 +38,8 @@ reports under `.evidence` deliberately set `visual_client_verified=false`.
 | Check | Public 26.2 client | Grounds 26.3 client |
 |---|---|---|
 | Actual client metadata and correct pack formats | Pending visual run | Pending visual run |
-| Pack accept, decline, download failure and removal | Pending | Pending |
-| No pack request when opening/reopening a dialogue | Pending | Pending |
+| Pack accept, decline, download failure and removal | Pending | Explicit prompt decline/chat fallback acceptedb133d53; re-enable, download failure and removal pending |
+| No pack request when opening/reopening a dialogue | Pending | Accepted7186e71: reopen/cancel and HUD/NPC/chat switching within one connection without request/download/interruption |
 | HUD: fonts, centering, typewriter, choices and final End hint | Pending | Pending |
 | GUI scale 1/2/3/Auto, window sizes and screen-edge clipping | Pending | Targeted layout pass4e5c121 for left/right cards at scales1/2/3/Auto and smaller window; foreground vertical alignment subsequently accepted1ff1860 |
 | NPC: fixed world size, body-front yaw limit and near-head spacing | Pending | Pending |
@@ -50,10 +50,10 @@ reports under `.evidence` deliberately set `visual_client_verified=false`.
 | Held button, fast clicks, scroll and jitter without accidental confirmation | Pending | Targeted empty-hand HUD pass1ff1860: fast clicks, held confirmation and wheel; other cases pending |
 | Current inventory and server slot preserved; visible vs covered hotbar | Pending | HUD inventory/cursor/slot PASS7186e71 for all bindings and item modes; Use+shield covered-HUD return also confirmed |
 | Language switch during reveal and action wait | Pending | Accepted4e5c121 in HUD/NPC, no restart/duplicate task |
-| Optional cover/vignette/backdrop toggled independently | Vignette unsupported | Pending |
+| Optional cover/vignette/backdrop toggled independently | Vignette unsupported | Targeted NPC pass7186e71: backdrop remains while vignette/cover toggle; cancel clears all effects/panels |
 | Ordinary hearts/hunger/hotbar covered; extra-heart limits noted | Pending | Targeted Use+shield HUD cover, controls and return accepted7186e71; extra-heart variants not client-tested |
 | Normal looking remains open; strong turn/distance ends after grace | Pending | Targeted NPC pass7186e71: normal gaze/answers remain open, strong turn/distance end and restore play |
-| Two visible clients: private gesture/sound and shared restoration | Pending | Pending |
+| Two visible clients: private gesture/sound and shared restoration | Pending | Accepted7186e71: A-only personalwave private to A; sequential cancel restores shared without disturbing other dialogue |
 | Disconnect/instance change during active/preparing dialogue | Pending | Disconnect during reveal/reconnect clean pass7186e71; preparing/instance change pending |
 
 Suggested first pass: accept the new pack, `/dialogue`, then `/renderer npc` and
@@ -336,3 +336,55 @@ reveal and the clean reconnect, not interruption during preparation or an
 instance change. Runtime JARs and pack match the previous7186e71 acceptance
 records; the remaining client matrix stays open. No product change or restart
 was needed for these results.
+
+## Independent effects and no repeated pack loading accepted (2026-11-16)
+
+On unchanged demo-App7186e71 at localhost:25578, the user confirmed that the
+NPC backdrop remains while vignette and HUD cover are each toggled on/off, with
+each toggle affecting only its own effect; `/cancel` removes all dialogue
+effects and panels. Reply: “Effekte unabhängig, Cleanup passt”.
+
+Repeated dialogue open/cancel and live HUD/NPC/chat switching within the same
+connection were accepted without a new pack request, download or loading
+interruption: “Keine erneute Pack-Abfrage oder Ladeunterbrechung”.
+
+The preceding missing-pack report was not reproduced on the specified local
+demo: HTTP download from Linux and Windows returned the expected866316-byte
+15a7eaf6 pack; the local server initially had no player while the current client
+log showed a Stage connection. After connecting to localhost:25578, the user
+confirmed visible NPC panels. Read-only runtime inspection confirmed the
+expected manifest ready and requested/effective surface NPC. No product, pack
+or runtime change was made to obtain that result; it is not a claim about Stage
+pack behavior. The two subsequent explicit replies above accept these scoped
+local checks. Pack decline/failure/removal and the rest of the matrix remain open.
+
+## Two visible clients accepted (2026-11-16)
+
+On the unchanged7186e71 demo with the recorded library JARs/pack, the user
+tested two visible nearby clients, each with its own NPC dialogue. After the
+initial greeting, only A executed `/personalwave`: only A saw/heard the personal
+gesture and B retained its independent presentation. Cancelling A restored
+the common NPC for A without disturbing B's ongoing private dialogue; then
+cancelling B restored the common NPC for B. Reply: “Mit zwei Clients getestet:
+Trennung und Rückkehr passen”. This accepts that real two-client private
+render/sound/restoration case, not the remaining public26.2, pack-failure,
+preparation-interruption or instance-change cases. No product change or
+restart was required.
+
+## Explicit pack decline accepted (2026-11-17)
+
+The demo was restarted on documentation HEAD
+`b133d5358a170a4a8a4b436caaff230dd8f9e170`, with shared demo source byte-identical
+to7186e71 and the same verified1ff1860 library JARs/15a7eaf6 pack recorded above.
+The initial attempt did not establish a decline: the client loaded a cached
+pack and the saved visible127.0.0.1:25578 entry still had packs enabled; the
+separate hidden localhost entry is distinct client configuration. No server
+fix or client configuration write was made by the agent.
+
+The user then set the exact visible server entry to Prompt, connected through
+that entry and explicitly declined the prompt. Requesting NPC output produced
+a complete usable chat dialogue with clickable choices: “Abfrage abgelehnt;
+Chat-Fallback funktioniert”. This accepts explicit decline and the resulting
+chat fallback. Re-enabling/reconnecting remains a separate pending check, as
+do actual download failure and removal during a session. No product change or
+restart was needed for the successful decline check.
