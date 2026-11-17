@@ -221,6 +221,49 @@ class NpcDialogueSurfaceTest {
   }
 
   @Test
+  void unavailableChoiceBoundsSurviveNativePublicationAndFollow(Env env) {
+    var f = new Fixture(env, CompletableFuture.completedFuture(null));
+    var h = f.open(env);
+    var frame = RenderFixtures.frame("npc", "Hello", 5);
+    var widgets =
+        frame.widgets().stream()
+            .map(
+                w ->
+                    "leave".equals(w.choiceId())
+                        ? new WidgetFrame.Widget(
+                            w.id(),
+                            w.kind(),
+                            w.bounds(),
+                            w.textBounds(),
+                            w.text(),
+                            w.layout(),
+                            w.visibleGraphemes(),
+                            false,
+                            false,
+                            1,
+                            Duration.ZERO,
+                            w.choiceId())
+                        : w)
+            .toList();
+    done(
+        env,
+        h.replace(
+            new WidgetFrame(
+                frame.semantic(),
+                widgets,
+                frame.fontPin(),
+                frame.theme(),
+                frame.chrome(),
+                frame.scrollbar())));
+    var before = f.surface.geometry();
+    assertEquals(Set.of("ask", "leave"), before.choiceBounds().keySet());
+    assertEquals(Set.of("ask"), f.targets.current().choices().keySet());
+    assertTrue(env.tickWhile(() -> f.surface.geometry() == before, Duration.ofSeconds(1)));
+    assertEquals(before.choiceBounds(), f.surface.geometry().choiceBounds());
+    done(env, h.closeAsync());
+  }
+
+  @Test
   void allFrontBackPairsClose(Env env) {
     var f = new Fixture(env, CompletableFuture.completedFuture(null));
     var h = f.open(env);

@@ -9,6 +9,19 @@ matrix is **pending**. Earlier 25570/25572/25576 prototype feedback is design
 evidence, not acceptance of these new Maven artifacts. No merge/release claim may
 replace the rows below with headless, packet or source-inspection evidence.
 
+## Current remaining26.3 client scope
+
+The remaining focused check is NPC confirmation against unavailable, occluded
+and back-facing cards on the corrected candidate below, together with the
+bounded front-follow rotation. Chat nonfirst/stale-link behaviour is already
+accepted; only explicit visibility of all7 chat choices remains to confirm.
+Do not repeat accepted inventory, controls, layout, lifecycle, pack or
+two-client cases. Fast/held/wheel input and manual-hover priority already have
+scoped client results; exact movement thresholds also have native tests.
+Extra/stacked heart rows are outside the documented initial cover claim, rather
+than an outstanding promise to hide arbitrary HUD extensions. Public26.2
+additional manual testing remains closed by the user's decision below.
+
 ## Current public26.2 acceptance scope
 
 On2026-11-17 the user explicitly stopped additional26.2 client testing:
@@ -56,14 +69,14 @@ reports under `.evidence` deliberately set `visual_client_verified=false`.
 | GUI scale 1/2/3/Auto, window sizes and screen-edge clipping | Representative Cards left/right at1/2/3/Auto and smaller window readable/aligned accepted60fd5c2; not exhaustive cross-product | Targeted layout pass4e5c121 for left/right cards at scales1/2/3/Auto and smaller window; foreground vertical alignment subsequently accepted1ff1860 |
 | NPC: fixed world size, body-front yaw limit and near-head spacing | Fixed size/anchor through movement/offscreen and limited follow rotation accepted60fd5c2 | Fixed size while moving/offscreen confirmed70f7e67; selection-safe gap/fold acceptedeb8cb5e; body-front yaw limit not separately confirmed on library artifacts |
 | NPC: closed backs, no Z-fighting, hover and selection growth | Hover/growth and closed backs without text bleed/flicker accepted60fd5c2 | Hover/growth and scrollbar back accepted through6e3c91c; closed speech/name/answer backs without text bleed/flicker and front-hover return accepted60fd5c2 |
-| Seven answers reachable through three cards; disabled/occluded/back targets | All7 reachable, stable3-slot HUD, arrow selection retention and wheel selection accepted60fd5c2; additional disabled/occluded/back-target tests waived by user2026-11-17 | Three-slot paging, partial last page, stable answer identity and wheel selection accepted6e3c91c; disabled/occluded/back-target client cases remain open |
-| Chat: complete sections, all choices, current/stale click behaviour | All7 readable, nonfirst click works and stale links inert accepted60fd5c2 | Targeted pass4e5c121: non-first answer and stale links; full matrix still open |
+| Seven answers reachable through three cards; disabled/occluded/back targets | All7 reachable, stable3-slot HUD, arrow selection retention and wheel selection accepted60fd5c2; additional disabled/occluded/back-target tests waived by user2026-11-17 | Three-slot paging, partial last page, stable answer identity and wheel selection accepted6e3c91c; three confirmation defects reproduced and corrected; focused26.3 client check remains open |
+| Chat: complete sections, all choices, current/stale click behaviour | All7 readable, nonfirst click works and stale links inert accepted60fd5c2 | Nonfirst answer/stale links accepted4e5c121; explicit all7-choice visibility remains open |
 | Use/Attack/Swap with empty hands, main/offhand items and shield | All9 equipped main/offhand/shield combinations accepted60fd5c2; additional empty-hand tests waived by user2026-11-17 | Targeted HUD pass: empty hands1ff1860; Use/Attack/Swap with main/offhand/shield7186e71 |
-| Held button, fast clicks, scroll and jitter without accidental confirmation | Equipped HUD fast/brief-held confirm and scrolling controlled60fd5c2; additional cases waived by user2026-11-17 | Targeted empty-hand HUD pass1ff1860: fast clicks, held confirmation and wheel; other cases pending |
+| Held button, fast clicks, scroll and jitter without accidental confirmation | Equipped HUD fast/brief-held confirm and scrolling controlled60fd5c2; additional cases waived by user2026-11-17 | Fast/held/wheel control accepted1ff1860; manual-hover priority/paging accepted6e3c91c; exact movement thresholds native-tested |
 | Current inventory and server slot preserved; visible vs covered hotbar | Inventory check PASS for all9 equipped HUD combinations60fd5c2; Use+shield covered-HUD/normal-end return and direct PASS also accepted60fd5c2 | HUD inventory/cursor/slot PASS7186e71 for all bindings and item modes; Use+shield covered-HUD return also confirmed |
 | Language switch during reveal and action wait | HUD/NPC de/en during reveal and action wait without restart/duplicate action accepted60fd5c2 | Accepted4e5c121 in HUD/NPC, no restart/duplicate task |
 | Optional cover/vignette/backdrop toggled independently | Vignette unsupported | Targeted NPC pass7186e71: backdrop remains while vignette/cover toggle; cancel clears all effects/panels |
-| Ordinary hearts/hunger/hotbar covered; extra-heart limits noted | Use+shield HUD cover stable at least15s, controls/return accepted60fd5c2; extra-heart variants untested; additional client tests waived by user2026-11-17 | Targeted Use+shield HUD cover, controls and return accepted7186e71; extra-heart variants not client-tested |
+| Ordinary hearts/hunger/hotbar covered; extra-heart limits noted | Use+shield HUD cover stable at least15s, controls/return accepted60fd5c2; extra-heart variants untested; additional client tests waived by user2026-11-17 | Ordinary Use+shield cover/control/return accepted7186e71; extra/stacked rows outside documented initial claim |
 | Normal looking remains open; strong turn/distance ends after grace | Additional26.2 test waived by user2026-11-17; not run | Targeted NPC pass7186e71: normal gaze/answers remain open, strong turn/distance end and restore play |
 | Two visible clients: private gesture/sound and shared restoration | Additional26.2 test waived by user2026-11-17; not run | Accepted7186e71: A-only personalwave private to A; sequential cancel restores shared without disturbing other dialogue |
 | Disconnect/instance change during active/preparing dialogue | Preparing cancel/instance/disconnect and clean reopening accepted60fd5c2; additional active-dialogue tests waived by user2026-11-17 | Active instance travel with cover, preparing cancel/instance/disconnect and reopening accepted60fd5c2; earlier reveal/reconnect accepted7186e71 |
@@ -772,3 +785,37 @@ pack SHA-256
 Actual process and installed JARs were verified before recording. No code/pack
 change or process restart. Remaining individual matrix cases stay open;
 draft PR3 remains unmerged.
+
+## NPC confirmation visibility regression (2026-11-17)
+
+The remaining26.3 occlusion/back/unavailable target audit reproduced three native
+input errors before correction: an occluded selected answer could confirm, a
+back-facing selected answer could confirm, and clicking an unavailable card
+could confirm another selected answer. All three regression tests first failed
+on an actual emitted core input, then passed after correcting confirmation.
+
+The NPC surface now publishes all card bounds, including unavailable cards,
+and preserves them while following. A blocked/back/unavailable pointed card
+consumes confirmation. A wheel-selected answer may still confirm while looking
+at the NPC if its front center is visible; a directly pointed visible portion
+also works. Off-page selection remains unconfirmable. The existing wheel versus
+stationary-hover regression remains green. A separate native surface regression
+first detects omitted card metadata, then verifies publication and retention
+across following. The prior Geometry constructor is retained.
+
+The demo supplies `/targettest`: answer2 is visibly unavailable and two fixed
+side pillars provide actual block occlusion. Ordinary `/dialogue` content is
+unchanged. Application smokes verify the unavailable offer/selection rejection,
+actual block visibility and graphical output. These server-side results do not
+replace the remaining targeted26.3 client check. No additional26.2 client tests
+are requested; its user-closed scope remains in effect.
+
+Fresh local verification of the correction passes253 library tests,142
+exact-Grounds-profile tests, publication/API integrity and all four independent
+module origins. Both app fixtures pass against public and exact-fork runtimes;
+all four protocol/pack/active-SIGTERM checks pass (415ms cleanup). The native
+adapter JAR is now
+`e1b1d32888e8e685775b3a50c89ebd55d124ea5a0f14f35e9d76eafcb3523f70`.
+Core/presentation JAR hashes, NPC1.0.0 pins and pack bytes are unchanged.
+Existing client acceptances remain attached to their actual earlier native JARs;
+the focused new26.3 confirmation/rotation/chat-completeness check stays open.

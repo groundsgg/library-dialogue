@@ -184,6 +184,10 @@ public final class DialogueDemo {
   }
 
   public static TextCatalog texts() {
+    return texts(false);
+  }
+
+  static TextCatalog texts(boolean targetTest) {
     var en = new LinkedHashMap<String, String>();
     var de = new LinkedHashMap<String, String>();
     en.put("speaker.mechanic", "Mechanic");
@@ -224,10 +228,16 @@ public final class DialogueDemo {
   }
 
   public static HostCatalog catalog() {
+    return catalog(false);
+  }
+
+  static HostCatalog catalog(boolean targetTest) {
     return new HostCatalog(
         "demo-v1",
         Set.of("mechanic"),
-        Map.of(),
+        targetTest
+            ? Map.of("demo:unavailable", new HostCatalog.ProviderSpec(Map.of(), false))
+            : Map.of(),
         Map.of("demo:wait", new HostCatalog.ProviderSpec(Map.of(), false)),
         Set.of("wave", "look"),
         Set.of("actor.gesture"),
@@ -235,13 +245,23 @@ public final class DialogueDemo {
   }
 
   public static ValidatedDialogue content() {
+    return content(false);
+  }
+
+  static ValidatedDialogue content(boolean targetTest) {
     var builder =
         DialogueBuilder.dialogue("demo:mechanic")
             .locales("en", "en", "de")
             .capabilities(new Capabilities(Set.of(), Set.of("actor.gesture")));
     var choices = new ArrayList<Choice>();
     for (int i = 0; i < 7; i++) {
-      choices.add(new Choice("c" + i, "choice" + i, i == 1 ? "wait" : "reply" + i, i == 0, null));
+      choices.add(
+          new Choice(
+              "c" + i,
+              "choice" + i,
+              i == 1 ? "wait" : "reply" + i,
+              i == 0,
+              targetTest && i == 1 ? new Condition("demo:unavailable", Map.of(), false) : null));
       builder.node(
           "reply" + i,
           new Message(
@@ -252,7 +272,11 @@ public final class DialogueDemo {
     builder.node("end", new End("completed"));
     var report =
         new DialogueValidator()
-            .validate(builder.build(), texts(), catalog(), ValidationLimits.defaults());
+            .validate(
+                builder.build(),
+                texts(targetTest),
+                catalog(targetTest),
+                ValidationLimits.defaults());
     if (!report.isValid()) throw new IllegalStateException(report.toString());
     return report.validated();
   }
@@ -316,12 +340,13 @@ public final class DialogueDemo {
               + " /confirm use|attack|swap · /hidehud · /vignette · /npcbackdrop · /cancel ·"
               + " /personalwave · /testitems main|offhand|shield|restore · /checkitems · /packtest"
               + " remove|fail|restore|status · /instance away|home · /preparetest"
-              + " cancel|disconnect|instance|status");
+              + " cancel|disconnect|instance|status · /targettest");
       return live;
     }
 
     void commands() {
       command("dialogue", (l, args) -> l.begin());
+      command("targettest", (l, args) -> l.targetTest());
       command(
           "cancel",
           (l, args) ->
@@ -721,9 +746,39 @@ public final class DialogueDemo {
         return begin(npc.actors().apply(player));
       }
 
+      CompletionStage<Void> targetTest() {
+        if (player.getInstance() != world)
+          return CompletableFuture.failedFuture(
+              new IllegalStateException("Return with /instance home first"));
+        for (int x : new int[] {-3, 3}) {
+          if (!world.isChunkLoaded(new Vec(x, 40, 2)))
+            return CompletableFuture.failedFuture(
+                new IllegalStateException("Wait for the test area to load"));
+          for (int y = 40; y < 46; y++) {
+            var block = world.getBlock(x, y, 2);
+            if (block != Block.AIR && block != Block.STONE)
+              return CompletableFuture.failedFuture(
+                  new IllegalStateException("The test pillar location is occupied"));
+          }
+        }
+        // Fixed obstacles belong to this demo world and stay available for repeated line-of-sight
+        // tests.
+        for (int x : new int[] {-3, 3})
+          for (int y = 40; y < 46; y++) world.setBlock(x, y, 2, Block.STONE);
+        renderer = "npc";
+        player.sendMessage(
+            "Target test: answer 2 is unavailable; side pillars block line of sight. /dialogue"
+                + " opens normal content.");
+        return begin(npc.actors().apply(player), true);
+      }
+
       synchronized CompletionStage<Void> begin(ActorPort actors) {
+        return begin(actors, false);
+      }
+
+      synchronized CompletionStage<Void> begin(ActorPort actors, boolean targetTest) {
         handle = null;
-        var dialogue = content();
+        var dialogue = content(targetTest);
         var action =
             new ActionHandler() {
               public CompletionStage<ActionResult> execute(ActionRequest r) {
@@ -749,10 +804,16 @@ public final class DialogueDemo {
                     dialogue,
                     new DialogueServices(
                         "demo-v1",
-                        Map.of(),
+                        targetTest
+                            ? Map.of(
+                                "demo:unavailable",
+                                request ->
+                                    CompletableFuture.completedFuture(
+                                        ConditionProvider.ConditionResult.UNAVAILABLE))
+                            : Map.of(),
                         Map.of("demo:wait", action),
                         null,
-                        TextResolver.catalogue(texts(), "en"),
+                        TextResolver.catalogue(texts(targetTest), "en"),
                         Set.of("actor.gesture")),
                     Map.of(),
                     locale,
@@ -861,6 +922,43 @@ public final class DialogueDemo {
             .refreshLocale(new LocaleContext("de", 1, "en"))
             .toCompletableFuture()
             .get(5, TimeUnit.SECONDS);
+        live.ticket
+            .cancel(DialogueEndReason.CANCELLED)
+            .toCompletableFuture()
+            .get(5, TimeUnit.SECONDS);
+        live.targetTest().toCompletableFuture().get(5, TimeUnit.SECONDS);
+        if (!live.ticket.status().effectiveSurface().equals("npc")
+            || gg.grounds.dialogue.minestom.geometry.MinestomOcclusion.visible(
+                world, new Vec(3, 41.6, 4), new Vec(3, 41.6, 0))
+            || !gg.grounds.dialogue.minestom.geometry.MinestomOcclusion.visible(
+                world, new Vec(0, 41.6, 4), new Vec(0, 41.6, 0)))
+          throw new AssertionError("Target-test graphics or real pillar occlusion failed");
+        var targetView = live.handle.snapshot();
+        if (targetView.choices().size() != 7
+            || targetView.choices().get(1).availability() != DialogueView.Availability.UNAVAILABLE)
+          throw new AssertionError(
+              "The target-test provider did not publish its unavailable answer");
+        live.handle
+            .submit(
+                new DialogueInput.Confirm(
+                    new DialogueInput.InputStamp(
+                        targetView.sessionId(), targetView.renderRevision(), 10001),
+                    targetView.selectedChoiceId()))
+            .toCompletableFuture()
+            .get(5, TimeUnit.SECONDS);
+        targetView = live.handle.snapshot();
+        var blocked =
+            live.handle
+                .submit(
+                    new DialogueInput.Select(
+                        new DialogueInput.InputStamp(
+                            targetView.sessionId(), targetView.renderRevision(), 10002),
+                        "c1"))
+                .toCompletableFuture()
+                .get(5, TimeUnit.SECONDS);
+        if (blocked != InputResult.INVALID
+            || "c1".equals(live.handle.snapshot().selectedChoiceId()))
+          throw new AssertionError("The target-test unavailable answer was selectable");
         live.ticket
             .cancel(DialogueEndReason.CANCELLED)
             .toCompletableFuture()

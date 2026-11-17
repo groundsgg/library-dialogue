@@ -53,6 +53,30 @@ public final class NpcHitTest {
     return Optional.empty();
   }
 
+  public record ChoiceHit(String choiceId, boolean usable) {}
+
+  /** A blocked, unavailable or back-facing card consumes confirmation without choosing another. */
+  public static Optional<ChoiceHit> choiceHit(
+      Point eye,
+      Vec direction,
+      NpcPanelTransform transform,
+      Map<String, WidgetFrame.Rect> choiceBounds,
+      TargetSnapshot targets,
+      OcclusionTest occlusion) {
+    for (var choice : choiceBounds.entrySet()) {
+      var world = intersection(eye, direction, transform, choice.getValue(), false);
+      if (world == null) continue;
+      boolean front = direction.dot(transform.planeFor(choice.getValue()).normal()) < -1e-9;
+      return Optional.of(
+          new ChoiceHit(
+              choice.getKey(),
+              front
+                  && targets.choices().containsKey(choice.getKey())
+                  && occlusion.visible(eye, world)));
+    }
+    return Optional.empty();
+  }
+
   public static Optional<String> hit(
       Point eye,
       Vec direction,

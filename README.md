@@ -25,7 +25,7 @@ python3 -m unittest discover -s tools -p '*_test.py'
 ./gradlew :examples:headless-dialogue:run --args=--presentation-smoke
 ```
 
-The [independent Minestom consumer](fixtures/minestom-consumer) and [basic native demo](examples/standalone-minestom) additionally run without GitHub credentials. The [personal NPC consumer](fixtures/npc-dialogue-consumer) uses the exact published NPC 0.2.0 package and needs package-read access.
+The [independent Minestom consumer](fixtures/minestom-consumer) and [basic native demo](examples/standalone-minestom) additionally run without GitHub credentials. The [personal NPC consumer](fixtures/npc-dialogue-consumer) uses the exact published NPC 1.0.0 package and needs package-read access.
 
 Expected markers: `PUBLIC_ARTIFACTS_OK`, `CONSUMER_OK java`, `CONSUMER_OK kotlin`, `HEADLESS_DIALOGUE_OK` and `PRESENTATION_OK`. The independent consumers resolve Maven JARs; they do not include the root build or fall back to private Grounds repositories.
 

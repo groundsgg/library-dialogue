@@ -34,9 +34,18 @@ public final class NpcDialogueSurface implements DialogueSurface {
   }
 
   public record Geometry(
-      NpcPanelTransform transform, List<WidgetFrame.Rect> fronts, long surfaceGeneration) {
+      NpcPanelTransform transform,
+      List<WidgetFrame.Rect> fronts,
+      long surfaceGeneration,
+      Map<String, WidgetFrame.Rect> choiceBounds) {
     public Geometry {
       fronts = List.copyOf(fronts);
+      choiceBounds = Map.copyOf(choiceBounds);
+    }
+
+    public Geometry(
+        NpcPanelTransform transform, List<WidgetFrame.Rect> fronts, long surfaceGeneration) {
+      this(transform, fronts, surfaceGeneration, Map.of());
     }
   }
 
@@ -606,17 +615,22 @@ public final class NpcDialogueSurface implements DialogueSurface {
 
     void publish(WidgetFrame value) {
       var choices = new LinkedHashMap<String, WidgetFrame.Rect>();
+      var choiceBounds = new LinkedHashMap<String, WidgetFrame.Rect>();
       var fronts = new ArrayList<WidgetFrame.Rect>();
       for (var w : value.widgets()) {
         if (w.kind() != WidgetFrame.Kind.HINT) fronts.add(w.hitRect());
-        if (w.kind() == WidgetFrame.Kind.CHOICE && w.enabled())
-          choices.put(w.choiceId(), w.hitRect());
+        if (w.kind() == WidgetFrame.Kind.CHOICE) {
+          choiceBounds.put(w.choiceId(), w.hitRect());
+          if (w.enabled()) choices.put(w.choiceId(), w.hitRect());
+        }
       }
       if (value.scrollbar() != null) {
         fronts.add(value.scrollbar().track());
         value.scrollbar().buttons().forEach(button -> fronts.add(button.bounds()));
       }
-      geometries.put(context.generation(), new Geometry(transform, fronts, context.generation()));
+      geometries.put(
+          context.generation(),
+          new Geometry(transform, fronts, context.generation(), choiceBounds));
       targets.publish(value, context.generation(), choices, () -> !closed.get() && available());
     }
 
@@ -725,7 +739,11 @@ public final class NpcDialogueSurface implements DialogueSurface {
                                             geometries.computeIfPresent(
                                                 context.generation(),
                                                 (g, old) ->
-                                                    new Geometry(transform, old.fronts(), g));
+                                                    new Geometry(
+                                                        transform,
+                                                        old.fronts(),
+                                                        g,
+                                                        old.choiceBounds()));
                                             startFollow();
                                           }));
                         } catch (Throwable error) {

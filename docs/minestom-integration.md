@@ -95,7 +95,7 @@ Native one-line/bearing offsets are shared with the hit-plane proof tests.
 For personal gestures, use the [published NPC consumer](../fixtures/npc-dialogue-consumer).
 Its `ActorPort` prepares hidden private presentations, publishes once during
 activation, cues private clips/head look and closes only the owned presentations.
-It reuses NPC 0.2.0's engine, clock, rendering and viewer-only sounds. The shared
+It reuses NPC 1.0.0's engine, clock, rendering and viewer-only sounds. The shared
 parent survives. The base adapter requires no NPC package. Scene/Map/Grounds
 adapters and quest services remain later integration work.
 
@@ -114,7 +114,7 @@ Visible hotbars get a correction + ping fence; only its own connection's matchin
 pong resets virtual history. Covered hotbars do not continually send corrections.
 A private interaction entity catches empty-hand air use/attack for graphical
 surfaces. Ambiguous arm-animation packets are not treated as Attack. This
-public-base route still needs explicit 26.3 hand/held-button client acceptance.
+public-base route has scoped hand/held-button client results in the acceptance matrix.
 
 NPC hover uses the exact published world plane and original rectangles. A
 stationary hover does not undo manual scroll, including during confirmation and
@@ -122,7 +122,13 @@ page changes. After wheel or arrow selection, hover resumes when gaze moves at
 least1.5 degrees or the eye moves more than0.08 blocks; sub-threshold jitter
 keeps the manual selection. A newly changed hover target selects at most and
 needs a fresh confirm impulse. Back faces and block-occluded fronts do
-not hover. Native collision shapes include partial blocks. Default hit testing
+not hover or confirm. A click on an unavailable card is consumed without
+confirming a different, previously selected answer. Geometry retains bounds for
+all rendered cards, including unavailable ones; the original three-argument
+Geometry constructor remains available. Wheel-selected answers can still be
+confirmed while looking at the NPC, provided their center has a clear front-side
+sightline; directly pointing at an exposed part of the selected card also works.
+Native collision shapes include partial blocks. Default hit testing
 assumes first-person view; unregistered third-person cameras are not supported.
 
 Look-away defaults to >110° for 600 ms, with reset below 95°. NPC and visible
@@ -336,3 +342,14 @@ before asynchronous resource release completes. This setting belongs to the
 standalone application; the library never stops a borrowed Minestom engine.
 The optional `--shutdown-probe` plus `tools/minestom_smoke.py --active-shutdown`
 verifies that order with an active server-side dialogue and a real SIGTERM.
+
+## Focused NPC target test
+
+The demo command `/targettest` opens a separate content variant with the second
+answer unavailable and the first always available. It places two fixed stone
+pillars at x=-3/+3, z=2 in the demo world as real line-of-sight obstacles. They
+stay in that disposable world for repeated tests; no map files are changed.
+The ordinary `/dialogue` still opens the unchanged seven-answer content.
+Use the target variant to check unavailable-card clicks, blocked selected
+answers and panel backs, then verify normal front-side wheel confirmation.
+These are test fixtures, not a new library condition or content format.

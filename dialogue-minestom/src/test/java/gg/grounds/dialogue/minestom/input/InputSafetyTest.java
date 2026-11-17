@@ -41,6 +41,7 @@ class InputSafetyTest {
     TargetSnapshot targets;
     NpcDialogueSurface.Geometry geometry;
     boolean hidden;
+    boolean visible = true;
     CompletionStage<InputResult> submitGate =
         CompletableFuture.completedFuture(InputResult.ACCEPTED);
 
@@ -86,7 +87,7 @@ class InputSafetyTest {
               clock,
               new CancellationToken(),
               this,
-              (a, b) -> true);
+              (a, b) -> visible);
     }
 
     public DialogueView view() {
@@ -133,13 +134,89 @@ class InputSafetyTest {
                   player.getPosition().add(0, player.getEyeHeight(), 0))
               .withSpeechHeight(40);
       geometry =
-          new NpcDialogueSurface.Geometry(transform, List.copyOf(targets.choices().values()), 1);
+          new NpcDialogueSurface.Geometry(
+              transform, List.copyOf(targets.choices().values()), 1, targets.choices());
       var r = targets.choices().get(id);
       var target = transform.widgetToWorld(r.x() + r.width() / 2, r.y() + r.height() / 2);
       player.setView(
           player.getPosition().withLookAt(target).yaw(),
           player.getPosition().add(0, player.getEyeHeight(), 0).asPos().withLookAt(target).pitch());
     }
+  }
+
+  @Test
+  void occludedSelectedNpcChoiceCannotConfirm(Env env) {
+    var f = new Fixture(env);
+    f.aim("ask");
+    done(env, f.adapter.activate());
+    f.visible = false;
+    f.now.set(400_000_000);
+    f.packet(env, new ClientUseItemPacket(PlayerHand.MAIN, 1, 0, 0));
+    assertTrue(f.submitted.isEmpty(), "Occlusion must block confirmation as well as hover");
+    done(env, f.adapter.closeAsync());
+  }
+
+  @Test
+  void backFacingSelectedNpcChoiceCannotConfirm(Env env) {
+    var f = new Fixture(env);
+    f.aim("ask");
+    var transform = f.geometry.transform();
+    var bounds = f.targets.choices().get("ask");
+    var center =
+        transform.widgetToWorld(bounds.x() + bounds.width() / 2, bounds.y() + bounds.height() / 2);
+    var eye = center.sub(transform.planeFor(bounds).normal().mul(3));
+    var look = eye.asPos().withLookAt(center);
+    done(
+        env,
+        f.player.teleport(
+            eye.sub(0, f.player.getEyeHeight(), 0).asPos().withView(look.yaw(), look.pitch())));
+    done(env, f.adapter.activate());
+    f.now.set(400_000_000);
+    f.packet(env, new ClientUseItemPacket(PlayerHand.MAIN, 1, 0, 0));
+    assertTrue(f.submitted.isEmpty(), "A panel back must not confirm the selected front answer");
+    done(env, f.adapter.closeAsync());
+  }
+
+  @Test
+  void pointingAtUnavailableNpcChoiceCannotConfirmAnotherAnswer(Env env) {
+    var f = new Fixture(env);
+    f.aim("leave");
+    var v = f.view;
+    f.view =
+        new DialogueView(
+            v.sessionId(),
+            v.contentPin(),
+            v.nodeId(),
+            v.nodeVisitId(),
+            v.state(),
+            v.stateRevision(),
+            v.renderRevision(),
+            v.localeTag(),
+            v.speaker(),
+            v.text(),
+            List.of(
+                v.choices().getFirst(),
+                new DialogueView.ChoiceView(
+                    "leave", "Leave", DialogueView.Availability.UNAVAILABLE, "CHOICE_UNAVAILABLE")),
+            v.selectedChoiceId(),
+            v.totalGraphemes(),
+            v.revealedGraphemes(),
+            v.hint(),
+            v.notice(),
+            v.pendingAction());
+    f.targets =
+        new TargetSnapshot(
+            v.sessionId(),
+            v.renderRevision(),
+            v.nodeVisitId(),
+            1,
+            Map.of("ask", f.targets.choices().get("ask")));
+    done(env, f.adapter.activate());
+    f.now.set(400_000_000);
+    f.packet(env, new ClientUseItemPacket(PlayerHand.MAIN, 1, 0, 0));
+    assertTrue(
+        f.submitted.isEmpty(), "Clicking an unavailable card must not confirm another answer");
+    done(env, f.adapter.closeAsync());
   }
 
   @Test

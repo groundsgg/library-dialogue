@@ -457,6 +457,7 @@ public final class MinestomInputAdapter implements OwnedResource {
     var view = target.view();
     if (snapshot == null || view == null) return ignored();
     var geometry = target.npcGeometry();
+    NpcHitTest.ChoiceHit pointedChoice = null;
     if (geometry != null && geometry.surfaceGeneration() == snapshot.surfaceGeneration()) {
       var button =
           NpcHitTest.navigationHit(
@@ -473,6 +474,16 @@ public final class MinestomInputAdapter implements OwnedResource {
         return target.submit(
             new DialogueInput.Select(stamp(snapshot), button.get().button().choiceId()));
       }
+      pointedChoice =
+          NpcHitTest.choiceHit(
+                  player.getPosition().add(0, player.getEyeHeight(), 0),
+                  player.getPosition().direction(),
+                  geometry.transform(),
+                  geometry.choiceBounds(),
+                  snapshot,
+                  occlusion)
+              .orElse(null);
+      if (pointedChoice != null && !pointedChoice.usable()) return ignored();
     }
     var hovered = hover(snapshot).orElse(null);
     if (hovered != null
@@ -483,9 +494,26 @@ public final class MinestomInputAdapter implements OwnedResource {
       observed = hoverStamp(snapshot, hovered);
       return selection;
     }
-    if (target.effectiveSurface().equals("npc")
-        && !view.choices().isEmpty()
-        && !snapshot.choices().containsKey(view.selectedChoiceId())) return ignored();
+    if (target.effectiveSurface().equals("npc") && !view.choices().isEmpty()) {
+      var bounds = snapshot.choices().get(view.selectedChoiceId());
+      if (bounds == null
+          || geometry == null
+          || geometry.surfaceGeneration() != snapshot.surfaceGeneration()) return ignored();
+      // Wheel selection can be confirmed while looking at the NPC, but never through a wall or
+      // back.
+      if (pointedChoice == null || !pointedChoice.choiceId().equals(view.selectedChoiceId())) {
+        var eye = player.getPosition().add(0, player.getEyeHeight(), 0);
+        var center =
+            geometry
+                .transform()
+                .widgetToWorld(bounds.x() + bounds.width() / 2, bounds.y() + bounds.height() / 2);
+        var ray = center.sub(eye).asVec();
+        if (ray.lengthSquared() < 1e-12
+            || !NpcHitTest.hit(eye, ray.normalize(), geometry.transform(), snapshot, occlusion)
+                .filter(view.selectedChoiceId()::equals)
+                .isPresent()) return ignored();
+      }
+    }
     return target.submit(new DialogueInput.Confirm(stamp(snapshot), view.selectedChoiceId()));
   }
 
