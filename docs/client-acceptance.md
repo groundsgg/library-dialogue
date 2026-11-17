@@ -537,3 +537,30 @@ and reopening. The headless fake connection does not substitute for a real
 disconnect test; that remains a specific client gate. These helpers do not
 change ordinary `/dialogue`, the library API or pack files. Actual-client
 preparation/instance results remain pending until confirmed.
+
+## Idle NPC HUD-cover regression, 2026-11-17
+
+During the instance-change client check on `5d15401`, the user reported that
+`/hidehud` faded after a few seconds. They clarified that this already happened
+while the NPC dialogue was still open, before changing instance. Other observed
+instance behaviour worked, but this is not full acceptance of the lifecycle row;
+the preparation cancel, disconnect and instance checks remain pending.
+
+The NPC surface sent the ActionBar cover only when replacing a frame. Unlike
+the HUD surface, it did not renew that output during an idle dialogue, allowing
+the native ActionBar timeout to remove it. The correction renews the owned cover
+at one-second intervals through the existing NPC follow task. It permits only
+one renewal in flight, ignores stale completion after replacement/close and
+stops when the dialogue ends, its actor becomes invalid or its instance changes.
+It does not change the pack, visual assets, public API or world clock.
+
+A regression test failed without the correction and passes with it: an unchanged
+NPC frame renews its nonempty cover, then closing clears it with no late repaint.
+Fresh local checks pass: 249 library tests, 138 exact Grounds-profile tests,
+publication integrity, all four independent module origins and 13 Python tests.
+The changed `dialogue-minestom` JAR has SHA-256
+`7e5dcff7b28c60323aeb90417c5bac31cbfe99afc050aeab3983da11e15a2081`.
+The core/presentation JARs and both pack hashes are unchanged. Both basic and
+personal-NPC application smokes pass on public 26.2 and Grounds 26.3, as do
+all four protocol/pack/active-shutdown checks. These remain server-side evidence;
+an idle-cover client retest remains required.

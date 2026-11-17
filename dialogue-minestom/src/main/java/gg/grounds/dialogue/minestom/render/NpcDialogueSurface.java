@@ -26,6 +26,8 @@ import net.minestom.server.network.packet.server.play.BundlePacket;
 
 /** Private world panels projected from shared widgets; shared NPC entities remain borrowed. */
 public final class NpcDialogueSurface implements DialogueSurface {
+  private static final long HUD_REFRESH_NANOS = Duration.ofSeconds(1).toNanos();
+
   @FunctionalInterface
   interface SpawnOperation {
     CompletionStage<Void> spawn(Entity entity, Instance instance, Pos position);
@@ -239,6 +241,8 @@ public final class NpcDialogueSurface implements DialogueSurface {
     OutputChannels.HudLease hud;
     OutputChannels.EffectLease effects;
     long epoch;
+    long nextHudRefresh;
+    boolean hudRefreshing;
     CompletionStage<Void> movement = CompletableFuture.completedFuture(null);
 
     Handle(SurfaceContext context) {
@@ -487,6 +491,9 @@ public final class NpcDialogueSurface implements DialogueSurface {
                                                                           "MISSING_PACK"));
                                                                   return;
                                                                 }
+                                                                nextHudRefresh =
+                                                                    clock.nanoTime()
+                                                                        + HUD_REFRESH_NANOS;
                                                                 frame = next;
                                                                 apply(slots);
                                                                 publish(next);
@@ -652,6 +659,32 @@ public final class NpcDialogueSurface implements DialogueSurface {
       return result.minimalCompletionStage();
     }
 
+    void renewHudIfDue() {
+      if (closed.get()
+          || context.cancellation().isCancelled()
+          || !available()
+          || hud == null
+          || hudRefreshing
+          || clock.nanoTime() < nextHudRefresh) return;
+      var lease = hud;
+      long renewingEpoch = epoch;
+      hudRefreshing = true;
+      nextHudRefresh = clock.nanoTime() + HUD_REFRESH_NANOS;
+      lease
+          .replace(HudCoverage.compose(Component.empty(), 320, true))
+          .whenComplete(
+              (v, error) ->
+                  queue.execute(
+                      () -> {
+                        hudRefreshing = false;
+                        if (closed.get()
+                            || context.cancellation().isCancelled()
+                            || renewingEpoch != epoch
+                            || lease != hud) return;
+                        if (error != null) context.cancellation().cancel(DialogueEndReason.FAILED);
+                      }));
+    }
+
     void startFollow() {
       if (follow != null) follow.cancel();
       long followingEpoch = epoch;
@@ -671,6 +704,7 @@ public final class NpcDialogueSurface implements DialogueSurface {
                             context.cancellation().cancel(DialogueEndReason.HOST_CHANGED);
                             return;
                           }
+                          renewHudIfDue();
                           var next =
                               NpcPanelTransform.from(binding.snapshot().get(), eye())
                                   .withSpeechHeight(transform.speechHeight())

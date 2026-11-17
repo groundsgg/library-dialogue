@@ -13,6 +13,7 @@ import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.*;
 import net.kyori.adventure.resource.ResourcePackStatus;
+import net.kyori.adventure.text.Component;
 import net.minestom.server.coordinate.*;
 import net.minestom.server.entity.*;
 import net.minestom.server.entity.metadata.display.*;
@@ -29,6 +30,7 @@ class NpcDialogueSurfaceTest {
   static class Fixture {
     final Player a, b;
     final SurfaceInputTargets targets = new SurfaceInputTargets();
+    final List<Component> hud = new ArrayList<>();
     final java.util.concurrent.atomic.AtomicReference<Vec> feet =
         new java.util.concurrent.atomic.AtomicReference<>(new Vec(0, 42, 0));
     final NpcDialogueSurface surface;
@@ -56,7 +58,10 @@ class NpcDialogueSurfaceTest {
               packs,
               RenderFixtures.ASSETS,
               new LocalOutputChannels(
-                  (p, c) -> CompletableFuture.completedFuture(null),
+                  (p, c) -> {
+                    hud.add(c);
+                    return CompletableFuture.completedFuture(null);
+                  },
                   false,
                   (p, k) -> CompletableFuture.completedFuture(null)),
               targets,
@@ -67,6 +72,10 @@ class NpcDialogueSurfaceTest {
     }
 
     DialogueSurface.SurfaceHandle open(Env env) {
+      return open(env, Map.of());
+    }
+
+    DialogueSurface.SurfaceHandle open(Env env, Map<String, String> effects) {
       return done(
           env,
           surface.open(
@@ -79,7 +88,7 @@ class NpcDialogueSurfaceTest {
                   new CancellationToken(),
                   1,
                   Long.MAX_VALUE,
-                  new PresentationPreferences("npc", Duration.ZERO, false, Map.of()))));
+                  new PresentationPreferences("npc", Duration.ZERO, false, effects))));
     }
 
     List<Entity> displays() {
@@ -87,6 +96,27 @@ class NpcDialogueSurfaceTest {
           .filter(e -> e.getEntityType() == EntityType.TEXT_DISPLAY)
           .toList();
     }
+  }
+
+  @Test
+  void idleNpcCoverageIsRenewedAndCannotReappearAfterClose(Env env) {
+    var f = new Fixture(env, CompletableFuture.completedFuture(null));
+    var h = f.open(env, Map.of("hideHud", "true"));
+    done(env, h.replace(RenderFixtures.frame("npc", "Hello", 5)));
+    assertEquals(1, f.hud.size());
+    var cover = f.hud.getFirst();
+    assertFalse(cover.equals(Component.empty()));
+    assertTrue(
+        env.tickWhile(() -> f.hud.size() < 2, Duration.ofMillis(1600)),
+        "An idle NPC dialogue must refresh its native ActionBar cover before it fades");
+    assertEquals(cover, f.hud.getLast());
+    done(env, h.closeAsync());
+    assertEquals(Component.empty(), f.hud.getLast());
+    int closedWrites = f.hud.size();
+    assertFalse(
+        env.tickWhile(() -> f.hud.size() == closedWrites, Duration.ofMillis(1200)),
+        "No cover should be repainted after close");
+    assertEquals(closedWrites, f.hud.size());
   }
 
   @Test
