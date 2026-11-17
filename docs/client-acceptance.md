@@ -40,10 +40,10 @@ reports under `.evidence` deliberately set `visual_client_verified=false`.
 | Actual client metadata and correct pack formats | Installed protocol776/pack88.0 verified; targeted rendered-client basic pass2c0c0fd | Grounds26.3/protocol777/pack97.1 demo; repeated targeted graphics checks through60fd5c2, scoped below |
 | Pack accept, decline, download failure and removal | Initial pack load/basic rendering accepted2c0c0fd; decline/failure/removal pending | Explicit decline/re-allow acceptedb133d53; live owned removal, actual404 failure and graphical recovery accepted8b3f8c0 |
 | No pack request when opening/reopening a dialogue | Pending | Accepted7186e71: reopen/cancel and HUD/NPC/chat switching within one connection without request/download/interruption |
-| HUD: fonts, centering, typewriter, choices and final End hint | Basic fonts/panels/selection/confirmation pass2c0c0fd; full details pending | Layout/styles/cards and frozen foreground alignment accepted1ff1860; final End hint not separately confirmed on these library artifacts |
+| HUD: fonts, centering, typewriter, choices and final End hint | Basic fonts/panels/selection/confirmation pass2c0c0fd; full details pending | Layout/styles/cards and frozen foreground alignment accepted1ff1860; binding-appropriate final End hint and one-confirm close accepted60fd5c2 |
 | GUI scale 1/2/3/Auto, window sizes and screen-edge clipping | Pending | Targeted layout pass4e5c121 for left/right cards at scales1/2/3/Auto and smaller window; foreground vertical alignment subsequently accepted1ff1860 |
 | NPC: fixed world size, body-front yaw limit and near-head spacing | Basic NPC panels visible pass2c0c0fd; full pose/size cases pending | Fixed size while moving/offscreen confirmed70f7e67; selection-safe gap/fold acceptedeb8cb5e; body-front yaw limit not separately confirmed on library artifacts |
-| NPC: closed backs, no Z-fighting, hover and selection growth | Pending | Hover/growth and scrollbar back accepted through6e3c91c; full panel-back/Z-fighting check remains open |
+| NPC: closed backs, no Z-fighting, hover and selection growth | Pending | Hover/growth and scrollbar back accepted through6e3c91c; closed speech/name/answer backs without text bleed/flicker and front-hover return accepted60fd5c2 |
 | Seven answers reachable through three cards; disabled/occluded/back targets | Pending | Three-slot paging, partial last page, stable answer identity and wheel selection accepted6e3c91c; disabled/occluded/back-target client cases remain open |
 | Chat: complete sections, all choices, current/stale click behaviour | Basic clickable choices pass2c0c0fd; stale/complete-choice cases pending | Targeted pass4e5c121: non-first answer and stale links; full matrix still open |
 | Use/Attack/Swap with empty hands, main/offhand items and shield | Pending | Targeted HUD pass: empty hands1ff1860; Use/Attack/Swap with main/offhand/shield7186e71 |
@@ -609,3 +609,25 @@ Tested runtime remains `60fd5c20473ec39a1e86ec92be28336aae7ec873`, NPC1.0.0,
 with the identical library/pack hashes recorded in the idle-cover acceptance
 above. No product change, pack rebuild or process restart was needed for these
 replies. Draft PR3 remains unmerged and no release is implied.
+
+## Final HUD hint and NPC panel backs accepted (2026-11-17)
+
+On the unchanged `60fd5c2` Grounds26.3 demo at localhost:25578, the user
+confirmed both targeted checks with “Ja”:
+
+- After choosing an answer in HUD mode and fully revealing the following
+  message, the binding-appropriate “Beenden/End” hint appears; one confirmation
+  closes the dialogue cleanly.
+- NPC speech, name and answer panels are closed from behind, without text
+  bleeding through or flicker. Returning to the front preserves their appearance
+  and hover interaction.
+
+Runtime remains `60fd5c20473ec39a1e86ec92be28336aae7ec873`, Grounds26.3,
+NPC1.0.0, native adapter SHA-256
+`7e5dcff7b28c60323aeb90417c5bac31cbfe99afc050aeab3983da11e15a2081`,
+pack SHA-256
+`15a7eaf6163538a695ed859013e0a13e7e0f10a57d588062dd635d49a62ee1dc`.
+No code, pack or process was changed for this feedback. This does not accept
+back-face confirmation rejection, disabled/occluded targets or the separate
+public26.2 detailed cases. The existing independent review remains valid;
+the full client matrix and draft PR are still open.
