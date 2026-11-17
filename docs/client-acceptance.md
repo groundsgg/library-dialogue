@@ -38,7 +38,7 @@ reports under `.evidence` deliberately set `visual_client_verified=false`.
 | Check | Public 26.2 client | Grounds 26.3 client |
 |---|---|---|
 | Actual client metadata and correct pack formats | Pending visual run | Pending visual run |
-| Pack accept, decline, download failure and removal | Pending | Pending |
+| Pack accept, decline, download failure and removal | Pending | Explicit prompt decline/chat fallback acceptedb133d53; re-enable, download failure and removal pending |
 | No pack request when opening/reopening a dialogue | Pending | Accepted7186e71: reopen/cancel and HUD/NPC/chat switching within one connection without request/download/interruption |
 | HUD: fonts, centering, typewriter, choices and final End hint | Pending | Pending |
 | GUI scale 1/2/3/Auto, window sizes and screen-edge clipping | Pending | Targeted layout pass4e5c121 for left/right cards at scales1/2/3/Auto and smaller window; foreground vertical alignment subsequently accepted1ff1860 |
@@ -370,3 +370,21 @@ Trennung und Rückkehr passen”. This accepts that real two-client private
 render/sound/restoration case, not the remaining public26.2, pack-failure,
 preparation-interruption or instance-change cases. No product change or
 restart was required.
+
+## Explicit pack decline accepted (2026-11-17)
+
+The demo was restarted on documentation HEAD
+`b133d5358a170a4a8a4b436caaff230dd8f9e170`, with shared demo source byte-identical
+to7186e71 and the same verified1ff1860 library JARs/15a7eaf6 pack recorded above.
+The initial attempt did not establish a decline: the client loaded a cached
+pack and the saved visible127.0.0.1:25578 entry still had packs enabled; the
+separate hidden localhost entry is distinct client configuration. No server
+fix or client configuration write was made by the agent.
+
+The user then set the exact visible server entry to Prompt, connected through
+that entry and explicitly declined the prompt. Requesting NPC output produced
+a complete usable chat dialogue with clickable choices: “Abfrage abgelehnt;
+Chat-Fallback funktioniert”. This accepts explicit decline and the resulting
+chat fallback. Re-enabling/reconnecting remains a separate pending check, as
+do actual download failure and removal during a session. No product change or
+restart was needed for the successful decline check.
