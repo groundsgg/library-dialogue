@@ -14,7 +14,7 @@ val generateVersion by tasks.registering {
         target.writeText("version=${rootProject.version}\n", Charsets.UTF_8)
     }
 }
-sourceSets.main { resources.srcDir(generatedVersion) }
+sourceSets.main { resources.srcDir(generateVersion) }
 tasks.named("processResources") { dependsOn(generateVersion) }
 tasks.test { systemProperty("cli.runtimeClasspath", sourceSets.main.get().runtimeClasspath.asPath) }
 

@@ -18,3 +18,16 @@ class ConsumerOriginTest(unittest.TestCase):
         self.assertEqual({'dialogue-minestom'},origins.verify_log('CONSUMER_JAR dialogue-minestom sha256='+expected,{'dialogue-minestom':{'sha256':expected}}))
         with self.assertRaises(ValueError):origins.verify_log('CONSUMER_JAR dialogue-minestom sha256='+'b'*64,{'dialogue-minestom':{'sha256':expected}})
         with self.assertRaises(ValueError):origins.verify_log('CONSUMER_OK but no origins',{})
+
+class CompleteConsumerOriginsTest(unittest.TestCase):
+    def test_absentRequiredModuleRejectsEvenIfOtherHashesMatch(self):
+        modules={'dialogue-core':{'sha256':'a'*64},'dialogue-testkit':{'sha256':'b'*64}}
+        log='CONSUMER_JAR dialogue-core sha256='+'a'*64
+        with self.assertRaises(ValueError):origins.verify_logs([log],modules,{'dialogue-testkit'})
+    def test_aggregateRequiresEveryRequestedModule(self):
+        modules={name:{'sha256':'a'*64} for name in ('dialogue-core','dialogue-testkit','dialogue-cli')}
+        logs=['CONSUMER_JAR '+name+' sha256='+'a'*64 for name in modules]
+        self.assertEqual(set(modules),origins.verify_logs(logs,modules,set(modules)))
+    def test_sourceDirectoryRejects(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(ValueError):origins.verify_logs(['MAVEN_ORIGIN gg.grounds.dialogue.core.runtime.DialogueRuntime '+pathlib.Path(directory).as_uri()],{'dialogue-core':{'sha256':'a'*64}},{'dialogue-core'})
