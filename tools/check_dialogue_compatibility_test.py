@@ -92,3 +92,20 @@ class BinaryConsumerTests(unittest.TestCase):
                 for algorithm in ('sha1','sha256','sha512','md5'):metadata.with_name(metadata.name+'.'+algorithm).write_text(hashlib.new(algorithm,metadata.read_bytes()).hexdigest())
             with self.assertRaises(subprocess.CalledProcessError) as failure:tool.binary_consumers(repo,'0.1.0-SNAPSHOT')
             self.assertIn('NoSuchMethodError',failure.exception.stdout+failure.exception.stderr)
+
+class ToolingBaselineTests(unittest.TestCase):
+    def test_toolingApiIsActuallyCompared(self):
+        import sys
+        sys.path.insert(0,str(TOOL.parent))
+        import check_dialogue_compatibility as tool
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);baseline=root/'baseline';(baseline/'api').mkdir(parents=True);repo=root/'repo';hashes={}
+            for module in tool.MODULES+('dialogue-testkit','dialogue-cli'):
+                folder=repo/'gg/grounds'/module/'1.0.0';folder.mkdir(parents=True)
+                with zipfile.ZipFile(folder/(module+'-1.0.0.jar'),'w') as z:z.writestr('marker','empty controlled JAR')
+                api=baseline/'api'/(module+'.txt');api.write_text('{}\n');hashes[module]=hashlib.sha256(api.read_bytes()).hexdigest()
+            data={'commit':tool.COMMIT,'java':25,'version':tool.BASE_VERSION,'api':{m:hashes[m] for m in tool.MODULES},'schemas':{}}
+            (baseline/'baseline.json').write_text(json.dumps(data))
+            altered=baseline/'api/dialogue-testkit.txt';altered.write_text(json.dumps({'sample.Missing':'public class sample.Missing {}'}));hashes['dialogue-testkit']=hashlib.sha256(altered.read_bytes()).hexdigest()
+            (baseline/'tooling-baseline.json').write_text(json.dumps({'java':25,'api':{m:hashes[m] for m in ('dialogue-testkit','dialogue-cli')}}))
+            with self.assertRaisesRegex(ValueError,'API_COMPATIBILITY_FAILED'):tool.check(repo,'1.0.0',baseline)

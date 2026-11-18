@@ -83,6 +83,15 @@ def check(repository, version, baseline):
         jar = artifact(repository/'gg/grounds'/module/version, module, version, 'jar')
         compare_api(json.loads(sig_file.read_text()), api_signature(jar))
         if module == 'dialogue-json': compare_schemas(value['schemas'], schemas(jar))
+    tooling=baseline/'tooling-baseline.json'
+    if tooling.exists():
+        added=json.loads(tooling.read_text())
+        if added.get('java')!=25 or set(added.get('api',{}))!={'dialogue-cli','dialogue-testkit'}:raise ValueError('TOOLING_BASELINE_INVALID')
+        for module,digest in added['api'].items():
+            signature=baseline/'api'/f'{module}.txt'
+            if hashlib.sha256(signature.read_bytes()).hexdigest()!=digest:raise ValueError('BASELINE_HASH_FAILED')
+            jar=artifact(repository/'gg/grounds'/module/version,module,version,'jar')
+            compare_api(json.loads(signature.read_text()),api_signature(jar))
     print('API_COMPATIBILITY_OK'); print('SCHEMA_COMPATIBILITY_OK')
 
 def binary_consumers(repository, version):

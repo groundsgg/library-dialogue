@@ -4,22 +4,18 @@ on:
     tags: ['v*']
 permissions:
   contents: read
-  packages: write
 jobs:
   publish:
     uses: groundsgg/.github/.github/workflows/gradle-publish.yml@main
     permissions:
       contents: read
       packages: write
-  verify-published-consumers:
-    needs: publish
-    runs-on: ubuntu-24.04
+  cli-assets:
+    runs-on: ubuntu-latest
     permissions:
-      contents: read
-      packages: read
+      contents: write
     env:
-      GITHUB_ACTOR: ${{ github.actor }}
-      GITHUB_TOKEN: ${{ github.token }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-java@v5
@@ -27,11 +23,49 @@ jobs:
           distribution: temurin
           java-version: '25'
       - uses: gradle/actions/setup-gradle@v6
-      - name: Resolve the published packages through independent consumers
+      - name: Build the tagged CLI version and upload release assets
+        shell: bash
         run: |
           version="${GITHUB_REF_NAME#v}"
-          repository="https://maven.pkg.github.com/groundsgg/library-dialogue"
-          ./gradlew -p fixtures/java-consumer run -PdialogueVersion="$version" -PdialogueRepository="$repository"
-          ./gradlew -p fixtures/kotlin-consumer run -PdialogueVersion="$version" -PdialogueRepository="$repository"
-          ./gradlew -p fixtures/minestom-consumer test run -PdialogueVersion="$version" -PdialogueRepository="$repository"
-          ./gradlew -p examples/standalone-minestom test run --args=--smoke -PdialogueVersion="$version" -PdialogueRepository="$repository"
+          ./gradlew :dialogue-cli:distZip -PversionOverride="$version"
+          python3 tools/check_cli_distribution.py --zip "dialogue-cli/build/distributions/dialogue-cli-${version}.zip" --version "$version" --author-root examples/headless-dialogue/src/main/resources
+          cd dialogue-cli/build/distributions
+          sha256sum "dialogue-cli-${version}.zip" > "dialogue-cli-${version}.zip.sha256"
+          for attempt in 1 2 3 4 5 6; do
+            if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then break; fi
+            if [ "$attempt" = 6 ]; then exit 1; fi
+            sleep 5
+          done
+          gh release upload "$GITHUB_REF_NAME" "dialogue-cli-${version}.zip" "dialogue-cli-${version}.zip.sha256" --clobber
+  verify-published-consumers:
+    needs: [publish, cli-assets]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+    env:
+      GITHUB_ACTOR: ${{ github.actor }}
+      GITHUB_TOKEN: ${{ github.token }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Download and verify the actual release through fresh consumers
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p .evidence/release
+          gh release download "$GITHUB_REF_NAME" --pattern "dialogue-cli-${version}.zip" --pattern "dialogue-cli-${version}.zip.sha256" --dir .evidence/release
+          (cd .evidence/release && sha256sum -c "dialogue-cli-${version}.zip.sha256")
+          python3 tools/verify_dialogue_release.py --repository https://maven.pkg.github.com/groundsgg/library-dialogue --version "$version" --cli-zip ".evidence/release/dialogue-cli-${version}.zip" --work-dir .evidence/remote-consumers
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: release-consumer-evidence
+          path: |
+            .evidence/remote-consumers/*.log
+            .evidence/remote-consumers/*.json
