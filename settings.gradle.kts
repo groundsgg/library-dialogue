@@ -3,3 +3,4 @@ include("dialogue-core", "dialogue-json", "dialogue-presentation")
 include(":examples:headless-dialogue")
 
 include("dialogue-minestom")
+include("dialogue-testkit")
