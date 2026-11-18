@@ -1,3 +1,4 @@
+plugins { application }
 dependencies {
     implementation(project(":dialogue-core"))
     implementation(project(":dialogue-json"))
@@ -16,3 +17,9 @@ val generateVersion by tasks.registering {
 sourceSets.main { resources.srcDir(generatedVersion) }
 tasks.named("processResources") { dependsOn(generateVersion) }
 tasks.test { systemProperty("cli.runtimeClasspath", sourceSets.main.get().runtimeClasspath.asPath) }
+
+application { mainClass.set("gg.grounds.dialogue.cli.DialogueCli"); applicationName = "dialogue" }
+distributions.main {
+    distributionBaseName.set("dialogue-cli")
+    contents { from(rootProject.file("LICENSE")); from(rootProject.file("NOTICE")) }
+}
