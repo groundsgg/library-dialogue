@@ -33,3 +33,7 @@ Defaults: definition 1 MiB; 1,024 nodes; 64 choices/node; 32 automatic transitio
 Fingerprint v1: SHA-256 of the canonical envelope containing `fingerprintVersion: 1`, the normalized definition and `textsManifest`, which is the SHA-256 of the canonical locale/text map. The text manifest is cached per immutable catalogue. The host provider implementation and live entity handles are excluded; the validation catalogue/binding generation is separate.
 
 Canonical data uses UTF-8, codepoint-ordered object keys, original array order, normalized finite decimal numbers and deterministic JSON escapes. It does not normalize Unicode NFC: distinct authored codepoint sequences remain distinct. Object whitespace/key order does not change a pin; choice order or translation content does. Full golden vectors are tested independently.
+
+## Local validation
+
+Run `dialogue validate --root <author-project> --format json` from the standalone CLI distribution (JDK25). Reuse `examples/headless-dialogue/src/main/resources`. Exit0 accepts the entire snapshot,1 reports invalid content and2 reports invocation/input errors. See `dialogue-cli/README.md` for limits and report v1. The shared loader/validator remains authoritative; the CLI neither fixes nor activates content.
