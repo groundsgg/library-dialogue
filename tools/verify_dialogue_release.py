@@ -15,7 +15,7 @@ import sys
 import time
 from urllib.error import HTTPError
 from urllib.parse import unquote,urlparse
-from urllib.request import Request,urlopen
+from urllib.request import Request,HTTPRedirectHandler,build_opener
 from check_cli_distribution import check_archive,check_distribution
 from verify_public_artifacts import MODULES
 from verify_consumer_origins import verify_logs
@@ -31,10 +31,22 @@ def validate_source(repository,allow_local):
 
 def success_marker(remote):return 'DIALOGUE_REMOTE_CONSUMERS_OK' if remote else 'DIALOGUE_LOCAL_CONSUMERS_OK'
 
+class OriginScopedRedirectHandler(HTTPRedirectHandler):
+    """Authenticate only the original origin; reject a TLS downgrade."""
+    def redirect_request(self, request, response, code, message, headers, new_url):
+        before=urlparse(request.full_url);after=urlparse(new_url)
+        if before.scheme=='https' and after.scheme!='https':raise ValueError('HTTPS_REDIRECT_REQUIRED')
+        if after.username or after.password:raise ValueError('REDIRECT_USERINFO_REJECTED')
+        redirected=super().redirect_request(request,response,code,message,headers,new_url)
+        def origin(uri):return (uri.scheme,uri.hostname,uri.port if uri.port is not None else (443 if uri.scheme=='https' else 80))
+        if redirected is not None and origin(before)!=origin(after):redirected.remove_header('Authorization')
+        return redirected
+
 def download_artifacts(version,mirror):
     user=os.environ.get('GITHUB_ACTOR');token=os.environ.get('GITHUB_TOKEN')
     if not user or not token:raise ValueError('PACKAGE_READ_IDENTITY_REQUIRED')
     auth='Basic '+base64.b64encode((user+':'+token).encode()).decode()
+    opener=build_opener(OriginScopedRedirectHandler())
     for module in MODULES:
         folder=mirror/'gg/grounds'/module/version;folder.mkdir(parents=True)
         for suffix in ('.pom','.jar','-sources.jar','-javadoc.jar'):
@@ -42,7 +54,7 @@ def download_artifacts(version,mirror):
             for attempt in range(3):
                 try:
                     request=Request(url,headers={'Authorization':auth,'User-Agent':'dialogue-release-verifier'})
-                    with urlopen(request,timeout=30) as response,(folder/filename).open('wb') as out:
+                    with opener.open(request,timeout=30) as response,(folder/filename).open('wb') as out:
                         size=0
                         while True:
                             block=response.read(65536)

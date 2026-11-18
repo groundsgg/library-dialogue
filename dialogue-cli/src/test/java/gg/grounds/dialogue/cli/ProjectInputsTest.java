@@ -181,4 +181,21 @@ class ProjectInputsTest {
       Files.write(root.resolve("texts/en-x-l" + i + ".json"), new byte[4 * 1024 * 1024]);
     assertEquals("CLI_INPUT_LIMIT", code(ProjectInputs.read(root)));
   }
+
+  @Test
+  void ambiguousNativeFilenamesCannotDropDefinitions() throws Exception {
+    org.junit.jupiter.api.Assumptions.assumeTrue(System.getProperty("os.name").equals("Linux"));
+    setup();
+    var child =
+        new ProcessBuilder(
+                "python3",
+                "-c",
+                "import os,sys; root=os.fsencode(sys.argv[1]); [(lambda f:"
+                    + " (os.write(f,b'{}'),os.close(f)))(os.open(root+b'/dialogues/'+bytes([n])+b'.json',os.O_CREAT|os.O_WRONLY,0o600))"
+                    + " for n in (254,255)]",
+                root.toString())
+            .start();
+    assertEquals(0, child.waitFor());
+    assertEquals("CLI_PATH", code(ProjectInputs.read(root)));
+  }
 }

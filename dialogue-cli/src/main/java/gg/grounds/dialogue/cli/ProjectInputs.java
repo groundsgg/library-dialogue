@@ -66,6 +66,9 @@ final class ProjectInputs {
   }
 
   private BasicFileAttributes attributes(Path path) {
+    var name = path.getFileName();
+    if (name != null && !name.equals(Path.of(name.toString())))
+      throw failure("CLI_PATH", path, "Input name cannot be represented unambiguously");
     if (!path.toAbsolutePath().normalize().startsWith(root))
       throw failure("CLI_PATH", null, "Input escapes project root");
     try {
@@ -93,7 +96,10 @@ final class ProjectInputs {
     for (Path path : discover(root.resolve("dialogues"))) {
       if (definitions.size() == 1024)
         throw failure("CLI_INPUT_LIMIT", path, "Too many dialogue definitions");
-      definitions.put(relative(path), readFile(path, 1024 * 1024));
+      String key = relative(path);
+      if (definitions.containsKey(key))
+        throw failure("CLI_PATH", path, "Ambiguous input source name");
+      definitions.put(key, readFile(path, 1024 * 1024));
     }
     for (Path path : discover(root.resolve("texts"))) {
       if (!path.getParent().equals(root.resolve("texts")))

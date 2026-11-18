@@ -10,7 +10,11 @@ public final class DialogueCli {
   private DialogueCli() {}
 
   public static void main(String[] args) {
-    System.exit(run(args, System.out, System.err));
+    System.exit(
+        run(
+            args,
+            new FileOutputStream(FileDescriptor.out),
+            new FileOutputStream(FileDescriptor.err)));
   }
 
   static int run(String[] args, OutputStream stdout, OutputStream stderr) {

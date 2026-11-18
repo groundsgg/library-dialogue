@@ -39,3 +39,11 @@ class DistributionTests(unittest.TestCase):
    self.assertEqual(0,result.returncode,result.stdout+result.stderr);hashes.append(hashlib.sha256(zip_path.read_bytes()).hexdigest())
   self.assertEqual(hashes[0],hashes[1])
   with self.assertRaises(ValueError):self.tool().check_distribution(zip_path,'0.1.0',root/'examples/headless-dialogue/src/main/resources')
+
+ def test_windowsBatchLauncherHandlesSpacesAndUnicode(self):
+  if os.name!='nt':self.skipTest('native Windows command processor gate')
+  tool=self.tool()
+  with tempfile.TemporaryDirectory(prefix='batch space ü ') as temporary:
+   folder=Path(temporary);script=folder/'probe.bat';script.write_bytes(b'@echo off\r\necho PROBE_OK %*\r\n')
+   result=tool.invoke(script,['--version'],folder)
+   self.assertEqual(0,result.returncode,result.stderr);self.assertEqual('PROBE_OK --version',result.stdout.strip())

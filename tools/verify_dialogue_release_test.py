@@ -44,3 +44,38 @@ class ReleaseVerifierTests(unittest.TestCase):
    self.assertIn('DIALOGUE_LOCAL_CONSUMERS_OK',result.stdout)
    self.assertIn('CLI_DISTRIBUTION_OK',result.stdout)
    self.assertNotIn('DIALOGUE_REMOTE_CONSUMERS_OK',result.stdout)
+
+class RedirectCredentialRegressions(unittest.TestCase):
+ def test_crossOriginRedirectCannotReceivePackageCredential(self):
+  import http.server,threading,os,base64
+  from unittest.mock import patch
+  import verify_dialogue_release as verifier
+  received=[];source_auth=[];mode=['cross']
+  class Sink(http.server.BaseHTTPRequestHandler):
+   def do_GET(self):
+    received.append(self.headers.get('Authorization'));self.send_response(200);self.end_headers();self.wfile.write(b'ok')
+   def log_message(self,*args):pass
+  target=http.server.ThreadingHTTPServer(('127.0.0.1',0),Sink)
+  class Source(http.server.BaseHTTPRequestHandler):
+   def do_GET(self):
+    if self.path=='/same':
+     received.append(self.headers.get('Authorization'));self.send_response(200);self.end_headers();self.wfile.write(b'ok');return
+    source_auth.append(self.headers.get('Authorization'));self.send_response(302);self.send_header('Location',('http://127.0.0.1:'+str(target.server_port)+'/target') if mode[0]=='cross' else '/same');self.end_headers()
+   def log_message(self,*args):pass
+  source=http.server.ThreadingHTTPServer(('127.0.0.1',0),Source)
+  threads=[threading.Thread(target=server.serve_forever,daemon=True) for server in (source,target)]
+  for thread in threads:thread.start()
+  try:
+   with tempfile.TemporaryDirectory() as temporary,patch.object(verifier,'REGISTRY','http://127.0.0.1:'+str(source.server_port)),patch.dict(os.environ,{'GITHUB_ACTOR':'dummy-user','GITHUB_TOKEN':'DUMMY-ONLY'}):
+    verifier.download_artifacts('1.0.0',Path(temporary)/'cross')
+    self.assertEqual([None]*24,received)
+    received.clear();mode[0]='relative';verifier.download_artifacts('1.0.0',Path(temporary)/'same')
+    expected='Basic '+base64.b64encode(b'dummy-user:DUMMY-ONLY').decode()
+    self.assertEqual([expected]*24,received);self.assertEqual([expected]*48,source_auth)
+  finally:
+   for server in (source,target):server.shutdown();server.server_close()
+   for thread in threads:thread.join(timeout=5)
+ def test_httpsRedirectCannotDowngrade(self):
+  import verify_dialogue_release as verifier
+  from urllib.request import Request
+  with self.assertRaisesRegex(ValueError,'HTTPS_REDIRECT_REQUIRED'):verifier.OriginScopedRedirectHandler().redirect_request(Request('https://registry.invalid/artifact'),None,302,'Found',{},'http://registry.invalid/artifact')

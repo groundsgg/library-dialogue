@@ -109,3 +109,25 @@ class ToolingBaselineTests(unittest.TestCase):
             altered=baseline/'api/dialogue-testkit.txt';altered.write_text(json.dumps({'sample.Missing':'public class sample.Missing {}'}));hashes['dialogue-testkit']=hashlib.sha256(altered.read_bytes()).hexdigest()
             (baseline/'tooling-baseline.json').write_text(json.dumps({'java':25,'api':{m:hashes[m] for m in ('dialogue-testkit','dialogue-cli')}}))
             with self.assertRaisesRegex(ValueError,'API_COMPATIBILITY_FAILED'):tool.check(repo,'1.0.0',baseline)
+
+class ReviewedCompatibilityRegressions(unittest.TestCase):
+    def test_removedSealedContractRejectsActualJar(self):
+        import check_dialogue_compatibility as tool
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);signatures=[]
+            for name,sealed in [('sealed',True),('open',False)]:
+                folder=root/name;folder.mkdir();source=folder/'Api.java'
+                source.write_text('package sample; public '+('sealed ' if sealed else '')+'interface Api '+('permits Impl ' if sealed else '')+'{} final class Impl implements Api {}')
+                subprocess.run([tool.jdk('javac'),'-d',str(folder),str(source)],check=True,capture_output=True)
+                jar=folder/'api.jar'
+                with zipfile.ZipFile(jar,'w') as z:
+                    for cls in folder.rglob('*.class'):z.write(cls,cls.relative_to(folder))
+                signatures.append(tool.api_signature(jar))
+            with self.assertRaisesRegex(ValueError,'API_COMPATIBILITY_FAILED'):tool.compare_api(*signatures)
+    def test_missingToolingManifestCannotDisableGate(self):
+        import check_dialogue_compatibility as tool
+        import shutil
+        root=TOOL.parent.parent
+        with tempfile.TemporaryDirectory() as temporary:
+            baseline=Path(temporary)/'baseline';shutil.copytree(root/'compatibility',baseline);(baseline/'tooling-baseline.json').unlink()
+            with self.assertRaisesRegex(ValueError,'TOOLING_BASELINE_MISSING'):tool.check(root/'.evidence/maven','0.1.0-SNAPSHOT',baseline)

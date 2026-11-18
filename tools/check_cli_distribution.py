@@ -29,7 +29,7 @@ def check_archive(path,version):
     return base
 
 def invoke(launcher,args,cwd):
-    command=([os.environ.get('COMSPEC','cmd.exe'),'/d','/s','/c',subprocess.list2cmdline([str(launcher),*args])] if os.name=='nt' else [str(launcher),*args])
+    command=(subprocess.list2cmdline([os.environ.get('COMSPEC','cmd.exe')])+' /d /s /c "'+subprocess.list2cmdline([str(launcher),*args])+'"' if os.name=='nt' else [str(launcher),*args])
     return subprocess.run(command,cwd=cwd,capture_output=True,text=True,encoding='utf-8',timeout=60)
 
 def check_distribution(path,version,author_root,java=None,work_dir=None):
@@ -44,7 +44,7 @@ def check_distribution(path,version,author_root,java=None,work_dir=None):
     project=work_dir/'author project Grüße';project.mkdir()
     for name in ('dialogues','texts','context'):shutil.copytree(Path(author_root)/name,project/name)
     version_result=invoke(launcher,['--version'],work_dir)
-    if version_result.returncode:raise ValueError('CLI_VERSION_LAUNCH_FAILED')
+    if version_result.returncode:raise ValueError('CLI_VERSION_LAUNCH_FAILED: '+version_result.stderr.strip())
     check_version(version_result.stdout,version)
     good=invoke(launcher,['validate','--root',str(project),'--format','json'],work_dir)
     report=json.loads(good.stdout)

@@ -189,4 +189,24 @@ class DialogueCliTest {
         new String(version.getInputStream().readAllBytes(), StandardCharsets.UTF_8).strip());
     assertEquals(0, version.waitFor());
   }
+
+  @Test
+  void realMainCannotClaimSuccessWhenStdoutIsFull() throws Exception {
+    org.junit.jupiter.api.Assumptions.assumeTrue(Files.exists(Path.of("/dev/full")));
+    project();
+    var child =
+        new ProcessBuilder(
+                Path.of(System.getProperty("java.home"), "bin/java").toString(),
+                "-cp",
+                System.getProperty("cli.runtimeClasspath"),
+                DialogueCli.class.getName(),
+                "validate",
+                "--root",
+                root.toString(),
+                "--format",
+                "json")
+            .redirectOutput(new java.io.File("/dev/full"))
+            .start();
+    assertEquals(2, child.waitFor());
+  }
 }

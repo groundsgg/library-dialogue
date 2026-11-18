@@ -73,6 +73,9 @@ jobs:
           java-version: '25'
       - uses: gradle/actions/setup-gradle@v6
       - run: ./gradlew :dialogue-cli:test :dialogue-cli:distZip
+      - name: Verify native Windows batch invocation
+        if: runner.os == 'Windows'
+        run: python -m unittest discover -s tools -p check_cli_distribution_test.py -k windowsBatchLauncher
       - name: Run actual standalone launcher with spaces and Unicode
         run: >-
           python tools/check_cli_distribution.py

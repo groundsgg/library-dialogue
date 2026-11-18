@@ -31,6 +31,16 @@ def api_signature(jar):
         lines = [s for s in out.splitlines() if not s.startswith('Compiled from')]
         if lines and re.match(r'^(public|protected) ', lines[0]):
             result[cls] = '\n'.join(lines) + '\n'
+    if classes:
+        details=subprocess.run([jdk('javap'),'-v','-classpath',str(jar),*classes],capture_output=True,text=True,check=True).stdout
+        for block in details.split('Classfile '):
+            owner=re.search(r'^\s*this_class:\s*#\d+\s*//\s*(\S+)',block,re.M)
+            permitted=re.search(r'^PermittedSubclasses:\r?\n((?:  \S+\r?\n)+)',block,re.M)
+            if owner and permitted:
+                name=owner.group(1).replace('/','.')
+                if name in result:
+                    children=sorted(line.strip().replace('/','.') for line in permitted.group(1).splitlines())
+                    result[name]+='PermittedSubclasses:\n'+''.join('  '+child+'\n' for child in children)
     return result
 
 def schemas(jar):
@@ -77,6 +87,7 @@ def capture(commit, output):
 
 def check(repository, version, baseline):
     value = json.loads((baseline/'baseline.json').read_text()); validate_baseline(value)
+    if not (baseline/'tooling-baseline.json').is_file():raise ValueError('TOOLING_BASELINE_MISSING')
     for module in MODULES:
         sig_file = baseline/'api'/f'{module}.txt'
         if hashlib.sha256(sig_file.read_bytes()).hexdigest() != value['api'][module]: raise ValueError('BASELINE_HASH_FAILED')
