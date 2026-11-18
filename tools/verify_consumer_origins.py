@@ -21,8 +21,11 @@ def verify_log(text, modules):
         path=Path(unquote(uri.path))
         if path.suffix!='.jar' or not path.is_file():
             raise ValueError('Expected a real Maven JAR')
-        found[module]=hashlib.sha256(path.read_bytes()).hexdigest()
+        digest=hashlib.sha256(path.read_bytes()).hexdigest()
+        if digest!=modules[module]['sha256']:raise ValueError('STALE_CONSUMER_ARTIFACT: '+module)
+        found[module]=digest
     for module,digest in re.findall(r'^CONSUMER_JAR (dialogue-[a-z]+) sha256=([a-f0-9]{64})$',text,re.M):
+        if module not in modules or digest!=modules[module]['sha256']:raise ValueError('STALE_CONSUMER_ARTIFACT: '+module)
         found[module]=digest
     if not found:
         raise ValueError('NO_CONSUMER_ORIGINS')
@@ -32,10 +35,20 @@ def verify_log(text, modules):
     return set(found)
 
 
+def verify_logs(logs, modules, required):
+    required=set(required)
+    if not required or not required.issubset(modules):raise ValueError('INVALID_REQUIRED_MODULES')
+    checked=set()
+    for log in logs:checked.update(verify_log(log,modules))
+    missing=required-checked
+    if missing:raise ValueError('MISSING_CONSUMER_MODULES: '+','.join(sorted(missing)))
+    return checked
+
+
 def main():
-    p=argparse.ArgumentParser();p.add_argument('--log',type=Path,action='append',required=True);p.add_argument('--manifest',type=Path,default=ROOT/'.evidence/public-artifacts.json');args=p.parse_args()
-    modules=json.loads(args.manifest.read_text())['modules'];checked=set()
-    for log in args.log:checked.update(verify_log(log.read_text(),modules))
+    p=argparse.ArgumentParser();p.add_argument('--log',type=Path,action='append',required=True);p.add_argument('--manifest',type=Path,default=ROOT/'.evidence/public-artifacts.json');p.add_argument('--require',action='append',required=True);args=p.parse_args()
+    modules=json.loads(args.manifest.read_text())['modules']
+    checked=verify_logs([log.read_text() for log in args.log],modules,args.require)
     print('CONSUMER_ORIGINS_OK '+','.join(sorted(checked)))
 
 

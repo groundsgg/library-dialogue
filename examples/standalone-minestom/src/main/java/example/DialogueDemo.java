@@ -45,6 +45,13 @@ public final class DialogueDemo {
     CompletionStage<DemoNpc> spawn(Instance instance);
   }
 
+  // The application listener can run before the host's child event node.
+  static void refreshAfterPackStatus(
+      PackStateTracker tracker, PlayerResourcePackStatusEvent event, Runnable refresh) {
+    tracker.observe(event.getPlayer(), event.getPackUuid(), event.getStatus());
+    refresh.run();
+  }
+
   public static void main(String[] args) throws Exception {
     run(args, DialogueDemo::nativeAnchor, Map.of(), DialoguePostEffects.unsupported());
   }
@@ -116,13 +123,17 @@ public final class DialogueDemo {
                       && e.getStatus()
                           == net.kyori.adventure.resource.ResourcePackStatus.SUCCESSFULLY_LOADED) {
                     live.restoreGraphics = false;
-                    live.refresh()
-                        .whenComplete(
-                            (v, error) -> {
-                              if (error != null)
-                                live.player.sendMessage(
-                                    "Demo pack restore failed: " + error.getMessage());
-                            });
+                    refreshAfterPackStatus(
+                        app.host.packState(),
+                        e,
+                        () ->
+                            live.refresh()
+                                .whenComplete(
+                                    (v, error) -> {
+                                      if (error != null)
+                                        live.player.sendMessage(
+                                            "Demo pack restore failed: " + error.getMessage());
+                                    }));
                   }
                 }
               });

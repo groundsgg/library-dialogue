@@ -62,3 +62,30 @@ class PublicationGateTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+class ToolingPublicationGateTest(unittest.TestCase):
+    def test_allSixPublicationsAreChecked(self):
+        result=subprocess.run([sys.executable,str(TOOL)],cwd=ROOT,capture_output=True,text=True)
+        self.assertEqual(0,result.returncode,result.stdout+result.stderr)
+        self.assertIn('PUBLIC_ARTIFACT dialogue-testkit ',result.stdout)
+        self.assertIn('PUBLIC_ARTIFACT dialogue-cli ',result.stdout)
+    def test_forbiddenPlatformDependencyRejectsNewModules(self):
+        for module in ('dialogue-testkit','dialogue-cli'):
+            with self.subTest(module=module),tempfile.TemporaryDirectory() as directory:
+                target=pathlib.Path(directory)/'maven';shutil.copytree(REPO,target)
+                for pom in (target/'gg/grounds'/module/'0.1.0-SNAPSHOT').glob('*.pom'):
+                    tree=ET.parse(pom);ns='{http://maven.apache.org/POM/4.0.0}'
+                    dep=ET.SubElement(tree.getroot().find(ns+'dependencies'),ns+'dependency')
+                    for key,text in [('groupId','net.minestom'),('artifactId','minestom'),('version','forbidden')]:ET.SubElement(dep,ns+key).text=text
+                    tree.write(pom)
+                result=subprocess.run([sys.executable,str(TOOL),'--repository',str(target)],cwd=ROOT,capture_output=True,text=True)
+                self.assertNotEqual(0,result.returncode)
+                self.assertIn('POM_DEPENDENCIES',result.stdout+result.stderr)
+    def test_missingToolingSourcesOrJavadocsRejects(self):
+        for module,classifier in [('dialogue-cli','sources'),('dialogue-testkit','javadoc')]:
+            with self.subTest(module=module),tempfile.TemporaryDirectory() as directory:
+                target=pathlib.Path(directory)/'maven';shutil.copytree(REPO,target)
+                for jar in (target/'gg/grounds'/module/'0.1.0-SNAPSHOT').glob('*-'+classifier+'.jar'):jar.unlink()
+                result=subprocess.run([sys.executable,str(TOOL),'--repository',str(target)],cwd=ROOT,capture_output=True,text=True)
+                self.assertNotEqual(0,result.returncode)
+                self.assertIn('ARTIFACT_MISSING',result.stdout+result.stderr)

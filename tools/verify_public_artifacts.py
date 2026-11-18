@@ -12,8 +12,10 @@ import sys
 import xml.etree.ElementTree as ET
 import zipfile
 
-MODULES = ('dialogue-core', 'dialogue-json', 'dialogue-presentation', 'dialogue-minestom')
+MODULES = ('dialogue-core', 'dialogue-json', 'dialogue-presentation', 'dialogue-minestom', 'dialogue-testkit', 'dialogue-cli')
 EXPECTED = {
+    'dialogue-testkit': {'gg.grounds:dialogue-core', 'gg.grounds:dialogue-presentation'},
+    'dialogue-cli': {'gg.grounds:dialogue-core', 'gg.grounds:dialogue-json', 'com.google.code.gson:gson'},
     'dialogue-core': set(),
     'dialogue-json': {'gg.grounds:dialogue-core', 'com.google.code.gson:gson'},
     'dialogue-presentation': {'gg.grounds:dialogue-core'},
@@ -71,8 +73,8 @@ def main():
                     continue
                 data = archive.read(name)
                 require(struct.unpack('>H', data[6:8])[0] == 69, 'BYTECODE_TARGET', name)
-                forbidden = [b'kotlin/',b'gg/grounds/scene',b'gg/grounds/npc',b'gg/grounds/runtime',b'probe/',b'java/awt']
-                if module not in ('dialogue-json','dialogue-minestom'):forbidden.append(b'com/google/gson')
+                forbidden = [b'kotlin/',b'gg/grounds/scene',b'gg/grounds/npc',b'gg/grounds/runtime',b'probe/',b'java/awt',b'org/junit',b'org/mockito',b'org/assertj']
+                if module not in ('dialogue-json','dialogue-minestom','dialogue-cli'):forbidden.append(b'com/google/gson')
                 if module != 'dialogue-minestom':forbidden.append(b'net/minestom')
                 for reference in forbidden:
                     require(reference not in data, 'FORBIDDEN_CLASS_REFERENCE', f'{module}: {name} {reference!r}')
@@ -94,7 +96,7 @@ def main():
                     require(total<=32*1024*1024,'ASSET_LIMIT',profile)
                     canonical=json.dumps({'profile':profile,'files':manifest['files'],'glyphs':manifest['glyphs']},sort_keys=True,ensure_ascii=False,separators=(',',':')).encode()
                     require(hashlib.sha256(canonical).hexdigest()==manifest['pin'],'FONT_PIN',profile)
-        publications[module] = {'jar': str(jar.resolve()), 'sha256': hashlib.sha256(jar.read_bytes()).hexdigest(), 'classes': classes}
+        publications[module] = {'jar': str(jar.resolve()), 'sha256': hashlib.sha256(jar.read_bytes()).hexdigest(), 'pom': str(pom.resolve()), 'pomSha256': hashlib.sha256(pom.read_bytes()).hexdigest(), 'classes': classes}
     classpath = os.pathsep.join(item['jar'] for item in publications.values())
     for module, item in publications.items():
         result = subprocess.run([javap, '-public', '-classpath', classpath, *item['classes']], capture_output=True, text=True)

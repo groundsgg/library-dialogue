@@ -1,0 +1,4 @@
+Gson 2.13.2 — Copyright Google Inc.; Apache License 2.0.
+Error Prone annotations 2.41.0 — Copyright The Error Prone Authors; Apache License 2.0.
+See Apache-2.0.txt. Original dependency JARs are retained without modification.
+Core/JSON/CLI are covered by the distribution LICENSE and NOTICE (MIT).

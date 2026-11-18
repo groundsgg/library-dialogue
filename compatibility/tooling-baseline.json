@@ -1,0 +1,9 @@
+{
+  "api": {
+    "dialogue-cli": "b8f2b5a808d92174106db0175d6a7b73cd74435587b8883e60c21158857b77b4",
+    "dialogue-testkit": "1ebb7870c3e914bf9d92be8e8da3f26f2058f786a222cddef0beb3d7ac3a05d7"
+  },
+  "introducedAt": "af19ed0766853a9ec7a81092a7dade8ded5ebe6f",
+  "java": 25,
+  "source": "actual review publications; included with first release"
+}

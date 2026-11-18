@@ -1,0 +1,3 @@
+{
+  "gg.grounds.dialogue.cli.DialogueCli": "public final class gg.grounds.dialogue.cli.DialogueCli {\n  public static void main(java.lang.String[]);\n    descriptor: ([Ljava/lang/String;)V\n}\n"
+}

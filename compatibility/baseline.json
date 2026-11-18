@@ -1,0 +1,17 @@
+{
+  "api": {
+    "dialogue-core": "84833935a3c3ce662ab4ecbc0021b0d37207c7c70c50123fde5a174117759769",
+    "dialogue-json": "db394c95161605c6654f9f69aa1e19c28a251b23bc5ff2c154ea63ab5297b602",
+    "dialogue-minestom": "7724443af5fcbfb32d7835ca803ce4da8bf65295efa391973355088aa4a9ae9a",
+    "dialogue-presentation": "8f4d2579ede74d3b90fbbc3fd634a842ec3ff5c742c66a124810720a9b89db84"
+  },
+  "commit": "e299b88d56df3e745ac45b319bdc88199d1ddaee",
+  "java": 25,
+  "schemas": {
+    "schemas/dialogue-v1.schema.json": "7082cc0823fba8cf009eecb0e97f813736cfd71440739824ad2847edb4d67c6d",
+    "schemas/host-catalog-v1.schema.json": "7e7b10ae22f3d839d7d02b37241e1fde660d0612d2d61e19bfad730381650529",
+    "schemas/texts-v1.schema.json": "7889d42943e3793f8a6a62f8be3424069f21ac66cbdd71e1ea816a71f1350aaa"
+  },
+  "source": "git archive; isolated Gradle publication",
+  "version": "0.0.0-compat-e299b88-SNAPSHOT"
+}
