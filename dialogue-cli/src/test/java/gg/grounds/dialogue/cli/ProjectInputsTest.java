@@ -33,6 +33,7 @@ class ProjectInputsTest {
     assertTrue(r.problems().isEmpty());
     assertEquals(Set.of("dialogues/Ä space/unused.json"), r.sources().dialogues().keySet());
     assertEquals(Set.of("en", "de-DE"), r.sources().texts().keySet());
+    Files.delete(root.resolve("texts/de-DE.json"));
     Files.writeString(root.resolve("texts/de-de.json"), "{}");
     assertEquals("CLI_PATH", code(ProjectInputs.read(root)));
   }
