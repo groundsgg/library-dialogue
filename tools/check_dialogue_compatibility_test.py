@@ -1,5 +1,7 @@
 import importlib.util
 import os
+import hashlib
+import json
 from pathlib import Path
 import subprocess
 import tempfile
@@ -55,3 +57,38 @@ class CompatibilityTests(unittest.TestCase):
     def test_foreignBaselineCommitRejected(self):
         tool = self.tool()
         with self.assertRaises(ValueError): tool.validate_baseline({'commit':'wrong'})
+
+class BinaryConsumerTests(unittest.TestCase):
+    def test_precompiledConsumerRejectsChangedCandidateMethod(self):
+        import sys
+        sys.path.insert(0,str(TOOL.parent))
+        import check_dialogue_compatibility as tool
+        self.assertTrue(hasattr(tool,'binary_consumers'),'binary consumer gate missing')
+        root=TOOL.parent.parent
+        with tempfile.TemporaryDirectory(dir=root/'.evidence') as tmp:
+            import shutil
+            temp=Path(tmp);repo=temp/'maven';shutil.copytree(root/'.evidence/maven',repo)
+            source=temp/'DialogueRuntime.java';source.write_text('package gg.grounds.dialogue.core.runtime; public final class DialogueRuntime {}')
+            subprocess.run([tool.jdk('javac'),'-d',str(temp/'classes'),str(source)],check=True,capture_output=True)
+            for jar in (repo/'gg/grounds/dialogue-core/0.1.0-SNAPSHOT').glob('*.jar'):
+                if jar.name.endswith(('-sources.jar','-javadoc.jar')):continue
+                changed=temp/'changed.jar'
+                with zipfile.ZipFile(jar) as before,zipfile.ZipFile(changed,'w') as after:
+                    for item in before.infolist():
+                        after.writestr(item,(temp/'classes/gg/grounds/dialogue/core/runtime/DialogueRuntime.class').read_bytes() if item.filename=='gg/grounds/dialogue/core/runtime/DialogueRuntime.class' else before.read(item))
+                shutil.copy2(changed,jar)
+                for algorithm in ('sha1','sha256','sha512','md5'):
+                    jar.with_name(jar.name+'.'+algorithm).write_text(hashlib.new(algorithm,jar.read_bytes()).hexdigest())
+            folder=repo/'gg/grounds/dialogue-core/0.1.0-SNAPSHOT'
+            representative=next(p for p in folder.glob('*.jar') if not p.name.endswith(('-sources.jar','-javadoc.jar')))
+            for metadata in folder.glob('*.module'):
+                data=json.loads(metadata.read_text())
+                for variant in data['variants']:
+                    for file in variant.get('files',[]):
+                        if file['name']=='dialogue-core-0.1.0-SNAPSHOT.jar':
+                            file['size']=representative.stat().st_size
+                            for algorithm in ('sha1','sha256','sha512','md5'):file[algorithm]=hashlib.new(algorithm,representative.read_bytes()).hexdigest()
+                metadata.write_text(json.dumps(data))
+                for algorithm in ('sha1','sha256','sha512','md5'):metadata.with_name(metadata.name+'.'+algorithm).write_text(hashlib.new(algorithm,metadata.read_bytes()).hexdigest())
+            with self.assertRaises(subprocess.CalledProcessError) as failure:tool.binary_consumers(repo,'0.1.0-SNAPSHOT')
+            self.assertIn('NoSuchMethodError',failure.exception.stdout+failure.exception.stderr)

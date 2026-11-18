@@ -85,9 +85,34 @@ def check(repository, version, baseline):
         if module == 'dialogue-json': compare_schemas(value['schemas'], schemas(jar))
     print('API_COMPATIBILITY_OK'); print('SCHEMA_COMPATIBILITY_OK')
 
+def binary_consumers(repository, version):
+    baseline=ROOT/'.evidence/compatibility-baseline-maven'
+    if not baseline.exists():
+        with tempfile.TemporaryDirectory(dir=ROOT/'.evidence') as temporary:
+            capture(COMMIT,Path(temporary)/'baseline')
+    for language in ('java','kotlin'):
+        with tempfile.TemporaryDirectory(dir=ROOT/'.evidence',prefix='binary-'+language+'-') as temporary:
+            folder=Path(temporary)/'consumer'
+            shutil.copytree(ROOT/'fixtures'/f'{language}-consumer',folder,ignore=shutil.ignore_patterns('build','.gradle','.kotlin'))
+            compile_result=subprocess.run([str(ROOT/'gradlew'),'-p',str(folder),'classes','-PdialogueRepository='+baseline.as_uri(),'-PdialogueVersion='+BASE_VERSION],capture_output=True,text=True,check=True)
+            original=folder/'build/classes'/language/'main'
+            frozen=Path(temporary)/'frozen';shutil.copytree(original,frozen)
+            def hashes():return {str(p.relative_to(frozen)):hashlib.sha256(p.read_bytes()).hexdigest() for p in frozen.rglob('*.class')}
+            before=hashes()
+            if not before:raise ValueError('BINARY_CLASSES_MISSING')
+            shutil.rmtree(folder/'src/main');shutil.rmtree(folder/'build/classes')
+            result=subprocess.run([str(ROOT/'gradlew'),'-p',str(folder),'runBinaryCompatibility','-PbinaryClassesDir='+str(frozen),'-PdialogueRepository='+Path(repository).resolve().as_uri(),'-PdialogueVersion='+version],capture_output=True,text=True,check=True)
+            if re.search(r'^> Task :compile',result.stdout,re.M) or before!=hashes():raise ValueError('BINARY_CLASSES_RECOMPILED')
+            from verify_consumer_origins import verify_logs
+            candidate={module:{'sha256':hashlib.sha256(artifact(Path(repository)/'gg/grounds'/module/version,module,version,'jar').read_bytes()).hexdigest()} for module in MODULES}
+            verify_logs([result.stdout],candidate,{'dialogue-core','dialogue-json','dialogue-presentation'})
+            print(result.stdout,end='')
+    print('BINARY_COMPATIBILITY_OK')
+
 def main():
-    p=argparse.ArgumentParser();p.add_argument('--capture');p.add_argument('--output',type=Path);p.add_argument('--check',action='store_true');p.add_argument('--repository',type=Path);p.add_argument('--version');p.add_argument('--baseline',type=Path,default=ROOT/'compatibility');a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('--binary-consumers',action='store_true');p.add_argument('--capture');p.add_argument('--output',type=Path);p.add_argument('--check',action='store_true');p.add_argument('--repository',type=Path);p.add_argument('--version');p.add_argument('--baseline',type=Path,default=ROOT/'compatibility');a=p.parse_args()
     if a.capture and a.output: capture(a.capture,a.output)
+    elif a.binary_consumers and a.repository and a.version: binary_consumers(a.repository,a.version)
     elif a.check and a.repository and a.version: check(a.repository,a.version,a.baseline)
     else:p.error('use --capture COMMIT --output DIR or --check --repository DIR --version VERSION')
 

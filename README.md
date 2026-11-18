@@ -87,3 +87,13 @@ Select an actual release version. The [consumer build](fixtures/java-consumer/bu
 ## License
 
 Library code: MIT. The bundled unchanged DejaVu Sans font keeps its Bitstream Vera license and public-domain DejaVu changes; see [FONT-LICENSE.txt](dialogue-presentation/src/main/resources/default-theme/FONT-LICENSE.txt) and `NOTICE`. No LuxDialogues/Rivet assets, purchased NPC models or Grounds story content are distributed.
+
+## Author tooling and deterministic tests
+
+Two optional modules complete the public distribution: `gg.grounds:dialogue-cli` (Core/JSON/internal Gson) and `gg.grounds:dialogue-testkit` (Core/Presentation/JDK only). All six modules share one release version. The four original public APIs and v1 schemas are frozen against `compatibility/baseline.json` from accepted C.
+
+Use the [CLI guide](dialogue-cli/README.md) to validate `examples/headless-dialogue/src/main/resources` from a standalone ZIP with JDK25. Humans and AI use the same structured diagnostics and host catalogue. A valid contentPin identifies the read snapshot, not a map activation.
+
+Add `testImplementation("gg.grounds:dialogue-testkit:<version>")` for tests. The [Java](fixtures/java-consumer/src/test/java/example/PublicTestkitTest.java) and [Kotlin](fixtures/kotlin-consumer/src/test/kotlin/example/PublicTestkitTest.kt) consumer tests start the real runtime with virtual time, refresh locale, reject stale input, release a delayed action and verify cleanup/late completion. Testkit is excluded from their main runtime classpaths. See [testkit contracts](dialogue-testkit/README.md).
+
+GitHub Packages: `https://maven.pkg.github.com/groundsgg/library-dialogue`. Maven requires a normal GitHub username and package-read token (`GITHUB_ACTOR`/`GITHUB_TOKEN`); public repository visibility does not provide anonymous Maven access. No Grounds service credentials are involved. Release Please owns release versions and tags. CLI ZIP/checksum assets are published on the corresponding GitHub release; downloaded ZIPs execute without a token, Gradle or source checkout.
