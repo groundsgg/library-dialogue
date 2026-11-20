@@ -7,10 +7,10 @@ Scene, NPC, Grounds-module, JSON-loader or pack-builder dependency.
 
 ## Exact profiles
 
-| Profile | Explicit server runtime | Protocol | Resource pack | Native vignette |
-|---|---|---|---|---|
-| `public-26.2` | `net.minestom:minestom:2026.10.07-26.2` | 776 | 88.0 | Unsupported transport |
-| `grounds-26.3` | `2026.11.08-26.3-grounds`, explicit complete local runtime | 777 | 97.1 | Injected `PostEffectsPacket` transport |
+| Profile        | Explicit server runtime                                    | Protocol | Resource pack | Native vignette                        |
+| -------------- | ---------------------------------------------------------- | -------- | ------------- | -------------------------------------- |
+| `public-26.2`  | `net.minestom:minestom:2026.10.07-26.2`                    | 776      | 88.0          | Unsupported transport                  |
+| `grounds-26.3` | `2026.11.08-26.3-grounds`, explicit complete local runtime | 777      | 97.1          | Injected `PostEffectsPacket` transport |
 
 The public Maven artifact uses Minestom as compile-only. Applications declare their
 runtime explicitly. The normal build needs Maven Central and JDK 25, without
@@ -228,6 +228,11 @@ Vertical card gaps retain their existing layout values. `effects.npcChoiceAngle`
 is an inward fold around the answer column's left edge (default12 degrees,
 range0–35); 0 keeps the column flat. Both settings are per viewer and change live
 without restarting the dialogue. The demo exposes `/npcgap 12` and `/npcangle 12`.
+
+Use `effects.npcVerticalOffset` to raise the NPC dialogue and its hit targets
+for a taller model. It defaults to 0 and accepts values from 0 through 16 blocks.
+The offset follows the NPC while preserving its feet and look origin for the
+host's interaction policies.
 
 Answers, their hints and the overflow indicator share the same hinged plane.
 Native front/back quaternions, positions, hover rays, block occlusion and leave

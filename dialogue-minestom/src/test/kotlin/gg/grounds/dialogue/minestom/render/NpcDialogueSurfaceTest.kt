@@ -38,6 +38,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -624,6 +625,53 @@ class NpcDialogueSurfaceTest {
         )
         fixture.displays().forEach { assertEquals(4.0, it.position.x(), 1e-6) }
         done(env, handle.closeAsync())
+    }
+
+    @Test
+    fun verticalOffsetRaisesDisplaysAndHitGeometryAcrossFollowUpdates(env: Env) {
+        val fixture = Fixture(env, CompletableFuture.completedFuture(null))
+        val handle = fixture.open(env, mapOf("npcVerticalOffset" to "1.0"))
+        done(env, handle.replace(RenderFixtures.frame("npc", "Hello", 5)))
+
+        assertEquals(44.9, checkNotNull(fixture.surface.geometry()).transform().origin.y(), 1e-6)
+        fixture.displays().forEach { assertEquals(44.9, it.position.y(), 1e-6) }
+
+        fixture.feet.set(Vec(4.0, 43.0, 0.0))
+        assertTrue(
+            env.tickWhile(
+                { checkNotNull(fixture.surface.geometry()).transform().origin.x() != 4.0 },
+                Duration.ofSeconds(2),
+            )
+        )
+        val transform = checkNotNull(fixture.surface.geometry()).transform()
+        assertEquals(45.9, transform.origin.y(), 1e-6)
+        fixture.displays().forEach { assertEquals(45.9, it.position.y(), 1e-6) }
+
+        val worldPoint = transform.widgetToWorld(160.0, 20.0)
+        assertEquals(45.9 + (transform.speechHeight - 20.0) * 0.008, worldPoint.y(), 1e-6)
+        val widgetPoint = transform.worldToWidget(worldPoint)
+        assertEquals(160.0, widgetPoint.x(), 1e-6)
+        assertEquals(20.0, widgetPoint.y(), 1e-6)
+        assertEquals(0.0, widgetPoint.z(), 1e-6)
+        done(env, handle.closeAsync())
+    }
+
+    @Test
+    fun invalidNpcVerticalOffsetsFallBack(env: Env) {
+        val fixture = Fixture(env, CompletableFuture.completedFuture(null))
+        val frame = RenderFixtures.frame("npc", "Hello", 5)
+        for (offset in listOf("NaN", "Infinity", "-0.01", "16.01")) {
+            val handle = fixture.open(env, mapOf("npcVerticalOffset" to offset))
+            val replacement = handle.replace(frame).toCompletableFuture()
+            assertTrue(env.tickWhile({ !replacement.isDone }, Duration.ofSeconds(2)))
+            val failure =
+                assertThrows(java.util.concurrent.CompletionException::class.java) {
+                    replacement.join()
+                }
+            assertTrue(failure.cause is DialoguePresenter.FallbackRequired)
+            assertEquals("UNSUPPORTED_RASTER", failure.cause?.message)
+            done(env, handle.closeAsync())
+        }
     }
 
     @Test

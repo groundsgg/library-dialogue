@@ -331,6 +331,7 @@ internal constructor(
                 throw CancellationException("NPC anchor changed")
             }
             val encoded = encoder.encode(frame, assets)
+            val verticalOffset = verticalOffset(preferences)
             val focus = VisualOptions.enabled(preferences, "npcBackdrop", diagnostic)
             val hide = VisualOptions.enabled(preferences, "hideHud", diagnostic)
             val vignette = VisualOptions.enabled(preferences, "vignette", diagnostic)
@@ -355,6 +356,7 @@ internal constructor(
             hingePosition = hinge
             val pose =
                 NpcPanelTransform.from(speaker.snapshot.get(), eye())
+                    .withVerticalOffset(verticalOffset)
                     .withSpeechHeight(height)
                     .withChoiceFold(hinge, NpcPanelOptions.from(preferences).choiceAngle)
             transform = pose
@@ -433,7 +435,16 @@ internal constructor(
                     CompletableFuture.allOf(*acquisitions.toTypedArray()).whenComplete { _, error ->
                         queue.execute {
                             if (writeReady(operation, error, result)) {
-                                finishPanel(frame, slots, pose, operation, hide, vignette, result)
+                                finishPanel(
+                                    frame,
+                                    slots,
+                                    pose,
+                                    operation,
+                                    hide,
+                                    vignette,
+                                    verticalOffset,
+                                    result,
+                                )
                             }
                         }
                     }
@@ -466,6 +477,7 @@ internal constructor(
             operation: Long,
             hide: Boolean,
             vignette: Boolean,
+            verticalOffset: Double,
             result: CompletableFuture<Void>,
         ) {
             val outputs = ArrayList<CompletableFuture<*>>()
@@ -494,7 +506,7 @@ internal constructor(
                         nextHudRefresh = clock.nanoTime() + HUD_REFRESH_NANOS
                         apply(slots, pose)
                         publish(frame, pose)
-                        startFollow()
+                        startFollow(verticalOffset)
                         result.complete(null)
                     }
                 }
@@ -689,7 +701,7 @@ internal constructor(
             }
         }
 
-        private fun startFollow() {
+        private fun startFollow(verticalOffset: Double) {
             follow?.cancel()
             val followingEpoch = epoch
             follow =
@@ -715,6 +727,7 @@ internal constructor(
                             val pose = checkNotNull(transform)
                             val next =
                                 NpcPanelTransform.from(anchor.snapshot.get(), eye())
+                                    .withVerticalOffset(verticalOffset)
                                     .withSpeechHeight(pose.speechHeight)
                                     .withFold(pose.fold)
                             positionDisplays(next.position()).whenComplete { _, error ->
@@ -728,7 +741,7 @@ internal constructor(
                                     geometries.computeIfPresent(context.generation) { key, old ->
                                         Geometry(next, old.fronts(), key, old.choiceBounds())
                                     }
-                                    startFollow()
+                                    startFollow(verticalOffset)
                                 }
                             }
                         } catch (_: Throwable) {
@@ -763,5 +776,17 @@ internal constructor(
     private companion object {
         val HUD_REFRESH_NANOS = Duration.ofSeconds(1).toNanos()
         val COUNTS = WeakHashMap<Player, AtomicInteger>()
+
+        fun verticalOffset(preferences: PresentationPreferences): Double {
+            val value = preferences.effects()["npcVerticalOffset"] ?: return 0.0
+            val offset = value.toDoubleOrNull()
+            if (offset == null || offset !in 0.0..16.0) {
+                throw DialoguePresenter.FallbackRequired("UNSUPPORTED_RASTER")
+            }
+            return offset
+        }
+
+        fun NpcPanelTransform.withVerticalOffset(offset: Double): NpcPanelTransform =
+            copy(origin = origin.add(0.0, offset, 0.0))
     }
 }
