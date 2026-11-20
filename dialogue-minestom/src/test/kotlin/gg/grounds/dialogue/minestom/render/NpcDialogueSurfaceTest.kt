@@ -1,0 +1,657 @@
+package gg.grounds.dialogue.minestom.render
+
+import gg.grounds.dialogue.core.runtime.CancellationToken
+import gg.grounds.dialogue.core.runtime.DialogueView
+import gg.grounds.dialogue.core.runtime.PresentationPreferences
+import gg.grounds.dialogue.minestom.MinestomSpeakerBinding
+import gg.grounds.dialogue.minestom.asset.AssetBundle
+import gg.grounds.dialogue.minestom.asset.MinecraftPackProfile
+import gg.grounds.dialogue.minestom.asset.PackStateTracker
+import gg.grounds.dialogue.minestom.channel.LocalOutputChannels
+import gg.grounds.dialogue.minestom.geometry.NpcHitTest
+import gg.grounds.dialogue.minestom.input.SurfaceInputTargets
+import gg.grounds.dialogue.minestom.internal.ConnectionGuard
+import gg.grounds.dialogue.minestom.internal.MinestomDialogueScheduler
+import gg.grounds.dialogue.presentation.DialoguePresenter
+import gg.grounds.dialogue.presentation.DialogueSurface
+import gg.grounds.dialogue.presentation.DialogueTheme
+import gg.grounds.dialogue.presentation.LayoutProfile
+import gg.grounds.dialogue.presentation.WidgetFrame
+import java.time.Duration
+import java.util.UUID
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionStage
+import java.util.concurrent.atomic.AtomicReference
+import net.kyori.adventure.resource.ResourcePackStatus
+import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
+import net.minestom.server.coordinate.Pos
+import net.minestom.server.coordinate.Vec
+import net.minestom.server.entity.Entity
+import net.minestom.server.entity.EntityType
+import net.minestom.server.entity.Player
+import net.minestom.server.entity.metadata.display.AbstractDisplayMeta
+import net.minestom.server.entity.metadata.display.TextDisplayMeta
+import net.minestom.testing.Env
+import net.minestom.testing.EnvTest
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
+
+@EnvTest
+class NpcDialogueSurfaceTest {
+    private fun <T> done(env: Env, stage: CompletionStage<T>): T =
+        HudDialogueSurfaceTest.done(env, stage)
+
+    private inner class Fixture(env: Env, gate: CompletableFuture<Void>) {
+        val first: Player
+        val second: Player
+        val targets = SurfaceInputTargets()
+        val hud = ArrayList<Component>()
+        val feet = AtomicReference(Vec(0.0, 42.0, 0.0))
+        val surface: NpcDialogueSurface
+
+        init {
+            val instance = env.createFlatInstance()
+            first = env.createConnection().connect(instance, Pos(0.0, 42.0, 4.0, 180f, 0f))
+            second = env.createConnection().connect(instance, Pos(0.0, 42.0, 4.0))
+            val packs = PackStateTracker()
+            val id = UUID.randomUUID()
+            packs.expect(first, 1, id, RenderFixtures.ASSETS.pin())
+            packs.observe(
+                first,
+                1,
+                id,
+                RenderFixtures.ASSETS.pin(),
+                ResourcePackStatus.SUCCESSFULLY_LOADED,
+            )
+            val binding =
+                MinestomSpeakerBinding("npc1", instance) {
+                    MinestomSpeakerBinding.AnchorSnapshot(
+                        feet.get(),
+                        0f,
+                        feet.get().add(0.0, 1.6, 0.0),
+                        true,
+                    )
+                }
+            surface =
+                NpcDialogueSurface(
+                    first,
+                    1,
+                    ConnectionGuard(first, 1, instance),
+                    packs,
+                    RenderFixtures.ASSETS,
+                    LocalOutputChannels(
+                        { _, component ->
+                            hud.add(component)
+                            CompletableFuture.completedFuture(null)
+                        },
+                        false,
+                        { _, _ -> CompletableFuture.completedFuture(null) },
+                    ),
+                    targets,
+                    MinestomDialogueScheduler(instance),
+                    { binding },
+                    {},
+                    { entity, world, position ->
+                        entity.setInstance(world, position).thenCompose { gate }
+                    },
+                )
+        }
+
+        fun open(
+            env: Env,
+            effects: Map<String, String> = emptyMap(),
+        ): DialogueSurface.SurfaceHandle =
+            done(
+                env,
+                surface.open(
+                    DialogueSurface.SurfaceContext(
+                        RenderFixtures.SESSION,
+                        first.uuid.toString(),
+                        1,
+                        "npc",
+                        "profile",
+                        CancellationToken(),
+                        1,
+                        Long.MAX_VALUE,
+                        PresentationPreferences("npc", Duration.ZERO, false, effects),
+                    )
+                ),
+            )
+
+        fun displays(): List<Entity> =
+            first.instance.entities.filter { it.entityType == EntityType.TEXT_DISPLAY }
+    }
+
+    @Test
+    fun idleNpcCoverageIsRenewedAndCannotReappearAfterClose(env: Env) {
+        val fixture = Fixture(env, CompletableFuture.completedFuture(null))
+        val handle = fixture.open(env, mapOf("hideHud" to "true"))
+        done(env, handle.replace(RenderFixtures.frame("npc", "Hello", 5)))
+        assertEquals(1, fixture.hud.size)
+        val cover = fixture.hud.first()
+        assertFalse(cover == Component.empty())
+        assertTrue(
+            env.tickWhile({ fixture.hud.size < 2 }, Duration.ofMillis(1600)),
+            "An idle NPC dialogue must refresh its native ActionBar cover before it fades",
+        )
+        assertEquals(cover, fixture.hud.last())
+        done(env, handle.closeAsync())
+        assertEquals(Component.empty(), fixture.hud.last())
+        val closedWrites = fixture.hud.size
+        assertFalse(
+            env.tickWhile({ fixture.hud.size == closedWrites }, Duration.ofMillis(1200)),
+            "No cover should be repainted after close",
+        )
+        assertEquals(closedWrites, fixture.hud.size)
+    }
+
+    @Test
+    fun supersedingPendingSlotsReusesTheirPreparationAndOwnsRetirement(env: Env) {
+        for (removeChoices in listOf(false, true)) {
+            val gate = CompletableFuture<Void>()
+            val fixture = Fixture(env, gate)
+            val handle = fixture.open(env)
+            val first = RenderFixtures.frame("npc", "Hello", 5)
+            val older = handle.replace(first)
+            assertTrue(
+                env.tickWhile(
+                    { fixture.displays().size < first.widgets().size * 2 },
+                    Duration.ofSeconds(2),
+                )
+            )
+            var updated = RenderFixtures.frame("npc", "Updated", 7)
+            if (removeChoices) {
+                updated =
+                    WidgetFrame(
+                        updated.semantic(),
+                        updated.widgets().filter { it.kind != WidgetFrame.Kind.CHOICE },
+                        updated.fontPin(),
+                        updated.theme(),
+                    )
+            }
+            val newer = handle.replace(updated)
+            repeat(10) { env.tick() }
+            assertFalse(newer.toCompletableFuture().isDone, "Await adopted slot preparation")
+            assertEquals(
+                first.widgets().size * 2,
+                fixture.displays().size,
+                "No duplicate pending displays",
+            )
+            gate.complete(null)
+            done(env, newer)
+            assertTrue(older.toCompletableFuture().isCompletedExceptionally)
+            assertEquals(
+                updated.widgets().size * 2,
+                fixture.displays().size,
+                "Retired slots fully removed",
+            )
+            assertTrue(
+                fixture
+                    .displays()
+                    .map { it.entityMeta as TextDisplayMeta }
+                    .any {
+                        PlainTextComponentSerializer.plainText()
+                            .serialize(it.text)
+                            .contains("Updated")
+                    }
+            )
+            done(env, handle.closeAsync())
+            assertTrue(fixture.displays().isEmpty())
+        }
+    }
+
+    @Test
+    fun retiringCandidateRestoresRetainedGeometry(env: Env) {
+        val fixture = Fixture(env, CompletableFuture.completedFuture(null))
+        val old = fixture.open(env)
+        done(env, old.replace(RenderFixtures.frame("npc", "Hello", 5)))
+        val candidate =
+            done(
+                env,
+                fixture.surface.open(
+                    DialogueSurface.SurfaceContext(
+                        RenderFixtures.SESSION,
+                        fixture.first.uuid.toString(),
+                        1,
+                        "npc",
+                        "profile",
+                        CancellationToken(),
+                        2,
+                        Long.MAX_VALUE,
+                        PresentationPreferences("npc", Duration.ZERO, false, emptyMap()),
+                    )
+                ),
+            )
+        done(env, candidate.replace(RenderFixtures.frame("npc", "Hello", 5)))
+        done(env, candidate.closeAsync())
+        assertNotNull(fixture.surface.geometry())
+        assertEquals(1, checkNotNull(fixture.surface.geometry()).surfaceGeneration())
+        done(env, old.closeAsync())
+    }
+
+    @Test
+    fun overlappingPendingHandlesShareOneConnectionDisplayBudget(env: Env) {
+        val gate = CompletableFuture<Void>()
+        val fixture = Fixture(env, gate)
+        val handles = ArrayList<DialogueSurface.SurfaceHandle>()
+        repeat(4) {
+            val handle = fixture.open(env)
+            handles.add(handle)
+            handle.replace(RenderFixtures.frame("npc", "Hello", 5))
+            repeat(10) { env.tick() }
+            assertTrue(
+                fixture.displays().size <= 32,
+                "Pending spawns count against the per-connection budget",
+            )
+        }
+        gate.complete(null)
+        handles.forEach { done(env, it.closeAsync()) }
+        assertTrue(fixture.displays().isEmpty())
+        val handle = fixture.open(env)
+        done(env, handle.replace(RenderFixtures.frame("npc", "Hello", 5)))
+        assertFalse(fixture.displays().isEmpty())
+        done(env, handle.closeAsync())
+    }
+
+    @Test
+    fun backdropIsBundledForBothProfiles() {
+        assertTrue(RenderFixtures.ASSETS.hasEntry("assets/dialogue/font/focus.json"))
+        assertTrue(
+            AssetBundle.loadDefault(MinecraftPackProfile.grounds263())
+                .hasEntry("assets/dialogue/textures/font/npc-focus.png")
+        )
+    }
+
+    @Test
+    fun unavailableChoiceBoundsSurviveNativePublicationAndFollow(env: Env) {
+        val fixture = Fixture(env, CompletableFuture.completedFuture(null))
+        val handle = fixture.open(env)
+        val frame = RenderFixtures.frame("npc", "Hello", 5)
+        val widgets =
+            frame.widgets().map { widget ->
+                if (widget.choiceId == "leave") {
+                    WidgetFrame.Widget(
+                        widget.id,
+                        widget.kind,
+                        widget.bounds,
+                        widget.textBounds,
+                        widget.text,
+                        widget.layout,
+                        widget.visibleGraphemes,
+                        false,
+                        false,
+                        1.0,
+                        Duration.ZERO,
+                        widget.choiceId,
+                    )
+                } else widget
+            }
+        done(
+            env,
+            handle.replace(
+                WidgetFrame(
+                    frame.semantic(),
+                    widgets,
+                    frame.fontPin(),
+                    frame.theme(),
+                    frame.chrome(),
+                    frame.scrollbar(),
+                )
+            ),
+        )
+        val before = checkNotNull(fixture.surface.geometry())
+        assertEquals(setOf("ask", "leave"), before.choiceBounds().keys)
+        assertEquals(setOf("ask"), checkNotNull(fixture.targets.current()).choices().keys)
+        assertTrue(env.tickWhile({ fixture.surface.geometry() === before }, Duration.ofSeconds(1)))
+        assertEquals(before.choiceBounds(), checkNotNull(fixture.surface.geometry()).choiceBounds())
+        done(env, handle.closeAsync())
+    }
+
+    @Test
+    fun allFrontBackPairsClose(env: Env) {
+        val fixture = Fixture(env, CompletableFuture.completedFuture(null))
+        val handle = fixture.open(env)
+        val frame = RenderFixtures.frame("npc", "Hello", 5)
+        done(env, handle.replace(frame))
+        assertEquals(frame.widgets().size * 2, fixture.displays().size)
+        assertTrue(fixture.displays().size <= 32)
+        for (entity in fixture.displays()) {
+            assertEquals(setOf(fixture.first), entity.viewers)
+            assertFalse(entity.viewers.contains(fixture.second))
+            assertEquals(
+                AbstractDisplayMeta.BillboardConstraints.FIXED,
+                (entity.entityMeta as TextDisplayMeta).billboardRenderConstraints,
+            )
+        }
+        assertEquals(2, checkNotNull(fixture.targets.current()).choices().size)
+        done(env, handle.closeAsync())
+        assertTrue(fixture.displays().isEmpty())
+        assertNull(fixture.targets.current())
+    }
+
+    @Test
+    fun sevenChoicesUseThreeCardsAndNativeOriginMatchesHitPlane(env: Env) {
+        val fixture = Fixture(env, CompletableFuture.completedFuture(null))
+        val handle = fixture.open(env)
+        val base = RenderFixtures.view("Hello", 5)
+        val choices =
+            (0 until 7).map {
+                DialogueView.ChoiceView(
+                    "c$it",
+                    "Choice $it",
+                    DialogueView.Availability.AVAILABLE,
+                    "",
+                )
+            }
+        val view =
+            DialogueView(
+                base.sessionId(),
+                base.contentPin(),
+                base.nodeId(),
+                base.nodeVisitId(),
+                base.state(),
+                2,
+                2,
+                "en",
+                "NPC",
+                "Hello",
+                choices,
+                "c4",
+                5,
+                5,
+                DialogueView.HintPhase.CHOOSE,
+                "",
+                null,
+            )
+        val presenter =
+            DialoguePresenter(
+                mapOf(
+                    "npc" to
+                        DialoguePresenter.SurfaceProfile(
+                            fixture.surface,
+                            LayoutProfile.npc(),
+                            DialogueTheme.neutral(),
+                            RenderFixtures.ASSETS.metrics(),
+                            false,
+                        )
+                ),
+                MinestomDialogueScheduler(fixture.first.instance),
+            )
+        val frame =
+            presenter.compose(
+                view,
+                "npc",
+                PresentationPreferences("npc", Duration.ZERO, false, emptyMap()),
+            )
+        done(env, handle.replace(frame))
+        assertEquals(
+            setOf("c3", "c4", "c5"),
+            checkNotNull(fixture.targets.current()).choices().keys,
+        )
+        val front =
+            fixture.displays().first {
+                PlainTextComponentSerializer.plainText()
+                    .serialize((it.entityMeta as TextDisplayMeta).text)
+                    .contains("Hello")
+            }
+        val meta = front.entityMeta as TextDisplayMeta
+        val transform = checkNotNull(fixture.surface.geometry()).transform()
+        val unit = 0.025 * meta.scale.x()
+        val local = meta.translation
+        val origin =
+            front.position
+                .add(transform.right.mul(local.x() + (1 - 320 / 2.0) * unit))
+                .add(0.0, local.y() + (9 - 7) * unit, 0.0)
+        assertEquals(0.0, origin.distance(transform.widgetToWorld(0.0, 0.0)), 1e-6)
+        val selected = frame.widgets().first { it.choiceId == "c4" }
+        assertEquals(1.08, selected.visualScale)
+        assertEquals(selected.bounds, checkNotNull(fixture.targets.current()).choices()["c4"])
+        assertNotNull(frame.scrollbar())
+        val bar =
+            MinecraftWidgetEncoder().encode(frame, RenderFixtures.ASSETS).widgets().first {
+                it.kind == WidgetFrame.Kind.SCROLLBAR
+            }
+        val barEntity =
+            fixture.displays().first {
+                val m = it.entityMeta as TextDisplayMeta
+                m.text == bar.front && m.leftRotation[1] < 0
+            }
+        val barMeta = barEntity.entityMeta as TextDisplayMeta
+        val barUnit = 0.025 * barMeta.scale.x()
+        val barCorner =
+            rotate(
+                Vec(
+                    (1 - bar.bounds.width / 2) * barUnit,
+                    (2 + bar.paintBaseline) * barUnit,
+                    0.0,
+                ),
+                barMeta.leftRotation,
+            )
+        val barLocal = barMeta.translation.add(barCorner)
+        val barPosition =
+            barEntity.position
+                .add(transform.right.mul(barLocal.x()))
+                .add(0.0, barLocal.y(), 0.0)
+                .add(transform.normal.mul(barLocal.z()))
+        assertEquals(
+            0.0,
+            barPosition.distance(
+                transform.planeFor(bar.bounds).widgetToWorld(bar.bounds.x, bar.bounds.y)
+            ),
+            1e-6,
+        )
+        val backEntity =
+            fixture.displays().first {
+                val m = it.entityMeta as TextDisplayMeta
+                m.text == bar.back && m.leftRotation[1] > 0
+            }
+        val backMeta = backEntity.entityMeta as TextDisplayMeta
+        val backUnit = 0.025 * backMeta.scale.x()
+        val backInk = MinecraftWidgetEncoderTest.barOffset(bar.back)
+        val track = checkNotNull(frame.scrollbar()).track()
+        val localBack =
+            backMeta.translation.add(
+                rotate(
+                    Vec(
+                        (1 - bar.bounds.width / 2 + backInk + track.width) * backUnit,
+                        (2 + bar.paintBaseline - (track.y - bar.bounds.y)) * backUnit,
+                        0.0,
+                    ),
+                    backMeta.leftRotation,
+                )
+            )
+        val actualBack =
+            backEntity.position
+                .add(transform.right.mul(localBack.x()))
+                .add(0.0, localBack.y(), 0.0)
+                .add(transform.normal.mul(localBack.z()))
+        val plane = transform.planeFor(bar.bounds)
+        val expectedBack = plane.widgetToWorld(track.x, track.y).sub(plane.normal.mul(0.012))
+        assertEquals(
+            0.0,
+            actualBack.distance(expectedBack),
+            1e-6,
+            "Both indicator faces must occupy the same folded track, separated only by back depth",
+        )
+        done(env, handle.closeAsync())
+        assertTrue(fixture.displays().isEmpty())
+    }
+
+    private fun rotate(vector: Vec, quaternion: FloatArray): Vec {
+        val axis = Vec(quaternion[0].toDouble(), quaternion[1].toDouble(), quaternion[2].toDouble())
+        val cross = axis.cross(vector).mul(2.0)
+        return vector.add(cross.mul(quaternion[3].toDouble())).add(axis.cross(cross))
+    }
+
+    @Test
+    fun foldedDisplayCornersBackDepthAndHitPlaneAgreeAndLiveGapDoesNotInterpolate(env: Env) {
+        val fixture = Fixture(env, CompletableFuture.completedFuture(null))
+        val handle = fixture.open(env)
+        val preferences =
+            PresentationPreferences("npc", Duration.ZERO, false, mapOf("npcChoiceAngle" to "30"))
+        done(env, handle.configure(preferences))
+        val frame = RenderFixtures.frame("npc", "Hello", 5)
+        done(env, handle.replace(frame))
+        val widget = frame.widgets().first { it.selected }
+        val entity =
+            fixture.displays().first {
+                PlainTextComponentSerializer.plainText()
+                    .serialize((it.entityMeta as TextDisplayMeta).text)
+                    .contains("Ask")
+            }
+        val meta = entity.entityMeta as TextDisplayMeta
+        val transform = checkNotNull(fixture.surface.geometry()).transform()
+        val plane = transform.planeFor(widget.bounds)
+        val unit = 0.025 * meta.scale.x()
+        val nativeCorner =
+            rotate(Vec((1 - widget.bounds.width / 2) * unit, 2 * unit, 0.0), meta.leftRotation)
+        val local = meta.translation.add(nativeCorner)
+        val actual =
+            entity.position
+                .add(transform.right.mul(local.x()))
+                .add(0.0, local.y(), 0.0)
+                .add(transform.normal.mul(local.z()))
+        val expected =
+            plane.widgetToWorld(
+                widget.bounds.x - widget.bounds.width * (widget.visualScale - 1) / 2,
+                widget.bounds.y - widget.bounds.height * (widget.visualScale - 1) / 2,
+            )
+        assertEquals(0.0, actual.distance(expected), 1e-6)
+        val frontNormal = rotate(Vec(0.0, 0.0, 1.0), meta.leftRotation)
+        assertEquals(0.0, frontNormal.distance(plane.normal), 1e-6)
+        val encodedBack =
+            MinecraftWidgetEncoder()
+                .encode(frame, RenderFixtures.ASSETS)
+                .widgets()
+                .first { it.id == widget.id }
+                .back
+        val back =
+            fixture
+                .displays()
+                .map { it.entityMeta as TextDisplayMeta }
+                .first { it.text == encodedBack && it.scale.x() > 0.33 }
+        assertEquals(-1.0, rotate(Vec(0.0, 0.0, 1.0), back.leftRotation).dot(frontNormal), 1e-6)
+        assertEquals(-0.012, back.translation.sub(meta.translation).dot(frontNormal), 1e-6)
+        val eye = fixture.first.position.add(0.0, fixture.first.eyeHeight.toDouble(), 0.0)
+        val center =
+            plane.widgetToWorld(
+                widget.bounds.x + widget.bounds.width / 2,
+                widget.bounds.y + widget.bounds.height / 2,
+            )
+        assertEquals(
+            widget.choiceId,
+            NpcHitTest.hit(
+                    eye,
+                    center.sub(eye).asVec().normalize(),
+                    transform,
+                    checkNotNull(fixture.targets.current()),
+                ) { _, _ ->
+                    true
+                }
+                .orElseThrow(),
+        )
+        done(
+            env,
+            handle.configure(
+                PresentationPreferences("npc", Duration.ZERO, false, mapOf("npcChoiceAngle" to "0"))
+            ),
+        )
+        done(env, handle.replace(frame))
+        assertNull(checkNotNull(fixture.surface.geometry()).transform().fold)
+        assertEquals(0.0, meta.leftRotation[1].toDouble(), 1e-6)
+        done(
+            env,
+            handle.configure(
+                PresentationPreferences(
+                    "npc",
+                    Duration.ZERO,
+                    false,
+                    mapOf("npcChoiceAngle" to "0", "npcChoiceGap" to "28"),
+                )
+            ),
+        )
+        val presenter =
+            DialoguePresenter(
+                mapOf(
+                    "npc" to
+                        DialoguePresenter.SurfaceProfile(
+                            fixture.surface,
+                            LayoutProfile.npc(28.0),
+                            DialogueTheme.neutral(),
+                            RenderFixtures.ASSETS.metrics(),
+                            false,
+                        )
+                ),
+                MinestomDialogueScheduler(fixture.first.instance),
+            )
+        val moved = presenter.compose(frame.semantic(), "npc", preferences)
+        done(env, handle.replace(moved))
+        assertEquals(
+            0,
+            meta.transformationInterpolationDuration,
+            "New hit planes must not race an interpolating gap change",
+        )
+        done(env, handle.closeAsync())
+        assertTrue(fixture.displays().isEmpty())
+    }
+
+    @Test
+    fun followingTheNpcRetainsTheFoldAndFixedWorldSize(env: Env) {
+        val fixture = Fixture(env, CompletableFuture.completedFuture(null))
+        val handle = fixture.open(env)
+        done(env, handle.replace(RenderFixtures.frame("npc", "Hello", 5)))
+        val fold = checkNotNull(checkNotNull(fixture.surface.geometry()).transform().fold)
+        fixture.feet.set(Vec(4.0, 42.0, 0.0))
+        assertTrue(
+            env.tickWhile(
+                { checkNotNull(fixture.surface.geometry()).transform().origin.x() != 4.0 },
+                Duration.ofSeconds(2),
+            )
+        )
+        val transform = checkNotNull(fixture.surface.geometry()).transform()
+        assertEquals(fold, transform.fold)
+        assertEquals(
+            240 * 0.008,
+            transform
+                .widgetToWorld(fold.pivot, 20.0)
+                .distance(transform.widgetToWorld(fold.pivot + 240, 20.0)),
+            1e-6,
+        )
+        fixture.displays().forEach { assertEquals(4.0, it.position.x(), 1e-6) }
+        done(env, handle.closeAsync())
+    }
+
+    @Test
+    fun movedAnchorIsAppliedBeforeFrameAcknowledgement(env: Env) {
+        val fixture = Fixture(env, CompletableFuture.completedFuture(null))
+        val handle = fixture.open(env)
+        val frame = RenderFixtures.frame("npc", "Hello", 5)
+        done(env, handle.replace(frame))
+        fixture.feet.set(Vec(4.0, 42.0, 0.0))
+        done(env, handle.replace(frame))
+        fixture.displays().forEach { assertEquals(4.0, it.position.x(), 1e-6) }
+        done(env, handle.closeAsync())
+    }
+
+    @Test
+    fun lateSpawnIsRemoved(env: Env) {
+        val gate = CompletableFuture<Void>()
+        val fixture = Fixture(env, gate)
+        val handle = fixture.open(env)
+        val write = handle.replace(RenderFixtures.frame("npc", "Hello", 5))
+        assertTrue(env.tickWhile({ fixture.displays().isEmpty() }, Duration.ofSeconds(2)))
+        assertTrue(fixture.displays().all { it.viewers.isEmpty() })
+        val close = handle.closeAsync()
+        env.tick()
+        assertFalse(close.toCompletableFuture().isDone)
+        gate.complete(null)
+        done(env, close)
+        assertTrue(fixture.displays().isEmpty())
+        assertTrue(write.toCompletableFuture().isCompletedExceptionally)
+    }
+}

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Strict accepted-C API and schema gate, built from immutable archived sources."""
+"""Check published JVM API and schemas against immutable archived sources."""
 import argparse
 import hashlib
 import json
@@ -47,8 +47,88 @@ def schemas(jar):
     with zipfile.ZipFile(jar) as archive:
         return {n: hashlib.sha256(archive.read(n)).hexdigest() for n in sorted(archive.namelist()) if n.startswith('schemas/') and n.endswith('.json')}
 
+# These types copy collections or normalize values before exposing them. Kotlin JVM
+# records cannot replace primary constructor properties in an init block.
+KOTLIN_VALUE_CLASSES = {
+    'gg.grounds.dialogue.core.definition.ArgumentValue$Number',
+    'gg.grounds.dialogue.core.definition.DialogueDefinition',
+    'gg.grounds.dialogue.core.definition.DialogueDefinition$Action',
+    'gg.grounds.dialogue.core.definition.DialogueDefinition$Branch',
+    'gg.grounds.dialogue.core.definition.DialogueDefinition$Capabilities',
+    'gg.grounds.dialogue.core.definition.DialogueDefinition$Condition',
+    'gg.grounds.dialogue.core.definition.DialogueDefinition$LocaleSpec',
+    'gg.grounds.dialogue.core.definition.DialogueDefinition$Message',
+    'gg.grounds.dialogue.core.definition.DialogueDefinition$Presentation',
+    'gg.grounds.dialogue.core.port.ActionHandler$ActionRequest',
+    'gg.grounds.dialogue.core.port.ActorPort$ActorRequest',
+    'gg.grounds.dialogue.core.port.ConditionProvider$ConditionRequest',
+    'gg.grounds.dialogue.core.port.HostBindings',
+    'gg.grounds.dialogue.core.runtime.DialogueEnd',
+    'gg.grounds.dialogue.core.runtime.DialogueStart',
+    'gg.grounds.dialogue.core.runtime.DialogueStartResult$Rejected',
+    'gg.grounds.dialogue.core.runtime.DialogueView',
+    'gg.grounds.dialogue.core.runtime.PresentationPreferences',
+    'gg.grounds.dialogue.core.text.LocaleContext',
+    'gg.grounds.dialogue.core.text.TextResolver$TextRequest',
+    'gg.grounds.dialogue.core.validation.HostCatalog',
+    'gg.grounds.dialogue.core.validation.HostCatalog$ProviderSpec',
+    'gg.grounds.dialogue.core.validation.ValidationReport',
+    'gg.grounds.dialogue.json.DialogueCatalogLoader$ContentSources',
+    'gg.grounds.dialogue.json.DialogueCatalogLoader$ValidatedCatalogue',
+    'gg.grounds.dialogue.json.DialogueCatalogLoader$ReloadResult',
+    'gg.grounds.dialogue.json.DialogueJsonCodec$DecodeResult',
+    'gg.grounds.dialogue.json.DialogueJsonCodec$ContextResult',
+    'gg.grounds.dialogue.presentation.ChoiceViewport$ChoiceWindow',
+    'gg.grounds.dialogue.presentation.DialogueTheme',
+    'gg.grounds.dialogue.presentation.TextLayout$Line',
+    'gg.grounds.dialogue.presentation.TextLayout$TextLayoutResult',
+    'gg.grounds.dialogue.presentation.UiLabelSource$LabelRequest',
+    'gg.grounds.dialogue.presentation.UiLabelSource$UiLabels',
+    'gg.grounds.dialogue.presentation.WidgetFrame',
+    'gg.grounds.dialogue.presentation.WidgetFrame$Scrollbar',
+    'gg.grounds.dialogue.minestom.DialogueServices',
+    'gg.grounds.dialogue.minestom.MinestomDialogueRequest',
+    'gg.grounds.dialogue.minestom.input.InputProfile',
+    'gg.grounds.dialogue.minestom.input.TargetSnapshot',
+    'gg.grounds.dialogue.minestom.render.EncodedFrame',
+    'gg.grounds.dialogue.minestom.render.NpcDialogueSurface$Geometry',
+    'gg.grounds.dialogue.testkit.RecordingDialogueRenderer$PresentationSnapshot',
+    'gg.grounds.dialogue.testkit.RecordingDialogueSurface$SurfaceSnapshot',
+}
+
+def member_signatures(text, owner_is_final):
+    lines = text.splitlines()
+    signatures = set()
+    for index, line in enumerate(lines[:-1]):
+        if not lines[index + 1].startswith('    descriptor: '):
+            continue
+        declaration = line.strip()
+        # A method on a final class cannot be overridden regardless of its own final flag.
+        if owner_is_final and '(' in declaration:
+            declaration = re.sub(r'^((?:public|protected)(?: static)?) final ', r'\1 ', declaration)
+        signatures.add((declaration, lines[index + 1].strip()))
+    return signatures
+
 def compare_api(before, after):
-    if before != after: raise ValueError('API_COMPATIBILITY_FAILED')
+    for name, original in before.items():
+        candidate = after.get(name)
+        if candidate is None:
+            raise ValueError(f'API_COMPATIBILITY_FAILED: missing type {name}')
+        old_header, *_ = original.splitlines()
+        new_header, *_ = candidate.splitlines()
+        expected_header = old_header
+        if name in KOTLIN_VALUE_CLASSES:
+            expected_header = old_header.replace(' extends java.lang.Record', '', 1)
+        if new_header not in (old_header, expected_header):
+            raise ValueError(f'API_COMPATIBILITY_FAILED: declaration changed for {name}')
+        old_permitted = original.partition('PermittedSubclasses:\n')[2]
+        new_permitted = candidate.partition('PermittedSubclasses:\n')[2]
+        if old_permitted != new_permitted:
+            raise ValueError(f'API_COMPATIBILITY_FAILED: permitted subclasses changed for {name}')
+        owner_is_final = bool(re.match(r'^(public|protected) final class ', old_header))
+        missing = member_signatures(original, owner_is_final) - member_signatures(candidate, owner_is_final)
+        if missing:
+            raise ValueError(f'API_COMPATIBILITY_FAILED: {name}: {sorted(missing)}')
 
 def compare_schemas(before, after):
     if before != after: raise ValueError('SCHEMA_COMPATIBILITY_FAILED')

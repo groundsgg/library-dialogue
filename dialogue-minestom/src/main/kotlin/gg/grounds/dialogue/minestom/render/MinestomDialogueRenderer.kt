@@ -1,0 +1,558 @@
+package gg.grounds.dialogue.minestom.render
+
+import gg.grounds.dialogue.core.internal.OwnedScope
+import gg.grounds.dialogue.core.internal.PendingOperation
+import gg.grounds.dialogue.core.internal.SerialCommandQueue
+import gg.grounds.dialogue.core.port.DialogueRenderer
+import gg.grounds.dialogue.core.port.DialogueScheduler
+import gg.grounds.dialogue.core.port.OwnedResource
+import gg.grounds.dialogue.core.runtime.DialogueEndReason
+import gg.grounds.dialogue.core.runtime.DialogueFailure
+import gg.grounds.dialogue.core.runtime.DialogueView
+import gg.grounds.dialogue.core.runtime.InputResult
+import gg.grounds.dialogue.core.runtime.PresentationPreferences
+import gg.grounds.dialogue.minestom.input.ChatInputTokens
+import gg.grounds.dialogue.minestom.input.SurfaceInputTargets
+import gg.grounds.dialogue.minestom.input.TargetSnapshot
+import gg.grounds.dialogue.minestom.internal.DialogueInputSource
+import gg.grounds.dialogue.presentation.ChoiceViewport
+import gg.grounds.dialogue.presentation.DialoguePresenter
+import gg.grounds.dialogue.presentation.DialogueSurface
+import gg.grounds.dialogue.presentation.UiLabelSource
+import java.time.Duration
+import java.util.Collections
+import java.util.HashMap
+import java.util.Optional
+import java.util.concurrent.CancellationException
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionStage
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
+import java.util.function.BiConsumer
+import java.util.function.Consumer
+import java.util.function.Supplier
+import net.minestom.server.entity.Player
+
+/** One presenter, one core session; fallback is an output handoff, never a dialogue restart. */
+class MinestomDialogueRenderer(
+    profiles: Map<String, DialoguePresenter.SurfaceProfile>,
+    private val clock: DialogueScheduler,
+    private val controls: DialoguePresenter.Controls,
+    private val labels: UiLabelSource,
+    private val targets: SurfaceInputTargets,
+    private val status: Consumer<PresentationStatus>,
+    private val tokens: ChatInputTokens?,
+    private val geometry: Supplier<NpcDialogueSurface.Geometry?>,
+) : DialogueRenderer, DialogueInputSource {
+    private val profiles = Collections.unmodifiableMap(HashMap(profiles))
+    @Volatile private var active: Run? = null
+    private val refreshing = AtomicBoolean()
+
+    constructor(
+        profiles: Map<String, DialoguePresenter.SurfaceProfile>,
+        clock: DialogueScheduler,
+        controls: DialoguePresenter.Controls,
+        labels: UiLabelSource,
+        targets: SurfaceInputTargets,
+        status: Consumer<PresentationStatus>,
+    ) : this(profiles, clock, controls, labels, targets, status, null, Supplier { null })
+
+    init {
+        require(profiles.containsKey("chat")) { "Chat fallback required" }
+    }
+
+    override fun effectiveSurface(): String {
+        val run = active
+        return if (run == null || !run.firstAck) "" else run.effective.surfaceKey()
+    }
+
+    override fun hiddenHotbar(): Boolean {
+        val run = active
+        return run != null &&
+            run.firstAck &&
+            run.effective.surfaceKey() != "chat" &&
+            run.effective.effects()["hideHud"] == "true"
+    }
+
+    override fun targets(): TargetSnapshot? {
+        val current = targets.current()
+        val run = active
+        if (current == null && run != null && run.firstAck && !run.closed.get()) refreshOutput()
+        return current
+    }
+
+    override fun npcGeometry(): NpcDialogueSurface.Geometry? = geometry.get()
+
+    override fun browse(displayed: TargetSnapshot, start: Int): CompletionStage<InputResult> =
+        active?.browse(displayed, start) ?: CompletableFuture.completedFuture(InputResult.STALE)
+
+    override fun refreshOutput() {
+        val run = active
+        if (run != null && refreshing.compareAndSet(false, true)) {
+            run.queue.execute {
+                val latest = run.latest
+                if (!run.closed.get() && latest != null) {
+                    run.replace(latest).whenComplete { _, _ -> refreshing.set(false) }
+                } else {
+                    refreshing.set(false)
+                }
+            }
+        }
+    }
+
+    override fun resolveChat(
+        player: Player,
+        generation: Long,
+        token: String,
+    ): Optional<TargetSnapshot.Target> =
+        tokens?.resolve(player, generation, token) ?: Optional.empty()
+
+    override fun prepare(
+        request: DialogueRenderer.PresentationRequest
+    ): CompletionStage<DialogueRenderer.PresentationHandle> {
+        val run = Run(request)
+        active = run
+        run.begin()
+        return run.ready.minimalCompletionStage()
+    }
+
+    private inner class Run(val request: DialogueRenderer.PresentationRequest) :
+        DialogueRenderer.PresentationHandle {
+        val queue = SerialCommandQueue(clock, ::fatal)
+        private val scope = OwnedScope(queue, clock, request.budgets.cleanup)
+        private val presenter: DialoguePresenter
+        val closed = AtomicBoolean()
+        private val surfaces = AtomicLong()
+        val ready = CompletableFuture<DialogueRenderer.PresentationHandle>()
+        private val waiters = ArrayList<CompletableFuture<Void>>()
+        private val configurations = ArrayList<CompletableFuture<Void>>()
+        private val browsers = ArrayList<CompletableFuture<InputResult>>()
+        private val waits = ArrayList<PendingOperation<*>>()
+        private var closing: CompletionStage<Void>? = null
+        private var delegate: DialogueRenderer.PresentationHandle? = null
+        private var requested = request.preferences
+        var effective: PresentationPreferences = request.preferences
+            private set
+
+        var latest: DialogueView? = null
+            private set
+
+        private var diagnostic = "PREPARING"
+        private var changing = false
+        private var inflight = false
+        var firstAck = false
+            private set
+
+        private var intent = 0L
+        private var writeEpoch = 0L
+        private var frameIntent = 0L
+        private var failure: Throwable? = null
+        private var batch: CompletableFuture<Void>? = null
+        private var batchDeadline = 0L
+
+        init {
+            val wrapped = HashMap<String, DialoguePresenter.SurfaceProfile>()
+            profiles.forEach { (key, profile) ->
+                wrapped[key] =
+                    DialoguePresenter.SurfaceProfile(
+                        { context ->
+                            val generation = surfaces.incrementAndGet()
+                            invalidate()
+                            profile.surface.open(
+                                DialogueSurface.SurfaceContext(
+                                    context.sessionId,
+                                    context.audienceId,
+                                    context.hostGeneration,
+                                    context.surfaceKey,
+                                    context.profilePin,
+                                    context.cancellation,
+                                    generation,
+                                    context.deadlineNanos,
+                                    context.preferences,
+                                    context.cleanupBudget,
+                                )
+                            )
+                        },
+                        profile.layout,
+                        profile.theme,
+                        profile.metrics,
+                        profile.semanticOnly,
+                        profile.layoutResolver,
+                    )
+            }
+            presenter = DialoguePresenter(wrapped, clock, controls, labels)
+        }
+
+        private fun invalidate() {
+            targets.current()?.let { targets.invalidateCurrent(it.surfaceGeneration()) }
+        }
+
+        private fun report() {
+            status.accept(
+                PresentationStatus(
+                    requested.surfaceKey(),
+                    if (firstAck) effective.surfaceKey() else "",
+                    diagnostic,
+                    surfaces.get(),
+                )
+            )
+        }
+
+        private fun chat(): PresentationPreferences =
+            PresentationPreferences(
+                "chat",
+                effective.graphemeDelay(),
+                effective.reducedMotion(),
+                effective.effects(),
+            )
+
+        fun begin() {
+            queue.execute {
+                scope.prepare {
+                    CompletableFuture.completedFuture(
+                        request.cancellation.onCancel { closeAsync() }
+                    )
+                }
+                prepareAttempt(effective, false)
+            }
+        }
+
+        private fun prepareAttempt(preferences: PresentationPreferences, fallback: Boolean) {
+            if (closed.get()) return
+            val work = scope.prepare {
+                presenter.prepare(
+                    DialogueRenderer.PresentationRequest(
+                        request.sessionId,
+                        request.audienceId,
+                        request.hostGeneration,
+                        preferences,
+                        request.cancellation,
+                        request.deadlineNanos,
+                        request.budgets,
+                    )
+                )
+            }
+            await(work, request.deadlineNanos) { handle, error ->
+                if (closed.get()) return@await
+                if (error != null) {
+                    val code = known(error)
+                    if (!fallback && preferences.surfaceKey() != "chat" && code != null) {
+                        effective = chat()
+                        diagnostic = code
+                        prepareAttempt(effective, true)
+                    } else {
+                        failPreparation(error)
+                    }
+                } else {
+                    delegate = handle
+                    effective = preferences
+                    ready.complete(this)
+                    report()
+                }
+            }
+        }
+
+        private fun <T> await(
+            stage: CompletionStage<T>,
+            deadline: Long,
+            callback: BiConsumer<T?, Throwable?>,
+        ) {
+            waits.removeIf(PendingOperation<*>::isDone)
+            waits.add(
+                PendingOperation(
+                    queue,
+                    clock,
+                    Duration.ofNanos(maxOf(1, deadline - clock.nanoTime())),
+                    stage,
+                    callback,
+                )
+            )
+        }
+
+        private fun failPreparation(error: Throwable) {
+            failure = error
+            closeAsync().whenComplete { _, cleanup ->
+                ready.completeExceptionally(
+                    if (cleanup == null) error else OwnedResource.PreparationFailure(cleanup)
+                )
+            }
+        }
+
+        override fun replace(view: DialogueView): CompletionStage<Void> {
+            val result = CompletableFuture<Void>()
+            queue.execute {
+                if (closed.get()) {
+                    result.completeExceptionally(CancellationException())
+                    return@execute
+                }
+                val current = latest
+                if (current == null || view.stateRevision() >= current.stateRevision())
+                    latest = view
+                frameIntent++
+                waiters.add(result)
+                flush()
+            }
+            return result.minimalCompletionStage()
+        }
+
+        fun browse(displayed: TargetSnapshot?, start: Int): CompletionStage<InputResult> {
+            val result = CompletableFuture<InputResult>()
+            queue.execute {
+                val currentDelegate = delegate
+                val currentLatest = latest
+                if (
+                    closed.get() ||
+                        displayed == null ||
+                        changing ||
+                        !firstAck ||
+                        effective.surfaceKey() != "npc" ||
+                        displayed !== targets.current() ||
+                        currentLatest == null ||
+                        displayed.stateRevision() != currentLatest.stateRevision() ||
+                        displayed.renderRevision() != currentLatest.renderRevision() ||
+                        currentDelegate !is ChoiceViewport.Controller
+                ) {
+                    result.complete(InputResult.STALE)
+                    return@execute
+                }
+                browsers.removeIf(CompletableFuture<InputResult>::isDone)
+                browsers.add(result)
+                invalidate()
+                await(
+                    call { currentDelegate.setChoiceStart(currentLatest, start) },
+                    clock.nanoTime() + request.budgets.prepare.toNanos(),
+                ) { changed, error ->
+                    if (error != null) {
+                        result.completeExceptionally(error)
+                    } else {
+                        val latestView = latest
+                        if (latestView == null) {
+                            result.complete(InputResult.STALE)
+                        } else {
+                            replace(latestView).whenComplete { _, writeError ->
+                                if (writeError != null) result.completeExceptionally(writeError)
+                                else {
+                                    result.complete(
+                                        if (changed == true) InputResult.ACCEPTED
+                                        else InputResult.STALE
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return result.minimalCompletionStage()
+        }
+
+        private fun flush() {
+            val currentDelegate = delegate
+            if (
+                closed.get() || changing || inflight || waiters.isEmpty() || currentDelegate == null
+            ) {
+                return
+            }
+            if (batch == null) {
+                batch = CompletableFuture()
+                batchDeadline =
+                    if (firstAck) clock.nanoTime() + request.budgets.prepare.toNanos()
+                    else request.deadlineNanos
+                val currentBatch = requireNotNull(batch)
+                await(currentBatch, batchDeadline) { _, error ->
+                    if (error != null && batch === currentBatch) fatal(error)
+                }
+            }
+            inflight = true
+            val epoch = ++writeEpoch
+            val writingIntent = frameIntent
+            val frame = checkNotNull(latest)
+            call { currentDelegate.replace(frame) }
+                .whenComplete { _, error ->
+                    queue.execute {
+                        if (closed.get() || epoch != writeEpoch) return@execute
+                        inflight = false
+                        if (error != null) {
+                            val code = known(error)
+                            if (code != null && effective.surfaceKey() != "chat") {
+                                diagnostic = code
+                                switchOutput(chat(), false, null, batchDeadline)
+                            } else {
+                                fatal(error)
+                            }
+                            return@execute
+                        }
+                        if (frame !== latest || writingIntent != frameIntent) {
+                            flush()
+                            return@execute
+                        }
+                        firstAck = true
+                        if (diagnostic == "PREPARING") diagnostic = ""
+                        report()
+                        val completed = waiters.toList()
+                        waiters.clear()
+                        val current = batch
+                        batch = null
+                        current?.complete(null)
+                        completed.forEach { it.complete(null) }
+                    }
+                }
+        }
+
+        override fun reconfigure(preferences: PresentationPreferences): CompletionStage<Void> {
+            val result = CompletableFuture<Void>()
+            queue.execute {
+                if (closed.get()) {
+                    result.completeExceptionally(CancellationException())
+                    return@execute
+                }
+                configurations.removeIf(CompletableFuture<Void>::isDone)
+                configurations.add(result)
+                requested = preferences
+                diagnostic = ""
+                switchOutput(
+                    preferences,
+                    true,
+                    result,
+                    clock.nanoTime() + request.budgets.prepare.toNanos(),
+                )
+            }
+            return result.minimalCompletionStage()
+        }
+
+        private fun switchOutput(
+            preferences: PresentationPreferences,
+            user: Boolean,
+            result: CompletableFuture<Void>?,
+            deadline: Long,
+        ) {
+            changing = true
+            inflight = false
+            writeEpoch++
+            val change = ++intent
+            invalidate()
+            val currentDelegate = delegate ?: return
+            await(call { currentDelegate.reconfigure(preferences) }, deadline) { _, error ->
+                if (closed.get()) return@await
+                if (change != intent) {
+                    result?.completeExceptionally(
+                        DialogueRenderer.ReconfigurationRejected(
+                            "SURFACE_SUPERSEDED",
+                            CancellationException(),
+                            effective,
+                        )
+                    )
+                    return@await
+                }
+                if (error != null) {
+                    val code = known(error)
+                    if (code != null && preferences.surfaceKey() != "chat") {
+                        diagnostic = code
+                        switchOutput(chat(), false, result, deadline)
+                    } else {
+                        changing = false
+                        result?.completeExceptionally(error)
+                        fatal(error)
+                    }
+                    return@await
+                }
+                effective = preferences
+                changing = false
+                if (latest != null) {
+                    firstAck = true
+                    report()
+                }
+                result?.complete(null)
+                flush()
+            }
+        }
+
+        private fun fatal(error: Throwable) {
+            if (closed.get()) return
+            failure = error
+            invalidate()
+            val pending = waiters.toList()
+            waiters.clear()
+            pending.forEach { it.completeExceptionally(error) }
+            request.cancellation.cancel(DialogueEndReason.FAILED)
+            closeAsync()
+        }
+
+        override fun closeAsync(): CompletionStage<Void> {
+            val result: CompletableFuture<Void>
+            synchronized(this) {
+                closing?.let {
+                    return it
+                }
+                result = CompletableFuture()
+                closing = result.minimalCompletionStage()
+                closed.set(true)
+            }
+            queue.execute {
+                invalidate()
+                waits.forEach(PendingOperation<*>::cancel)
+                waits.clear()
+                val error = CancellationException("Renderer closed")
+                waiters.forEach { it.completeExceptionally(error) }
+                waiters.clear()
+                configurations.forEach { it.completeExceptionally(error) }
+                configurations.clear()
+                browsers.forEach { it.completeExceptionally(error) }
+                browsers.clear()
+                scope.closeAsync().whenComplete { _, cleanup ->
+                    queue.execute {
+                        if (active === this) active = null
+                        delegate = null
+                        latest = null
+                        ready.completeExceptionally(
+                            if (cleanup != null) OwnedResource.PreparationFailure(cleanup)
+                            else failure ?: error
+                        )
+                        if (cleanup == null) result.complete(null)
+                        else result.completeExceptionally(cleanup)
+                    }
+                }
+            }
+            return requireNotNull(closing)
+        }
+    }
+
+    companion object {
+        private val KNOWN =
+            setOf(
+                "MISSING_PACK",
+                "MISSING_GLYPH",
+                "LAYOUT_OVERFLOW",
+                "FONT_PIN_MISMATCH",
+                "UNSUPPORTED_RASTER",
+                "OUTPUT_SUPPRESSED",
+            )
+
+        private fun known(error: Throwable): String? {
+            var current: Throwable? = error
+            while (current != null) {
+                if (
+                    current is OwnedResource.PreparationFailure ||
+                        (current is DialogueFailure &&
+                            (current.code().contains("CLEANUP") ||
+                                current.code().contains("TIMEOUT")))
+                ) {
+                    return null
+                }
+                current = current.cause
+            }
+            current = error
+            while (current != null) {
+                if (current is DialogueFailure && current.code() in KNOWN) return current.code()
+                current = current.cause
+            }
+            return null
+        }
+
+        private fun <T> call(supplier: Supplier<CompletionStage<T>>): CompletionStage<T> =
+            try {
+                requireNotNull(supplier.get())
+            } catch (error: Throwable) {
+                CompletableFuture.failedFuture(error)
+            }
+    }
+}

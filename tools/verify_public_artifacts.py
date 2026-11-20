@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Verify the actual Maven publications, not project class directories."""
 import argparse
+import re
 import hashlib
 import json
 import os
@@ -14,12 +15,12 @@ import zipfile
 
 MODULES = ('dialogue-core', 'dialogue-json', 'dialogue-presentation', 'dialogue-minestom', 'dialogue-testkit', 'dialogue-cli')
 EXPECTED = {
-    'dialogue-testkit': {'gg.grounds:dialogue-core', 'gg.grounds:dialogue-presentation'},
-    'dialogue-cli': {'gg.grounds:dialogue-core', 'gg.grounds:dialogue-json', 'com.google.code.gson:gson'},
-    'dialogue-core': set(),
-    'dialogue-json': {'gg.grounds:dialogue-core', 'com.google.code.gson:gson'},
-    'dialogue-presentation': {'gg.grounds:dialogue-core'},
-    'dialogue-minestom': {'gg.grounds:dialogue-core', 'gg.grounds:dialogue-presentation', 'com.google.code.gson:gson'},
+    'dialogue-testkit': {'gg.grounds:dialogue-core', 'gg.grounds:dialogue-presentation', 'org.jetbrains.kotlin:kotlin-stdlib'},
+    'dialogue-cli': {'gg.grounds:dialogue-core', 'gg.grounds:dialogue-json', 'com.google.code.gson:gson', 'org.jetbrains.kotlin:kotlin-stdlib'},
+    'dialogue-core': {'org.jetbrains.kotlin:kotlin-stdlib'},
+    'dialogue-json': {'gg.grounds:dialogue-core', 'com.google.code.gson:gson', 'org.jetbrains.kotlin:kotlin-stdlib'},
+    'dialogue-presentation': {'gg.grounds:dialogue-core', 'org.jetbrains.kotlin:kotlin-stdlib'},
+    'dialogue-minestom': {'gg.grounds:dialogue-core', 'gg.grounds:dialogue-presentation', 'com.google.code.gson:gson', 'org.jetbrains.kotlin:kotlin-stdlib'},
 }
 NS = {'m': 'http://maven.apache.org/POM/4.0.0'}
 
@@ -43,6 +44,24 @@ def artifact(directory, module, version, extension, classifier=''):
     return path
 
 
+def public_api_lines(output):
+    # Verbose javap exposes JVM member flags so synthetic compiler bridges do not
+    # count as Java-callable API. Keep checking every visible non-synthetic type.
+    declaration = re.compile(r'^(?:public|protected) (?:[\w-]+ )*(?:class|interface|enum|record) ')
+    member = re.compile(r'(?m)^  (?:public|protected) [^\n]+;\n'
+                        r'    descriptor: [^\n]+\n    flags: [^\n]+')
+    enum_entries = re.compile(r'  public static kotlin\.enums\.EnumEntries<[\w.$]+> getEntries\(\);')
+    for block in output.split('Classfile '):
+        header = next((line for line in block.splitlines() if declaration.match(line)), None)
+        if header is None:
+            continue
+        yield header
+        for entry in member.finditer(block):
+            signature, _, flags = entry.group().splitlines()
+            if 'ACC_SYNTHETIC' not in flags and not enum_entries.fullmatch(signature):
+                yield signature
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--repository', type=pathlib.Path, default=pathlib.Path('.evidence/maven'))
@@ -64,7 +83,9 @@ def main():
         require(root.findtext('m:licenses/m:license/m:name', namespaces=NS) == 'MIT License', 'LICENSE_METADATA', module)
         jar = artifact(directory, module, args.version, 'jar')
         artifact(directory, module, args.version, 'jar', 'sources')
-        artifact(directory, module, args.version, 'jar', 'javadoc')
+        javadoc = artifact(directory, module, args.version, 'jar', 'javadoc')
+        with zipfile.ZipFile(javadoc) as docs:
+            require('index.html' in docs.namelist(), 'JAVADOC_CONTENT', module)
         with zipfile.ZipFile(jar) as archive:
             require('META-INF/LICENSE' in archive.namelist() and 'META-INF/NOTICE' in archive.namelist(), 'LICENSE_FILES', module)
             classes = []
@@ -73,7 +94,7 @@ def main():
                     continue
                 data = archive.read(name)
                 require(struct.unpack('>H', data[6:8])[0] == 69, 'BYTECODE_TARGET', name)
-                forbidden = [b'kotlin/',b'gg/grounds/scene',b'gg/grounds/npc',b'gg/grounds/runtime',b'probe/',b'java/awt',b'org/junit',b'org/mockito',b'org/assertj']
+                forbidden = [b'gg/grounds/scene',b'gg/grounds/npc',b'gg/grounds/runtime',b'probe/',b'java/awt',b'org/junit',b'org/mockito',b'org/assertj']
                 if module not in ('dialogue-json','dialogue-minestom','dialogue-cli'):forbidden.append(b'com/google/gson')
                 if module != 'dialogue-minestom':forbidden.append(b'net/minestom')
                 for reference in forbidden:
@@ -99,12 +120,13 @@ def main():
         publications[module] = {'jar': str(jar.resolve()), 'sha256': hashlib.sha256(jar.read_bytes()).hexdigest(), 'pom': str(pom.resolve()), 'pomSha256': hashlib.sha256(pom.read_bytes()).hexdigest(), 'classes': classes}
     classpath = os.pathsep.join(item['jar'] for item in publications.values())
     for module, item in publications.items():
-        result = subprocess.run([javap, '-public', '-classpath', classpath, *item['classes']], capture_output=True, text=True)
+        result = subprocess.run([javap, '-protected', '-v', '-classpath', classpath, *item['classes']], capture_output=True, text=True)
         require(result.returncode == 0, 'API_INSPECTION', result.stderr)
+        api = '\n'.join(public_api_lines(result.stdout))
         forbidden_types=['com.google.gson','kotlin.','gg.grounds.scene','gg.grounds.npc','gg.grounds.runtime','java.awt']
         if module!='dialogue-minestom':forbidden_types.append('net.minestom')
         for forbidden in forbidden_types:
-            require(forbidden not in result.stdout, 'EXPOSED_PUBLIC_TYPE', f'{module}: {forbidden}')
+            require(forbidden not in api, 'EXPOSED_PUBLIC_TYPE', f'{module}: {forbidden}')
         print(f'PUBLIC_ARTIFACT {module} {args.version} sha256={item["sha256"]}')
     output = args.repository.parent / 'public-artifacts.json'
     output.write_text(json.dumps({'version': args.version, 'modules': publications}, indent=2) + '\n')

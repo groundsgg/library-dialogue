@@ -1,15 +1,15 @@
 # Grounds Dialogue
 
-Java-first dialogue graphs, live language changes and a shared presentation pipeline.
+Kotlin dialogue graphs, live language changes and a shared presentation pipeline for Kotlin and Java applications.
 
 This repository provides the **headless core, JSON authoring, shared presentation and an initial Minestom adapter**. HUD panels, NPC panels and chat are three output surfaces on one presentation pipeline. The first three modules remain independent of Minestom; the adapter takes an explicit matching Minestom runtime from its application. No Scene, Grounds service, database or client extension is required. Package C has automated profile/consumer checks; its [real client acceptance](docs/client-acceptance.md) remains a separate release/merge gate.
 
-| Artifact | Responsibility | Runtime dependencies |
-|---|---|---|
-| `gg.grounds:dialogue-core` | Immutable definitions, validation, sessions, choices, reveal, locale and host ports | JDK 25 |
-| `gg.grounds:dialogue-json` | Strict JSON codec, author context, schemas and atomic catalogue reload | Core, internal Gson |
-| `gg.grounds:dialogue-presentation` | Text metrics, widgets, viewport, themes and owned surfaces | Core |
-| `gg.grounds:dialogue-minestom` | Local host, HUD/NPC/chat surfaces, pack status, input and owned native output | Core, Presentation, internal Gson; application-supplied Minestom |
+| Artifact                           | Responsibility                                                                      | Runtime dependencies                                             |
+| ---------------------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `gg.grounds:dialogue-core`         | Immutable definitions, validation, sessions, choices, reveal, locale and host ports | JDK 25, Kotlin standard library                                  |
+| `gg.grounds:dialogue-json`         | Strict JSON codec, author context, schemas and atomic catalogue reload              | Core, internal Gson                                              |
+| `gg.grounds:dialogue-presentation` | Text metrics, widgets, viewport, themes and owned surfaces                          | Core                                                             |
+| `gg.grounds:dialogue-minestom`     | Local host, HUD/NPC/chat surfaces, pack status, input and owned native output       | Core, Presentation, internal Gson; application-supplied Minestom |
 
 Release Please and GitHub Packages are configured. Until the first release is published, use the source build and its local review repository; do not assume the snapshot already exists on GitHub Packages.
 
@@ -29,25 +29,24 @@ The [independent Minestom consumer](fixtures/minestom-consumer) and [basic nativ
 
 Expected markers: `PUBLIC_ARTIFACTS_OK`, `CONSUMER_OK java`, `CONSUMER_OK kotlin`, `HEADLESS_DIALOGUE_OK` and `PRESENTATION_OK`. The independent consumers resolve Maven JARs; they do not include the root build or fall back to private Grounds repositories.
 
-`./gradlew formatJava` formats Java sources; `checkJavaFormat` verifies them. Dependency lockfiles and the official Gradle distribution checksum are checked in. Normal builds use frozen font metrics and do not depend on an installed desktop font.
+`./gradlew spotlessApply` formats Kotlin, Gradle Kotlin DSL and the Java interoperability probes. `./gradlew spotlessCheck` verifies the formatting. Dependency lockfiles and the official Gradle distribution checksum are checked in. Normal builds use frozen font metrics and do not depend on an installed desktop font.
 
-## Java authoring
+## Kotlin authoring
 
-```java
-var definition = DialogueBuilder.dialogue("demo:hello")
-    .node("start", new DialogueDefinition.Message("guide", "hello", null, List.of(), "end"))
-    .node("end", new DialogueDefinition.End("completed"))
-    .build();
-var texts = new TextCatalog(Map.of("en", Map.of("hello", "Welcome!")));
-var host = new HostCatalog("v1", Set.of("guide"), Map.of(), Map.of(), Set.of(), Set.of(), false);
-var report = new DialogueValidator().validate(definition, texts, host, ValidationLimits.defaults());
-if (!report.isValid()) {
-    throw new IllegalArgumentException(report.problems().toString());
-}
-var content = report.validated();
+```kotlin
+val definition = DialogueBuilder.dialogue("demo:hello")
+    .node("start", DialogueDefinition.Message("guide", "hello", null, emptyList(), "end"))
+    .node("end", DialogueDefinition.End("completed"))
+    .build()
+val texts = TextCatalog(mapOf("en" to mapOf("hello" to "Welcome!")))
+val host = HostCatalog("v1", setOf("guide"), emptyMap(), emptyMap(), emptySet(), emptySet(), false)
+val report = DialogueValidator().validate(definition, texts, host, ValidationLimits.defaults())
+val content = requireNotNull(report.validated()) { report.problems().toString() }
 ```
 
-Builder output still requires validation. Only the common validator issues `ValidatedDialogue`. JSON produces the same model and content pin. For a complete runnable session with owned renderer, scheduler, locale switch, selection and cleanup, see [the Java example](examples/headless-dialogue/src/main/java/example/HeadlessDialogue.java). [The independent Java consumer](fixtures/java-consumer/src/main/java/example/Consumer.java) also shows a semantic surface that does not use glyph assets.
+Builder output still requires validation. Only the common validator issues `ValidatedDialogue`. JSON produces the same model and content pin. For a complete runnable session with owned renderer, scheduler, locale switch, selection and cleanup, see [the Kotlin example](examples/headless-dialogue/src/main/kotlin/example/HeadlessDialogue.kt). [The independent Java consumer](fixtures/java-consumer/src/main/java/example/Consumer.java) also shows a semantic surface that does not use glyph assets.
+
+Value types that defensively copy collections or normalize constructor input use immutable Kotlin classes. These types keep their Java constructors and accessors. Their JVM record reflection metadata changes, so Java callers using record patterns or record reflection may need to adapt. The [compatibility check](tools/check_dialogue_compatibility.py) lists the affected types.
 
 ## Authoring and presentation
 
@@ -57,7 +56,7 @@ A message has either a `next` target or choices. Every choice list must include 
 
 The session owns reveal, selection and input freshness. `DialoguePresenter` creates shared widgets; layout profiles arrange choices below the text or beside it. `DialogueSurface` owns platform output. A semantic surface receives the original `DialogueView` without measuring glyphs. Visual selection growth keeps its hit rectangle fixed. Missing glyphs/overflow raise a typed `FallbackRequired`; the host can choose a semantic/chat renderer. No content is silently cut off.
 
-The supplied glyph profile covers the example's DE/EN characters. Arbitrary Unicode remains valid dialogue content; a graphical font profile must provide its coverage, or the host must choose a semantic fallback. The Minestom adapter uses its separately pinned native bitmap metrics, upright fixed-size NPC geometry and unscaled hover rectangles. See [Minestom integration](docs/minestom-integration.md) and the [standalone Java example](examples/standalone-minestom).
+The supplied glyph profile covers the example's DE/EN characters. Arbitrary Unicode remains valid dialogue content; a graphical font profile must provide its coverage, or the host must choose a semantic fallback. The Minestom adapter uses its separately pinned native bitmap metrics, upright fixed-size NPC geometry and unscaled hover rectangles. See [Minestom integration](docs/minestom-integration.md) and the [standalone Kotlin example](examples/standalone-minestom).
 
 ## Host obligations
 

@@ -17,10 +17,16 @@ The bundled files and advances share a verified SHA-256 manifest. They are pack
 contributions; the application owns pack.mcmeta, ZIP composition and HTTP hosting.
 No normal build or server start regenerates fonts from the host environment.
 
-Maintenance with JDK 25.0.2 after compiling dialogue-core:
+To regenerate the Minecraft asset profile with JDK 25.0.2, run the maintenance task from the repository root.
 
 ```sh
-java -Djava.awt.headless=true -cp dialogue-core/build/classes/java/main tools/GenerateMinecraftAssets.java dialogue-presentation/src/main/resources/default-theme/DejaVuSans.ttf dialogue-minestom/src/main/resources/default-minecraft
+./gradlew :tools:generateMinecraftAssets --args="dialogue-presentation/src/main/resources/default-theme/DejaVuSans.ttf dialogue-minestom/src/main/resources/default-minecraft"
+```
+
+The headless theme metrics have their own maintenance task.
+
+```sh
+./gradlew :tools:generateDefaultMetrics --args="dialogue-presentation/src/main/resources/default-theme/DejaVuSans.ttf dialogue-presentation/src/main/resources/default-theme/metrics.properties"
 ```
 
 Verify actual installed client metadata explicitly, for example:
