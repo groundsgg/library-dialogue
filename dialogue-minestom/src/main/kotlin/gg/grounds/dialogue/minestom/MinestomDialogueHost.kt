@@ -46,8 +46,9 @@ import net.minestom.server.event.player.PlayerTickEvent
 
 /** Owns local dialogue lifetimes. The application supplies identity and language authority. */
 class MinestomDialogueHost
-internal constructor(
+private constructor(
     private val options: MinestomDialogueOptions,
+    private val npcTheme: DialogueTheme,
     rendererFactory: RendererFactory?,
 ) {
     internal fun interface RendererFactory {
@@ -59,7 +60,17 @@ internal constructor(
         ): DialogueRenderer
     }
 
-    constructor(options: MinestomDialogueOptions) : this(options, null)
+    internal constructor(
+        options: MinestomDialogueOptions,
+        rendererFactory: RendererFactory?,
+    ) : this(options, DialogueTheme.neutral(), rendererFactory)
+
+    constructor(options: MinestomDialogueOptions) : this(options, DialogueTheme.neutral(), null)
+
+    constructor(
+        options: MinestomDialogueOptions,
+        npcTheme: DialogueTheme,
+    ) : this(options, npcTheme, null)
 
     private val lock = Any()
     private val renderers = rendererFactory ?: RendererFactory(::defaultRenderer)
@@ -104,6 +115,19 @@ internal constructor(
     }
 
     fun packState(): PackStateTracker = packs
+
+    /** Call only after verifying the proxy source, player connection and asset identity. */
+    fun confirmProxyPack(
+        player: Player,
+        generation: Long,
+        assetPin: String,
+        revision: Long,
+        ready: Boolean,
+    ): Boolean {
+        val accepted = packs.confirmProxyState(player, generation, revision, assetPin, ready)
+        if (accepted) current(player)?.session?.refreshPresentation()
+        return accepted
+    }
 
     // JVM name used by the local protocol fixtures.
     fun inputRoute(): String = "/" + inputRoute.name
@@ -189,7 +213,7 @@ internal constructor(
                     DialoguePresenter.SurfaceProfile(
                         npc,
                         LayoutProfile.npc(),
-                        DialogueTheme.neutral(),
+                        npcTheme,
                         options.assets.metrics(),
                         false,
                         { LayoutProfile.npc(NpcPanelOptions.from(it).choiceGap) },

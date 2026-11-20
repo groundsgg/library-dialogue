@@ -17,6 +17,37 @@ class PackStateTracker {
     private val current = WeakHashMap<Player, Expected>()
     private val used = WeakHashMap<Player, MutableSet<UUID>>()
 
+    private data class ProxyConfirmation(
+        val generation: Long,
+        val revision: Long,
+        val pin: String,
+        val ready: Boolean,
+    )
+
+    private val proxy = WeakHashMap<Player, ProxyConfirmation>()
+
+    /** The application supplies confirmations from its authenticated proxy connection. */
+    @Synchronized
+    fun confirmProxyState(
+        player: Player,
+        generation: Long,
+        revision: Long,
+        pin: String,
+        ready: Boolean,
+    ): Boolean {
+        require(generation >= 0 && revision > 0 && pin.matches(Regex("[a-f0-9]{64}"))) {
+            "Invalid proxy pack confirmation"
+        }
+        val previous = proxy[player]
+        if (
+            previous != null && (revision <= previous.revision || generation < previous.generation)
+        ) {
+            return false
+        }
+        proxy[player] = ProxyConfirmation(generation, revision, pin, ready)
+        return true
+    }
+
     @Synchronized
     fun expect(player: Player, generation: Long, id: UUID, manifestPin: String) {
         require(generation >= 0) { "generation" }
@@ -66,9 +97,13 @@ class PackStateTracker {
 
     @Synchronized
     fun isReady(player: Player, generation: Long, pin: String): Boolean {
+        if (!player.isOnline) return false
+        val confirmed = proxy[player]
+        if (confirmed != null) {
+            return confirmed.generation == generation && confirmed.pin == pin && confirmed.ready
+        }
         val expected = current[player]
-        return player.isOnline &&
-            expected != null &&
+        return expected != null &&
             expected.generation == generation &&
             expected.pin == pin &&
             expected.ready
@@ -77,12 +112,14 @@ class PackStateTracker {
     @Synchronized
     fun forget(player: Player) {
         current.remove(player)
+        proxy.remove(player)
         used.remove(player)
     }
 
     @Synchronized
     fun clear() {
         current.clear()
+        proxy.clear()
         used.clear()
     }
 }
