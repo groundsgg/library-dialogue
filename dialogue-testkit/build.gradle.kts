@@ -1,1 +1,4 @@
-dependencies { api(project(":dialogue-core")); api(project(":dialogue-presentation")) }
+dependencies {
+    api(project(":dialogue-core"))
+    api(project(":dialogue-presentation"))
+}

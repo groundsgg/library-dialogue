@@ -54,6 +54,27 @@ class CompatibilityTests(unittest.TestCase):
         tool.compare_api(tool.api_signature(before), tool.api_signature(after))
         self.assertIn('sample.Api$Nested', tool.api_signature(before))
 
+    def test_preserves_legacy_signatures_with_kotlin_additions(self):
+        tool = self.tool()
+        header = 'public final class sample.Api {\n'
+        method = '  public java.lang.String value();\n    descriptor: ()Ljava/lang/String;\n'
+        getter = '  public java.lang.String getValue();\n    descriptor: ()Ljava/lang/String;\n'
+        before = {'sample.Api': header + method + '}\n'}
+        after = {'sample.Api': header + getter + method.replace('public ', 'public final ') + '}\n'}
+        tool.compare_api(before, after)
+        with self.assertRaisesRegex(ValueError, 'API_COMPATIBILITY_FAILED'):
+            tool.compare_api(before, {'sample.Api': header + getter + '}\n'})
+
+    def test_requires_explicit_exception_to_lose_record_kind(self):
+        tool = self.tool()
+        name = 'sample.Api'
+        before = {name: 'public final class sample.Api extends java.lang.Record {\n}\n'}
+        after = {name: 'public final class sample.Api {\n}\n'}
+        with self.assertRaisesRegex(ValueError, 'API_COMPATIBILITY_FAILED'):
+            tool.compare_api(before, after)
+        tool.KOTLIN_VALUE_CLASSES.add(name)
+        tool.compare_api(before, after)
+
     def test_foreignBaselineCommitRejected(self):
         tool = self.tool()
         with self.assertRaises(ValueError): tool.validate_baseline({'commit':'wrong'})

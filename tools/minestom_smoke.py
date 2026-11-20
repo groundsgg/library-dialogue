@@ -121,11 +121,13 @@ def main():
     origins = verify_libraries(libraries, args.artifact_manifest)
     main_class = 'example.DialogueDemo' if args.consumer == 'basic' else 'example.PersonalDialogueDemo'
     if runtime:
-        compiled = project / 'build/classes/java/groundsProfile'
-        if not compiled.is_dir():
+        compiled = [project / 'build/classes' / language / 'groundsProfile'
+                    for language in ('kotlin', 'java')]
+        compiled = [path for path in compiled if path.is_dir()]
+        if not compiled:
             raise ValueError('Compile the explicit Grounds demo profile first')
         libraries = [p for p in libraries if p.name.startswith(('dialogue-', 'npc-', 'kotlin-stdlib-'))]
-        classpath = [compiled, project / 'build/resources/groundsProfile', *runtime, *libraries]
+        classpath = [*compiled, project / 'build/resources/groundsProfile', *runtime, *libraries]
         main_class = 'example.GroundsDialogueDemo' if args.consumer == 'basic' else 'example.GroundsPersonalDialogueDemo'
     else:
         classpath = libraries

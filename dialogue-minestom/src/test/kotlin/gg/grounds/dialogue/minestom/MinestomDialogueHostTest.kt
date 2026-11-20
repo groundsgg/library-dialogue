@@ -1,0 +1,435 @@
+package gg.grounds.dialogue.minestom
+
+import gg.grounds.dialogue.core.definition.DialogueBuilder
+import gg.grounds.dialogue.core.definition.DialogueDefinition.End
+import gg.grounds.dialogue.core.definition.DialogueDefinition.Message
+import gg.grounds.dialogue.core.port.DialogueRenderer
+import gg.grounds.dialogue.core.runtime.*
+import gg.grounds.dialogue.core.text.LocaleContext
+import gg.grounds.dialogue.core.text.TextCatalog
+import gg.grounds.dialogue.core.text.TextResolver
+import gg.grounds.dialogue.core.validation.DialogueValidator
+import gg.grounds.dialogue.core.validation.HostCatalog
+import gg.grounds.dialogue.core.validation.ValidatedDialogue
+import gg.grounds.dialogue.core.validation.ValidationLimits
+import gg.grounds.dialogue.minestom.asset.AssetBundle
+import gg.grounds.dialogue.minestom.asset.MinecraftPackProfile
+import gg.grounds.dialogue.minestom.channel.LocalOutputChannels
+import gg.grounds.dialogue.minestom.input.InputProfile
+import gg.grounds.dialogue.presentation.UiLabelSource
+import java.time.Duration
+import java.util.UUID
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionStage
+import java.util.concurrent.atomic.AtomicInteger
+import net.minestom.server.coordinate.Pos
+import net.minestom.server.coordinate.Vec
+import net.minestom.server.entity.EntityType
+import net.minestom.server.event.EventDispatcher
+import net.minestom.server.event.player.PlayerDisconnectEvent
+import net.minestom.server.event.player.PlayerPacketEvent
+import net.minestom.server.event.player.PlayerResourcePackStatusEvent
+import net.minestom.server.instance.block.BlockFace
+import net.minestom.server.network.packet.client.play.ClientPlayerActionPacket
+import net.minestom.testing.Env
+import net.minestom.testing.EnvTest
+import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Test
+
+@EnvTest
+internal class MinestomDialogueHostTest {
+    internal class Surface : DialogueRenderer.PresentationHandle {
+        @JvmField var frames = 0
+        @JvmField var closes = 0
+        @JvmField var cleanup: CompletableFuture<Void> = CompletableFuture.completedFuture(null)
+
+        override fun replace(view: DialogueView): CompletionStage<Void> {
+            frames++
+            return CompletableFuture.completedFuture(null)
+        }
+
+        override fun reconfigure(preferences: PresentationPreferences): CompletionStage<Void> =
+            CompletableFuture.completedFuture(null)
+
+        override fun closeAsync(): CompletionStage<Void> {
+            closes++
+            return cleanup
+        }
+    }
+
+    internal class Fixture(env: Env) {
+        @JvmField
+        val player = env.createConnection().connect(env.createFlatInstance(), Pos(0.0, 42.0, 0.0))
+        @JvmField val content = content()
+        @JvmField val services = services()
+        @JvmField val options: MinestomDialogueOptions
+        @JvmField val prepares = AtomicInteger()
+        @JvmField val surfaces = mutableListOf<Surface>()
+        @JvmField var prepareGate: CompletableFuture<DialogueRenderer.PresentationHandle>? = null
+        @JvmField val host: MinestomDialogueHost
+
+        init {
+            val budgets =
+                RuntimeOptions.Budgets(
+                    Duration.ofSeconds(2),
+                    Duration.ofSeconds(5),
+                    Duration.ofSeconds(10),
+                    Duration.ofSeconds(30),
+                )
+            options =
+                MinestomDialogueOptions(
+                    budgets,
+                    MinecraftPackProfile.public262(),
+                    AssetBundle.loadDefault(MinecraftPackProfile.public262()),
+                    LocalOutputChannels(
+                        { _, _ -> CompletableFuture.completedFuture(null) },
+                        false,
+                        { _, _ -> CompletableFuture.completedFuture(null) },
+                    ),
+                    UiLabelSource.defaults(),
+                    Duration.ofMillis(600),
+                )
+            host =
+                MinestomDialogueHost(options) { _, _, _, _ ->
+                    DialogueRenderer {
+                        prepares.incrementAndGet()
+                        val surface = Surface()
+                        surfaces.add(surface)
+                        prepareGate ?: CompletableFuture.completedFuture(surface)
+                    }
+                }
+        }
+
+        fun request(id: String, binding: String): MinestomDialogueRequest =
+            MinestomDialogueRequest(
+                id,
+                player,
+                1,
+                content,
+                DialogueServices(
+                    binding,
+                    services.conditions(),
+                    services.actions(),
+                    services.outcomes(),
+                    services.texts(),
+                    services.capabilities(),
+                ),
+                emptyMap(),
+                LocaleContext("en", 0, "en"),
+                PresentationPreferences("hud", Duration.ZERO, false, emptyMap()),
+                mapOf(
+                    "npc" to
+                        MinestomSpeakerBinding(
+                            "anchor-1",
+                            player.instance,
+                            {
+                                MinestomSpeakerBinding.AnchorSnapshot(
+                                    player.position,
+                                    0f,
+                                    player.position.add(0.0, 1.6, 0.0),
+                                    true,
+                                )
+                            },
+                        )
+                ),
+                null,
+                InputProfile.defaults(),
+                0,
+            )
+    }
+
+    companion object {
+        @JvmStatic
+        fun content(): ValidatedDialogue {
+            val texts = TextCatalog(mapOf("en" to mapOf("line" to "Hello")))
+            val definition =
+                DialogueBuilder.dialogue("test:minestom")
+                    .node("start", Message("npc", "line", null, emptyList(), "end"))
+                    .node("end", End("completed"))
+                    .build()
+            return DialogueValidator()
+                .validate(
+                    definition,
+                    texts,
+                    HostCatalog(
+                        "v1",
+                        setOf("npc"),
+                        emptyMap(),
+                        emptyMap(),
+                        emptySet(),
+                        emptySet(),
+                        false,
+                    ),
+                    ValidationLimits.defaults(),
+                )
+                .validated()!!
+        }
+
+        @JvmStatic
+        fun services(): DialogueServices {
+            val texts = TextCatalog(mapOf("en" to mapOf("line" to "Hello")))
+            return DialogueServices(
+                "v1",
+                emptyMap(),
+                emptyMap(),
+                null,
+                TextResolver.catalogue(texts, "en"),
+                emptySet(),
+            )
+        }
+
+        @JvmStatic
+        fun <T> done(env: Env, stage: CompletionStage<T>): T {
+            assertTrue(
+                env.tickWhile(
+                    { !stage.toCompletableFuture().isDone },
+                    Duration.ofSeconds(2),
+                )
+            )
+            return stage.toCompletableFuture().join()
+        }
+    }
+
+    @Test
+    fun nativeInputRouteOwnsOnlyActiveConnectionAndWaitsItsCatcher(env: Env) {
+        val fixture = Fixture(env)
+        done(env, fixture.host.closeAsync())
+        val host = MinestomDialogueHost(fixture.options)
+        val id = UUID.randomUUID()
+        host.packState().expect(fixture.player, 1, id, fixture.options.assets.pin())
+        host
+            .packState()
+            .observe(
+                fixture.player,
+                1,
+                id,
+                fixture.options.assets.pin(),
+                net.kyori.adventure.resource.ResourcePackStatus.SUCCESSFULLY_LOADED,
+            )
+        val ticket = host.begin(fixture.request("native-input", "v1"))
+        val handle = (done(env, ticket.result()) as DialogueStartResult.Started).handle
+        assertEquals(
+            1,
+            fixture.player.instance.entities.count { it.entityType == EntityType.INTERACTION },
+        )
+        val packet =
+            ClientPlayerActionPacket(
+                ClientPlayerActionPacket.Status.SWAP_ITEM_HAND,
+                Vec.ZERO,
+                BlockFace.TOP,
+                0,
+            )
+        val opening = PlayerPacketEvent(fixture.player, packet)
+        EventDispatcher.call(opening)
+        assertTrue(opening.isCancelled)
+        env.tick()
+        assertFalse(handle.completion().toCompletableFuture().isDone)
+        Thread.sleep(375)
+        val confirm = PlayerPacketEvent(fixture.player, packet)
+        EventDispatcher.call(confirm)
+        assertTrue(confirm.isCancelled)
+        assertEquals(DialogueEndReason.COMPLETED, done(env, handle.completion()).reason())
+        done(env, ticket.cancel(DialogueEndReason.CANCELLED))
+        assertTrue(
+            fixture.player.instance.entities.none { it.entityType == EntityType.INTERACTION }
+        )
+        val after = PlayerPacketEvent(fixture.player, packet)
+        EventDispatcher.call(after)
+        assertFalse(after.isCancelled)
+        done(env, host.closeAsync())
+    }
+
+    @Test
+    fun nativeHostFallsBackAndDoesNotRestartSessionOnPackRevocation(env: Env) {
+        val fixture = Fixture(env)
+        done(env, fixture.host.closeAsync())
+        val host = MinestomDialogueHost(fixture.options)
+        val id = UUID.randomUUID()
+        host.packState().expect(fixture.player, 1, id, fixture.options.assets.pin())
+        host
+            .packState()
+            .observe(
+                fixture.player,
+                1,
+                id,
+                fixture.options.assets.pin(),
+                net.kyori.adventure.resource.ResourcePackStatus.SUCCESSFULLY_LOADED,
+            )
+        val ticket = host.begin(fixture.request("native", "v1"))
+        val handle = (done(env, ticket.result()) as DialogueStartResult.Started).handle
+        assertEquals("hud", ticket.status().effectiveSurface)
+        val visit = handle.snapshot().nodeVisitId()
+        EventDispatcher.call(
+            PlayerResourcePackStatusEvent(
+                fixture.player,
+                id,
+                net.kyori.adventure.resource.ResourcePackStatus.DECLINED,
+            )
+        )
+        assertTrue(
+            env.tickWhile(
+                { ticket.status().effectiveSurface != "chat" },
+                Duration.ofSeconds(2),
+            )
+        )
+        assertEquals(visit, handle.snapshot().nodeVisitId())
+        assertEquals("hud", ticket.status().requestedSurface)
+        done(env, host.closeAsync())
+    }
+
+    @Test
+    fun noInstanceAtAdmissionRejectsRatherThanHangs(env: Env) {
+        val fixture = Fixture(env)
+        val request = fixture.request("departed", "v1")
+        fixture.player.remove()
+        val ticket = fixture.host.begin(request)
+        assertEquals(
+            "HOST_CHANGED",
+            (done(env, ticket.result()) as DialogueStartResult.Rejected).code(),
+        )
+        assertEquals(0, fixture.prepares.get())
+        done(env, fixture.host.closeAsync())
+    }
+
+    @Test
+    fun admissionWorldCannotChangeWhilePreviousCleanupWaits(env: Env) {
+        val fixture = Fixture(env)
+        done(env, fixture.host.begin(fixture.request("first-world", "v1")).result())
+        val gate = CompletableFuture<Void>()
+        fixture.surfaces.first().cleanup = gate
+        val next = fixture.host.begin(fixture.request("queued-world", "v1"))
+        fixture.player.setInstance(env.createFlatInstance(), Pos(0.0, 42.0, 0.0)).join()
+        gate.complete(null)
+        assertEquals(
+            "HOST_CHANGED",
+            (done(env, next.result()) as DialogueStartResult.Rejected).code(),
+        )
+        assertEquals(1, fixture.prepares.get(), "No new preparation or actions in another world")
+        done(env, fixture.host.closeAsync())
+    }
+
+    @Test
+    fun duplicatePendingRequestReturnsSameTicket(env: Env) {
+        val fixture = Fixture(env)
+        fixture.prepareGate = CompletableFuture()
+        val request = fixture.request("same", "v1")
+        val first = fixture.host.begin(request)
+        assertSame(first, fixture.host.begin(request))
+        env.tick()
+        env.tick()
+        assertEquals(1, fixture.prepares.get())
+        val close = first.cancel(DialogueEndReason.CANCELLED)
+        fixture.prepareGate!!.complete(fixture.surfaces.first())
+        done(env, close)
+        assertEquals(1, fixture.surfaces.first().closes)
+        done(env, fixture.host.closeAsync())
+    }
+
+    @Test
+    fun changedBindingGenerationConflicts(env: Env) {
+        val fixture = Fixture(env)
+        val first = fixture.host.begin(fixture.request("conflict", "v1"))
+        val other = fixture.host.begin(fixture.request("conflict", "v2"))
+        assertEquals(
+            "START_REQUEST_CONFLICT",
+            (done(env, other.result()) as DialogueStartResult.Rejected).code(),
+        )
+        assertInstanceOf(DialogueStartResult.Started::class.java, done(env, first.result()))
+        done(env, fixture.host.closeAsync())
+    }
+
+    @Test
+    fun pendingCancelCleansLateRenderer(env: Env) {
+        val fixture = Fixture(env)
+        fixture.prepareGate = CompletableFuture()
+        val start = fixture.host.begin(fixture.request("late", "v1"))
+        assertTrue(env.tickWhile({ fixture.prepares.get() == 0 }, Duration.ofSeconds(2)))
+        val close = start.cancel(DialogueEndReason.DISCONNECTED)
+        env.tick()
+        assertFalse(close.toCompletableFuture().isDone)
+        fixture.prepareGate!!.complete(fixture.surfaces.first())
+        done(env, close)
+        assertEquals(
+            "DISCONNECTED",
+            (done(env, start.result()) as DialogueStartResult.Rejected).code(),
+        )
+        assertEquals(1, fixture.surfaces.first().closes)
+        done(env, fixture.host.closeAsync())
+    }
+
+    @Test
+    fun cancelledMiddleStartPreservesCleanupBarrier(env: Env) {
+        val fixture = Fixture(env)
+        done(env, fixture.host.begin(fixture.request("barrier-a", "v1")).result())
+        val gate = CompletableFuture<Void>()
+        fixture.surfaces.first().cleanup = gate
+        fixture.host.begin(fixture.request("barrier-b", "v1"))
+        val third = fixture.host.begin(fixture.request("barrier-c", "v1"))
+        repeat(20) { env.tick() }
+        assertEquals(1, fixture.prepares.get())
+        assertFalse(third.result().toCompletableFuture().isDone)
+        gate.complete(null)
+        assertInstanceOf(DialogueStartResult.Started::class.java, done(env, third.result()))
+        done(env, fixture.host.closeAsync())
+    }
+
+    @Test
+    fun failedCleanupFencesLaterAdmissions(env: Env) {
+        val fixture = Fixture(env)
+        val first = fixture.host.begin(fixture.request("failed-a", "v1"))
+        done(env, first.result())
+        fixture.surfaces.first().cleanup =
+            CompletableFuture.failedFuture(IllegalStateException("uncertain removal"))
+        val second = fixture.host.begin(fixture.request("failed-b", "v1"))
+        assertInstanceOf(DialogueStartResult.Rejected::class.java, done(env, second.result()))
+        val third = fixture.host.begin(fixture.request("failed-c", "v1"))
+        assertInstanceOf(DialogueStartResult.Rejected::class.java, done(env, third.result()))
+        assertEquals(1, fixture.prepares.get())
+    }
+
+    @Test
+    fun nextStartWaitsPreviousCleanup(env: Env) {
+        val fixture = Fixture(env)
+        val first = fixture.host.begin(fixture.request("first", "v1"))
+        done(env, first.result())
+        val gate = CompletableFuture<Void>()
+        fixture.surfaces.first().cleanup = gate
+        val next = fixture.host.begin(fixture.request("next", "v1"))
+        env.tick()
+        env.tick()
+        assertEquals(1, fixture.prepares.get())
+        assertFalse(next.result().toCompletableFuture().isDone)
+        gate.complete(null)
+        assertInstanceOf(DialogueStartResult.Started::class.java, done(env, next.result()))
+        assertEquals(2, fixture.prepares.get())
+        done(env, fixture.host.closeAsync())
+    }
+
+    @Test
+    fun disconnectAndInstanceChangeInvalidate(env: Env) {
+        val fixture = Fixture(env)
+        val first = fixture.host.begin(fixture.request("disconnect", "v1"))
+        val handle = (done(env, first.result()) as DialogueStartResult.Started).handle
+        EventDispatcher.call(PlayerDisconnectEvent(fixture.player))
+        assertEquals(DialogueEndReason.DISCONNECTED, done(env, handle.completion()).reason())
+        val second = fixture.host.begin(fixture.request("world", "v1"))
+        val secondHandle = (done(env, second.result()) as DialogueStartResult.Started).handle
+        fixture.player.setInstance(env.createFlatInstance(), Pos(0.0, 42.0, 0.0)).join()
+        assertEquals(
+            DialogueEndReason.HOST_CHANGED,
+            done(env, secondHandle.completion()).reason(),
+        )
+        done(env, fixture.host.closeAsync())
+    }
+
+    @Test
+    fun startAndShutdownObserversCannotCancelOwnedOperations(env: Env) {
+        val fixture = Fixture(env)
+        val start = fixture.host.begin(fixture.request("observer", "v1"))
+        start.result().toCompletableFuture().cancel(false)
+        assertInstanceOf(DialogueStartResult.Started::class.java, done(env, start.result()))
+        val close = fixture.host.closeAsync()
+        close.toCompletableFuture().cancel(false)
+        done(env, fixture.host.closeAsync())
+    }
+}
