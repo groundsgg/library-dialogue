@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/groundsgg/library-dialogue/compare/v1.0.0...v1.1.0) (2026-11-20)
+
+
+### Features
+
+* **minestom:** support confirmed proxy packs and NPC themes ([#8](https://github.com/groundsgg/library-dialogue/issues/8)) ([cfdc340](https://github.com/groundsgg/library-dialogue/commit/cfdc3402296d37c7824d05f8e4cff7070c9903ff))
+
 ## [1.0.0](https://github.com/groundsgg/library-dialogue/compare/v0.1.0...v1.0.0) (2026-11-20)
 
 
