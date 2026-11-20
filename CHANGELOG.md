@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.2](https://github.com/groundsgg/library-dialogue/compare/v1.1.1...v1.1.2) (2026-11-20)
+
+
+### Bug Fixes
+
+* **assets:** prevent bitmap glyphs from bleeding into adjacent tiles ([#12](https://github.com/groundsgg/library-dialogue/issues/12)) ([f9fb73d](https://github.com/groundsgg/library-dialogue/commit/f9fb73ddc36025c70196b0b75dc342795397d198))
+
 ## [1.1.1](https://github.com/groundsgg/library-dialogue/compare/v1.1.0...v1.1.1) (2026-11-20)
 
 
