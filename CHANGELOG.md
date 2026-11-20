@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/groundsgg/library-dialogue/compare/v1.1.0...v1.1.1) (2026-11-20)
+
+
+### Bug Fixes
+
+* **minestom:** allow NPC panels to clear taller actors ([#10](https://github.com/groundsgg/library-dialogue/issues/10)) ([c2ba928](https://github.com/groundsgg/library-dialogue/commit/c2ba928cade2e206bf0fe335d43ea337172319da))
+
 ## [1.1.0](https://github.com/groundsgg/library-dialogue/compare/v1.0.0...v1.1.0) (2026-11-20)
 
 
