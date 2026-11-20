@@ -163,21 +163,33 @@ class MinecraftAssetsTest {
 
     @Test
     fun bitmapAdvancesMatchFrozenAtlas() {
-        val bundle = AssetBundle.loadDefault(MinecraftPackProfile.grounds263())
-        val image =
-            ImageIO.read(
-                ByteArrayInputStream(bundle.entries()["assets/dialogue/textures/font/letters.png"])
-            )
-        val spec = bundle.glyphs()['A'.code]!!
-        var right = -1
-        for (x in 0 until 16) for (y in 0 until 256) if (
-            image.getRGB(spec.column * 16 + x, spec.row * 256 + y) ushr 24 != 0
-        )
-            right = maxOf(right, x)
-        assertEquals((right + 2).toDouble(), bundle.metrics().width("A"))
-        assertEquals(4.0, bundle.metrics().width(" "))
-        assertTrue(bundle.metrics().width("ä") > 0)
-        assertThrows(IllegalArgumentException::class.java) { bundle.metrics().width("😀") }
+        for (profile in
+            listOf(MinecraftPackProfile.public262(), MinecraftPackProfile.grounds263())) {
+            val bundle = AssetBundle.loadDefault(profile)
+            val image =
+                ImageIO.read(
+                    ByteArrayInputStream(
+                        bundle.entries().getValue("assets/dialogue/textures/font/letters.png")
+                    )
+                )
+            for ((codePoint, glyph) in bundle.glyphs()) {
+                val text = Character.toString(codePoint)
+                var right = -1
+                for (x in 0 until 16) {
+                    for (y in 0 until 256) {
+                        if (image.getRGB(glyph.column * 16 + x, glyph.row * 256 + y) ushr 24 != 0) {
+                            right = maxOf(right, x)
+                        }
+                    }
+                }
+                val message = "${profile.id} bitmap advance for U+${codePoint.toString(16)} ($text)"
+                assertEquals(glyph.advance, right + 2, message)
+                assertEquals((right + 2).toDouble(), bundle.metrics().width(text), message)
+            }
+            assertEquals(4.0, bundle.metrics().width(" "))
+            assertEquals(4.0, bundle.metrics().width("\u00a0"))
+            assertThrows(IllegalArgumentException::class.java) { bundle.metrics().width("😀") }
+        }
     }
 
     @Test

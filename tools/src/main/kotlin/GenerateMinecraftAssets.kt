@@ -446,12 +446,15 @@ object GenerateMinecraftAssets {
                 }
                 val cp = codes[index]
                 line.appendCodePoint(cp)
-                graphics.drawString(Character.toString(cp), col * 16, row * 256 + 12)
+                val tileX = col * 16
+                val tileY = row * 256
+                // Negative left bearings must not affect the previous glyph's ink or advance.
+                graphics.setClip(tileX, tileY, 16, 256)
+                graphics.drawString(Character.toString(cp), tileX, tileY + 12)
                 var right = -1
                 for (x in 0 until 16) {
                     for (y in 0 until 256) {
-                        if (atlas.getRGB(col * 16 + x, row * 256 + y) ushr 24 != 0)
-                            right = max(right, x)
+                        if (atlas.getRGB(tileX + x, tileY + y) ushr 24 != 0) right = max(right, x)
                     }
                 }
                 val advance = right + 2
