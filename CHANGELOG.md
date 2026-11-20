@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.0](https://github.com/groundsgg/library-dialogue/compare/v0.1.0...v1.0.0) (2026-11-20)
+
+
+### ⚠ BREAKING CHANGES
+
+* value types that defensively copy or normalize constructor inputs no longer expose JVM record metadata.
+
+### Code Refactoring
+
+* migrate dialogue library to Kotlin ([#6](https://github.com/groundsgg/library-dialogue/issues/6)) ([04c380e](https://github.com/groundsgg/library-dialogue/commit/04c380e98a10e021b78f3be7eea265ea6dcc339e))
+
 ## 0.1.0 (2026-11-18)
 
 
