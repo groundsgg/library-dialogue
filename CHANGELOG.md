@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/groundsgg/library-dialogue/compare/v1.1.2...v1.2.0) (2026-11-21)
+
+
+### Features
+
+* **minestom:** fade NPC vignette and backdrop effects ([1fa19a5](https://github.com/groundsgg/library-dialogue/commit/1fa19a552e062bd2d75fc549e32f6f54b972d9e0))
+
 ## [1.1.2](https://github.com/groundsgg/library-dialogue/compare/v1.1.1...v1.1.2) (2026-11-20)
 
 
