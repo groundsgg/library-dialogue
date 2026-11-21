@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/groundsgg/library-dialogue/compare/v1.2.0...v1.2.1) (2026-11-21)
+
+
+### Bug Fixes
+
+* **minestom:** show NPC backdrop immediately with dialogue panels ([5cac726](https://github.com/groundsgg/library-dialogue/commit/5cac7266cf4c16e264d404af78976a2c4d19d225))
+
 ## [1.2.0](https://github.com/groundsgg/library-dialogue/compare/v1.1.2...v1.2.0) (2026-11-21)
 
 
