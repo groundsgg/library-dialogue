@@ -230,7 +230,6 @@ internal constructor(
         private var follow: DialogueScheduler.ScheduledTask? = null
         private var backdrop: Display? = null
         private var backdropPreparation: CompletableFuture<Void>? = null
-        private val backdropLevel = NpcEffectLevel()
         private val vignetteLevel = NpcEffectLevel()
         private val hasVignetteSteps =
             DIALOGUE_VIGNETTE_KEYS.dropLast(1).all {
@@ -357,8 +356,7 @@ internal constructor(
             if (encoded.widgets().size * 2 + (if (focus) 1 else 0) > 32) {
                 throw DialogueFailure("DISPLAY_LIMIT", "NPC display budget exceeded")
             }
-            val keepBackdrop =
-                focus || !fadeDuration.isZero && backdrop != null && encoded.widgets().size * 2 < 32
+            val keepBackdrop = focus
             val operation = ++epoch
             follow?.cancel()
             follow = null
@@ -541,8 +539,7 @@ internal constructor(
                 queue.execute {
                     if (writeReady(operation, error, result)) {
                         nextHudRefresh = clock.nanoTime() + HUD_REFRESH_NANOS
-                        retargetEffects(focus, vignette)
-                        updateBackdropOpacity()
+                        retargetEffects(vignette)
                         apply(slots, pose)
                         scheduleFade()
                         publish(frame, pose)
@@ -645,6 +642,7 @@ internal constructor(
                             .color(TextColor.color(0xffffff))
                             .shadowColor(ShadowColor.none())
                     )
+                    meta.setTextOpacity(255.toByte())
                     entity.addViewer(player)
                 }
             } finally {
@@ -801,12 +799,10 @@ internal constructor(
             return Duration.ofMillis(millis)
         }
 
-        private fun retargetEffects(focus: Boolean, vignette: Boolean) {
+        private fun retargetEffects(vignette: Boolean) {
             val now = clock.nanoTime()
-            val backdropChanged =
-                backdropLevel.retarget(focus && backdrop != null, now, fadeDuration)
             val vignetteChanged = retargetVignette(vignette, now)
-            if (backdropChanged || vignetteChanged) cancelFadeTask()
+            if (vignetteChanged) cancelFadeTask()
         }
 
         private fun retargetVignette(vignette: Boolean, now: Long): Boolean =
@@ -816,8 +812,6 @@ internal constructor(
                 if (hasVignetteSteps) fadeDuration else Duration.ZERO,
                 effectStep.toDouble() / DIALOGUE_VIGNETTE_KEYS.size,
             )
-
-        private fun backdropOpacity(): Int = (backdropLevel.current * 255).roundToInt()
 
         private fun vignetteStep(): Int =
             (vignetteLevel.current * DIALOGUE_VIGNETTE_KEYS.size).roundToInt()
@@ -860,10 +854,9 @@ internal constructor(
         private fun scheduleFade() {
             if (fadeTask != null) return
             val now = clock.nanoTime()
-            val remaining = maxOf(backdropLevel.remaining(now), vignetteLevel.remaining(now))
+            val remaining = vignetteLevel.remaining(now)
             if (
-                backdropLevel.settled &&
-                    vignetteLevel.settled &&
+                vignetteLevel.settled &&
                     (closed.get() || effectWriting || vignetteStep() == effectStep)
             ) {
                 if (closed.get()) finishCleanup()
@@ -893,9 +886,7 @@ internal constructor(
                 return
             }
             val now = clock.nanoTime()
-            backdropLevel.advance(now)
             vignetteLevel.advance(now)
-            updateBackdropOpacity()
             // Releasing the lease publishes the endpoint at zero during surface retirement.
             if (!closed.get() || vignetteStep() != 0) writeVignette(reportFailure = true)
             scheduleFade()
@@ -905,15 +896,6 @@ internal constructor(
             val display = backdrop ?: return CompletableFuture.completedFuture(null)
             backdrop = null
             return scope.release(display)
-        }
-
-        private fun updateBackdropOpacity() {
-            backdrop?.let { display ->
-                (display.entity.entityMeta as TextDisplayMeta).setTextOpacity(
-                    backdropOpacity().toByte()
-                )
-                if (backdropLevel.current == 0.0 && !backdropLevel.enabled) releaseBackdrop()
-            }
         }
 
         private fun canFadeOut(): Boolean {
@@ -943,17 +925,18 @@ internal constructor(
                     if (
                         !fadeDuration.isZero &&
                             context.cleanupBudget > fadeDuration.plus(FADE_TICK) &&
-                            (backdrop != null && backdropLevel.current > 0.0 ||
-                                hasVignetteSteps && effectStep > 0) &&
+                            hasVignetteSteps &&
+                            effectStep > 0 &&
                             canFadeOut()
                     ) {
                         panels.values.forEach { pair ->
                             pair.displays.filterNotNull().forEach(scope::release)
                         }
                         panels.clear()
+                        releaseBackdrop()
                         hud?.let(scope::release)
                         hud = null
-                        retargetEffects(focus = false, vignette = false)
+                        retargetEffects(vignette = false)
                         scheduleFade()
                     } else finishCleanup()
                 }
