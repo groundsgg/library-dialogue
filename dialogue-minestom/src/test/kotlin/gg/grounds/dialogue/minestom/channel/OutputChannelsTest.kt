@@ -140,6 +140,33 @@ class OutputChannelsTest {
     }
 
     @Test
+    fun strongestDialogueVignetteWinsAndKeepsForeignOrder(env: Env) {
+        val player = env.createConnection().connect(env.createFlatInstance(), Pos(0.0, 42.0, 0.0))
+        val seen = mutableListOf<List<Key>>()
+        val channels =
+            LocalOutputChannels(
+                { _, _ -> CompletableFuture.completedFuture(null) },
+                true,
+                { _, effects ->
+                    seen.add(effects)
+                    CompletableFuture.completedFuture(null)
+                },
+            )
+        val before = Key.key("example:before")
+        val after = Key.key("example:after")
+        val weaker = Key.key("dialogue:vignette_fade_2")
+        val stronger = Key.key("dialogue:vignette")
+        val fading = channels.acquireEffects(player, 1)
+        val remaining = channels.acquireEffects(player, 1)
+        fading.replace(listOf(before, weaker, after)).toCompletableFuture().join()
+        remaining.replace(listOf(stronger)).toCompletableFuture().join()
+        assertEquals(listOf(before, stronger, after), seen.last())
+        remaining.closeAsync().toCompletableFuture().join()
+        assertEquals(listOf(before, weaker, after), seen.last())
+        fading.closeAsync().toCompletableFuture().join()
+    }
+
+    @Test
     fun removingOneEffectKeepsOtherRegisteredEffects(env: Env) {
         val player = env.createConnection().connect(env.createFlatInstance(), Pos(0.0, 42.0, 0.0))
         val seen = mutableListOf<List<Key>>()
