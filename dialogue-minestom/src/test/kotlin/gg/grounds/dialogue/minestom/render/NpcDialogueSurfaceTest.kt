@@ -193,17 +193,24 @@ class NpcDialogueSurfaceTest {
         val backdrop = fixture.backdrop()
         val panels = fixture.displays().filter { it !== backdrop }
         assertTrue(panels.all { (it.entityMeta as TextDisplayMeta).textOpacity.toInt() == -1 })
-        assertEquals(0, fixture.opacity())
+        assertEquals(255, fixture.opacity())
         assertEquals(listOf(foreignKey), fixture.output.last())
 
         time.set(Duration.ofMillis(50).toNanos())
-        expectOpacity(env, fixture, 51)
+        expectVignette(env, fixture, Key.key("dialogue:vignette_fade_1"))
+        assertEquals(255, fixture.opacity())
         assertEquals(listOf(foreignKey, Key.key("dialogue:vignette_fade_1")), fixture.output.last())
 
-        for ((millis, opacity) in listOf(100L to 102, 150L to 153, 200L to 204, 250L to 255)) {
+        for (millis in listOf(100L, 150L, 200L, 250L)) {
             done(env, handle.replace(fixture.frame("Hello ${millis / 50}")))
             time.set(Duration.ofMillis(millis).toNanos())
-            expectOpacity(env, fixture, opacity)
+            expectVignette(
+                env,
+                fixture,
+                if (millis == 250L) Key.key("dialogue:vignette")
+                else Key.key("dialogue:vignette_fade_${millis / 50}"),
+            )
+            assertEquals(255, fixture.opacity())
         }
         assertEquals(
             (1..4).map { Key.key("dialogue:vignette_fade_$it") } + Key.key("dialogue:vignette"),
@@ -214,15 +221,14 @@ class NpcDialogueSurfaceTest {
         fixture.token.cancel(DialogueEndReason.COMPLETED)
         val close = handle.closeAsync()
         assertNull(fixture.targets.current())
-        assertTrue(env.tickWhile({ fixture.displays().size > 1 }, Duration.ofSeconds(2)))
-        assertEquals(listOf(backdrop), fixture.displays())
+        assertTrue(env.tickWhile({ fixture.displays().isNotEmpty() }, Duration.ofSeconds(2)))
+        assertTrue(fixture.displays().isEmpty())
         assertFalse(close.toCompletableFuture().isDone)
         time.set(Duration.ofMillis(300).toNanos())
-        expectOpacity(env, fixture, 204)
+        expectVignette(env, fixture, Key.key("dialogue:vignette_fade_4"))
         assertEquals(listOf(foreignKey, Key.key("dialogue:vignette_fade_4")), fixture.output.last())
         time.set(Duration.ofMillis(500).toNanos())
         done(env, close)
-        assertTrue(fixture.displays().isEmpty())
         assertEquals(listOf(foreignKey), fixture.output.last())
         done(env, foreign.closeAsync())
     }
@@ -234,7 +240,7 @@ class NpcDialogueSurfaceTest {
         val handle = openFading(env, fixture)
         done(env, handle.replace(fixture.frame()))
         time.set(Duration.ofMillis(100).toNanos())
-        expectOpacity(env, fixture, 102)
+        expectVignette(env, fixture, Key.key("dialogue:vignette_fade_2"))
         fixture.anchorUnavailable = true
         done(env, handle.closeAsync())
         assertTrue(fixture.displays().isEmpty())
@@ -288,12 +294,13 @@ class NpcDialogueSurfaceTest {
         val handle = openFading(env, fixture)
         done(env, handle.replace(fixture.frame()))
         time.set(Duration.ofMillis(100).toNanos())
-        expectOpacity(env, fixture, 102)
+        expectVignette(env, fixture, Key.key("dialogue:vignette_fade_2"))
         val close = handle.closeAsync()
-        assertTrue(env.tickWhile({ fixture.displays().size > 1 }, Duration.ofSeconds(2)))
-        assertEquals(102, fixture.opacity())
-        time.set(Duration.ofMillis(150).toNanos())
-        expectOpacity(env, fixture, 82)
+        assertTrue(env.tickWhile({ fixture.displays().isNotEmpty() }, Duration.ofSeconds(2)))
+        assertTrue(fixture.displays().isEmpty())
+        assertFalse(close.toCompletableFuture().isDone)
+        time.set(Duration.ofMillis(200).toNanos())
+        expectVignette(env, fixture, Key.key("dialogue:vignette_fade_1"))
         val previousWrites = fixture.output.size
         fixture.packs.forget(fixture.first)
         done(env, close)
@@ -309,7 +316,7 @@ class NpcDialogueSurfaceTest {
             val handle = openFading(env, fixture)
             done(env, handle.replace(fixture.frame()))
             time.set(Duration.ofMillis(100).toNanos())
-            expectOpacity(env, fixture, 102)
+            expectVignette(env, fixture, Key.key("dialogue:vignette_fade_2"))
             val originalInstance = fixture.first.instance
             val writes = fixture.output.toList()
             if (reason == DialogueEndReason.HOST_CHANGED) {
@@ -334,9 +341,9 @@ class NpcDialogueSurfaceTest {
         fixture.writeGate = gate
         done(env, handle.replace(fixture.frame()))
         time.set(Duration.ofMillis(50).toNanos())
-        expectOpacity(env, fixture, 51)
+        expectVignette(env, fixture, Key.key("dialogue:vignette_fade_1"))
         time.set(Duration.ofMillis(250).toNanos())
-        expectOpacity(env, fixture, 255)
+        assertEquals(255, fixture.opacity())
         assertEquals(listOf(listOf(Key.key("dialogue:vignette_fade_1"))), fixture.output)
         fixture.writeGate = CompletableFuture.completedFuture(null)
         gate.complete(null)
@@ -373,8 +380,14 @@ class NpcDialogueSurfaceTest {
             mapOf("npcBackdrop" to "true", "vignette" to "true", "npcEffectsFadeMs" to "250"),
         )
 
-    private fun expectOpacity(env: Env, fixture: Fixture, opacity: Int) {
-        assertTrue(env.tickWhile({ fixture.opacity() != opacity }, Duration.ofSeconds(2)))
+    private fun expectVignette(env: Env, fixture: Fixture, key: Key) {
+        assertTrue(
+            env.tickWhile(
+                { fixture.output.lastOrNull()?.contains(key) != true },
+                Duration.ofSeconds(2),
+            ),
+            "Expected $key in vignette writes, got ${fixture.output}",
+        )
     }
 
     @Test
@@ -948,5 +961,21 @@ class NpcDialogueSurfaceTest {
         done(env, close)
         assertTrue(fixture.displays().isEmpty())
         assertTrue(write.toCompletableFuture().isCompletedExceptionally)
+    }
+
+    @Test
+    fun backdropOnlyCloseRemovesDisplaysImmediately(env: Env) {
+        val time = AtomicLong()
+        val fixture = groundsFixture(env, time)
+        val handle = fixture.open(env, mapOf("npcBackdrop" to "true", "npcEffectsFadeMs" to "250"))
+        done(env, handle.replace(fixture.frame()))
+        assertEquals(255, fixture.opacity())
+
+        val close = handle.closeAsync()
+        assertTrue(env.tickWhile({ fixture.displays().isNotEmpty() }, Duration.ofSeconds(2)))
+
+        assertTrue(close.toCompletableFuture().isDone)
+        assertTrue(fixture.displays().isEmpty())
+        done(env, close)
     }
 }

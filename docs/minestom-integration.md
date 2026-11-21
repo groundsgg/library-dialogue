@@ -147,11 +147,13 @@ hearts and hunger visually. It does not change inventory, health, hunger, game
 mode or client world age. Extra/stacked HUD rows are outside the initial claim.
 The optional NPC focus plane is 2.88 × 3.84 blocks, at most roughly 25% black.
 NPC surfaces accept `npcEffectsFadeMs` as an integer from 0 through 1000, with
-0 (the default) applying the effects immediately. For example, 250 fades the
-native vignette and NPC backdrop over 250 ms on entry and normal exit. Dialogue
-panels and input remain immediate. This preference is independent of reduced
-motion and leaves HUD coverage unchanged. Intermediate vignette steps require the
-Grounds profile assets in this release. The backdrop fade works on both profiles.
+0 (the default) applying the vignette immediately. For example, 250 fades the
+native vignette over 250 ms on entry and normal exit. The NPC backdrop appears
+at full opacity with the panels and is removed with them immediately, regardless
+of this setting. Dialogue panels and input remain immediate. This preference is
+independent of reduced motion and leaves HUD coverage unchanged. Intermediate
+vignette steps require the Grounds profile assets in this release. The backdrop
+is immediate on both profiles.
 A public unsupported effect transport diagnoses the request without breaking HUD.
 Grounds effects are explicit, namespaced post effects, without vanilla shader
 replacement, world-age control, mod or dialogue-time pack swap.
