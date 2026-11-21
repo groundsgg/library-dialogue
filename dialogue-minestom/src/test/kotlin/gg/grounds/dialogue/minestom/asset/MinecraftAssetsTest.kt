@@ -162,6 +162,47 @@ class MinecraftAssetsTest {
     }
 
     @Test
+    fun fadeVignettesReferenceTheirStrengthAndPreserveTheFullVignette() {
+        val grounds = AssetBundle.loadDefault(MinecraftPackProfile.grounds263())
+        val entries = grounds.entries()
+        val strengths = listOf("0.03", "0.06", "0.09", "0.12")
+        for ((index, strength) in strengths.withIndex()) {
+            val suffix = index + 1
+            val effectPath = "assets/dialogue/post_effect/vignette_fade_${suffix}.json"
+            val shaderPath = "assets/dialogue/shaders/post/vignette_fade_${suffix}.fsh"
+            val effect =
+                JsonParser.parseString(String(entries.getValue(effectPath), StandardCharsets.UTF_8))
+            assertEquals(
+                "dialogue:post/vignette_fade_${suffix}",
+                effect.asJsonObject
+                    .getAsJsonArray("passes")[0]
+                    .asJsonObject
+                    .get("fragment_shader")
+                    .asString,
+            )
+            val shader = String(entries.getValue(shaderPath), StandardCharsets.UTF_8)
+            assertTrue(shader.contains("scene.rgb * (1.0 - ${strength} * edge)"), shaderPath)
+        }
+        assertEquals(
+            """#version 330
+#extension GL_ARB_separate_shader_objects : require
+uniform sampler2D InSampler;
+layout(location = 0) in vec2 texCoord;
+layout(location = 0) out vec4 fragColor;
+void main() {
+    vec4 scene = texture(InSampler, texCoord);
+    float edge = smoothstep(0.35, 1.35, length((texCoord - vec2(0.5)) * 2.0));
+    fragColor = vec4(scene.rgb * (1.0 - 0.15 * edge), scene.a);
+}
+""",
+            String(
+                entries.getValue("assets/dialogue/shaders/post/vignette.fsh"),
+                StandardCharsets.UTF_8,
+            ),
+        )
+    }
+
+    @Test
     fun bitmapAdvancesMatchFrozenAtlas() {
         for (profile in
             listOf(MinecraftPackProfile.public262(), MinecraftPackProfile.grounds263())) {

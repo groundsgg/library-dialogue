@@ -1,6 +1,8 @@
 package gg.grounds.dialogue.minestom.render
 
+import gg.grounds.dialogue.core.port.DialogueScheduler
 import gg.grounds.dialogue.core.runtime.CancellationToken
+import gg.grounds.dialogue.core.runtime.DialogueEndReason
 import gg.grounds.dialogue.core.runtime.DialogueView
 import gg.grounds.dialogue.core.runtime.PresentationPreferences
 import gg.grounds.dialogue.minestom.MinestomSpeakerBinding
@@ -17,11 +19,14 @@ import gg.grounds.dialogue.presentation.DialogueSurface
 import gg.grounds.dialogue.presentation.DialogueTheme
 import gg.grounds.dialogue.presentation.LayoutProfile
 import gg.grounds.dialogue.presentation.WidgetFrame
+import java.io.IOException
 import java.time.Duration
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionStage
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
+import net.kyori.adventure.key.Key
 import net.kyori.adventure.resource.ResourcePackStatus
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
@@ -44,33 +49,61 @@ import org.junit.jupiter.api.Test
 
 @EnvTest
 class NpcDialogueSurfaceTest {
+    private companion object {
+        val GROUNDS_ASSETS by lazy { AssetBundle.loadDefault(MinecraftPackProfile.grounds263()) }
+    }
+
     private fun <T> done(env: Env, stage: CompletionStage<T>): T =
         HudDialogueSurfaceTest.done(env, stage)
 
-    private inner class Fixture(env: Env, gate: CompletableFuture<Void>) {
+    private inner class Fixture(
+        env: Env,
+        gate: CompletableFuture<Void>,
+        private val assets: AssetBundle = RenderFixtures.ASSETS,
+        private val time: AtomicLong? = null,
+    ) {
         val first: Player
         val second: Player
         val targets = SurfaceInputTargets()
         val hud = ArrayList<Component>()
+        val output = ArrayList<List<Key>>()
+        var writeGate = CompletableFuture.completedFuture<Void>(null)
+        val packs = PackStateTracker()
+        val token = CancellationToken()
+        val channels =
+            LocalOutputChannels(
+                { _, component ->
+                    hud.add(component)
+                    CompletableFuture.completedFuture(null)
+                },
+                assets.profile().postEffects,
+                { _, keys ->
+                    output.add(keys)
+                    writeGate
+                },
+            )
+        val guard: ConnectionGuard
         val feet = AtomicReference(Vec(0.0, 42.0, 0.0))
+        var anchorUnavailable = false
         val surface: NpcDialogueSurface
 
         init {
             val instance = env.createFlatInstance()
             first = env.createConnection().connect(instance, Pos(0.0, 42.0, 4.0, 180f, 0f))
             second = env.createConnection().connect(instance, Pos(0.0, 42.0, 4.0))
-            val packs = PackStateTracker()
+            guard = ConnectionGuard(first, 1, instance)
             val id = UUID.randomUUID()
-            packs.expect(first, 1, id, RenderFixtures.ASSETS.pin())
+            packs.expect(first, 1, id, assets.pin())
             packs.observe(
                 first,
                 1,
                 id,
-                RenderFixtures.ASSETS.pin(),
+                assets.pin(),
                 ResourcePackStatus.SUCCESSFULLY_LOADED,
             )
             val binding =
                 MinestomSpeakerBinding("npc1", instance) {
+                    if (anchorUnavailable) throw IOException("Anchor unavailable")
                     MinestomSpeakerBinding.AnchorSnapshot(
                         feet.get(),
                         0f,
@@ -78,23 +111,19 @@ class NpcDialogueSurfaceTest {
                         true,
                     )
                 }
+            val scheduler = MinestomDialogueScheduler(instance)
             surface =
                 NpcDialogueSurface(
                     first,
                     1,
-                    ConnectionGuard(first, 1, instance),
+                    guard,
                     packs,
-                    RenderFixtures.ASSETS,
-                    LocalOutputChannels(
-                        { _, component ->
-                            hud.add(component)
-                            CompletableFuture.completedFuture(null)
-                        },
-                        false,
-                        { _, _ -> CompletableFuture.completedFuture(null) },
-                    ),
+                    assets,
+                    channels,
                     targets,
-                    MinestomDialogueScheduler(instance),
+                    object : DialogueScheduler by scheduler {
+                        override fun nanoTime(): Long = time?.get() ?: scheduler.nanoTime()
+                    },
                     { binding },
                     {},
                     { entity, world, position ->
@@ -116,16 +145,236 @@ class NpcDialogueSurfaceTest {
                         1,
                         "npc",
                         "profile",
-                        CancellationToken(),
+                        token,
                         1,
                         Long.MAX_VALUE,
                         PresentationPreferences("npc", Duration.ZERO, false, effects),
+                        Duration.ofSeconds(2),
                     )
                 ),
             )
 
+        fun frame(text: String = "Hello"): WidgetFrame {
+            val frame = RenderFixtures.frame("npc", text, text.length)
+            return WidgetFrame(
+                frame.semantic(),
+                frame.widgets(),
+                assets.pin(),
+                frame.theme(),
+                frame.chrome(),
+                frame.scrollbar(),
+            )
+        }
+
+        fun backdrop(): Entity =
+            displays().single {
+                PlainTextComponentSerializer.plainText()
+                    .serialize((it.entityMeta as TextDisplayMeta).text) == "\ue300"
+            }
+
+        fun opacity(): Int = (backdrop().entityMeta as TextDisplayMeta).textOpacity.toInt() and 255
+
         fun displays(): List<Entity> =
             first.instance.entities.filter { it.entityType == EntityType.TEXT_DISPLAY }
+    }
+
+    @Test
+    fun onlyEffectsFadeAndReplacingFramesPreservesProgress(env: Env) {
+        val time = AtomicLong()
+        val fixture = groundsFixture(env, time)
+        val foreignKey = Key.key("example:other")
+        val foreign = fixture.channels.acquireEffects(fixture.first, 1)
+        done(env, foreign.replace(listOf(foreignKey)))
+        val handle = openFading(env, fixture)
+        val frame = fixture.frame()
+        done(env, handle.replace(frame))
+        assertEquals(frame.widgets().size * 2 + 1, fixture.displays().size)
+        assertNotNull(fixture.targets.current())
+        val backdrop = fixture.backdrop()
+        val panels = fixture.displays().filter { it !== backdrop }
+        assertTrue(panels.all { (it.entityMeta as TextDisplayMeta).textOpacity.toInt() == -1 })
+        assertEquals(0, fixture.opacity())
+        assertEquals(listOf(foreignKey), fixture.output.last())
+
+        time.set(Duration.ofMillis(50).toNanos())
+        expectOpacity(env, fixture, 51)
+        assertEquals(listOf(foreignKey, Key.key("dialogue:vignette_fade_1")), fixture.output.last())
+
+        for ((millis, opacity) in listOf(100L to 102, 150L to 153, 200L to 204, 250L to 255)) {
+            done(env, handle.replace(fixture.frame("Hello ${millis / 50}")))
+            time.set(Duration.ofMillis(millis).toNanos())
+            expectOpacity(env, fixture, opacity)
+        }
+        assertEquals(
+            (1..4).map { Key.key("dialogue:vignette_fade_$it") } + Key.key("dialogue:vignette"),
+            fixture.output.drop(1).map { it.single { key -> key != foreignKey } },
+        )
+
+        fixture.guard.invalidate()
+        fixture.token.cancel(DialogueEndReason.COMPLETED)
+        val close = handle.closeAsync()
+        assertNull(fixture.targets.current())
+        assertTrue(env.tickWhile({ fixture.displays().size > 1 }, Duration.ofSeconds(2)))
+        assertEquals(listOf(backdrop), fixture.displays())
+        assertFalse(close.toCompletableFuture().isDone)
+        time.set(Duration.ofMillis(300).toNanos())
+        expectOpacity(env, fixture, 204)
+        assertEquals(listOf(foreignKey, Key.key("dialogue:vignette_fade_4")), fixture.output.last())
+        time.set(Duration.ofMillis(500).toNanos())
+        done(env, close)
+        assertTrue(fixture.displays().isEmpty())
+        assertEquals(listOf(foreignKey), fixture.output.last())
+        done(env, foreign.closeAsync())
+    }
+
+    @Test
+    fun unavailableAnchorSkipsFadeWithoutFailingCleanup(env: Env) {
+        val time = AtomicLong()
+        val fixture = groundsFixture(env, time)
+        val handle = openFading(env, fixture)
+        done(env, handle.replace(fixture.frame()))
+        time.set(Duration.ofMillis(100).toNanos())
+        expectOpacity(env, fixture, 102)
+        fixture.anchorUnavailable = true
+        done(env, handle.closeAsync())
+        assertTrue(fixture.displays().isEmpty())
+        assertTrue(fixture.output.last().isEmpty())
+    }
+
+    @Test
+    fun fullPanelFrameWaitsForObsoletePendingBackdropRetirement(env: Env) {
+        val gate = CompletableFuture<Void>()
+        val fixture = Fixture(env, gate)
+        val handle = openFading(env, fixture)
+        val frame = fixture.frame()
+        val pending = handle.replace(frame)
+        assertTrue(
+            env.tickWhile(
+                { fixture.displays().size < frame.widgets().size * 2 + 1 },
+                Duration.ofSeconds(2),
+            )
+        )
+        done(
+            env,
+            handle.configure(PresentationPreferences("npc", Duration.ZERO, false, emptyMap())),
+        )
+        val template = frame.widgets().first { it.kind == WidgetFrame.Kind.TEXT }
+        val widgets =
+            frame.widgets() +
+                (frame.widgets().size until 16).map { template.copy(id = "extra-$it") }
+        val fullFrame =
+            WidgetFrame(
+                frame.semantic(),
+                widgets,
+                frame.fontPin(),
+                frame.theme(),
+                frame.chrome(),
+                frame.scrollbar(),
+            )
+        val replacement = handle.replace(fullFrame)
+        repeat(5) { env.tick() }
+        gate.complete(null)
+        done(env, replacement)
+        assertTrue(pending.toCompletableFuture().isCompletedExceptionally)
+        assertEquals(32, fixture.displays().size)
+        done(env, handle.closeAsync())
+        assertTrue(fixture.displays().isEmpty())
+    }
+
+    @Test
+    fun partialFadeReversesAndPackLossStopsFurtherFadeWrites(env: Env) {
+        val time = AtomicLong()
+        val fixture = groundsFixture(env, time)
+        val handle = openFading(env, fixture)
+        done(env, handle.replace(fixture.frame()))
+        time.set(Duration.ofMillis(100).toNanos())
+        expectOpacity(env, fixture, 102)
+        val close = handle.closeAsync()
+        assertTrue(env.tickWhile({ fixture.displays().size > 1 }, Duration.ofSeconds(2)))
+        assertEquals(102, fixture.opacity())
+        time.set(Duration.ofMillis(150).toNanos())
+        expectOpacity(env, fixture, 82)
+        val previousWrites = fixture.output.size
+        fixture.packs.forget(fixture.first)
+        done(env, close)
+        assertTrue(fixture.displays().isEmpty())
+        assertEquals(listOf(emptyList<Key>()), fixture.output.drop(previousWrites))
+    }
+
+    @Test
+    fun worldChangeAndDisconnectRemoveDisplaysWithoutFurtherOutput(env: Env) {
+        for (reason in listOf(DialogueEndReason.HOST_CHANGED, DialogueEndReason.DISCONNECTED)) {
+            val time = AtomicLong()
+            val fixture = groundsFixture(env, time)
+            val handle = openFading(env, fixture)
+            done(env, handle.replace(fixture.frame()))
+            time.set(Duration.ofMillis(100).toNanos())
+            expectOpacity(env, fixture, 102)
+            val originalInstance = fixture.first.instance
+            val writes = fixture.output.toList()
+            if (reason == DialogueEndReason.HOST_CHANGED) {
+                fixture.first.setInstance(env.createFlatInstance(), Pos(0.0, 42.0, 0.0)).join()
+            } else {
+                fixture.first.kick("Disconnected")
+                assertFalse(fixture.first.isOnline)
+            }
+            fixture.token.cancel(reason)
+            done(env, handle.closeAsync())
+            assertTrue(originalInstance.entities.none { it.entityType == EntityType.TEXT_DISPLAY })
+            assertEquals(writes, fixture.output)
+        }
+    }
+
+    @Test
+    fun slowEffectTransportSkipsMissedStepsWithoutDelayingPanels(env: Env) {
+        val time = AtomicLong()
+        val fixture = groundsFixture(env, time)
+        val handle = openFading(env, fixture)
+        val gate = CompletableFuture<Void>()
+        fixture.writeGate = gate
+        done(env, handle.replace(fixture.frame()))
+        time.set(Duration.ofMillis(50).toNanos())
+        expectOpacity(env, fixture, 51)
+        time.set(Duration.ofMillis(250).toNanos())
+        expectOpacity(env, fixture, 255)
+        assertEquals(listOf(listOf(Key.key("dialogue:vignette_fade_1"))), fixture.output)
+        fixture.writeGate = CompletableFuture.completedFuture(null)
+        gate.complete(null)
+        assertTrue(env.tickWhile({ fixture.output.size < 2 }, Duration.ofSeconds(2)))
+        assertEquals(listOf(Key.key("dialogue:vignette")), fixture.output.last())
+        fixture.token.cancel(DialogueEndReason.HOST_CLOSED)
+        done(env, handle.closeAsync())
+        assertTrue(fixture.displays().isEmpty())
+        assertEquals(3, fixture.output.size)
+    }
+
+    @Test
+    fun zeroFadeStillPublishesFullOpacityImmediately(env: Env) {
+        val fixture = groundsFixture(env, AtomicLong())
+        val handle = fixture.open(env, mapOf("npcBackdrop" to "true", "vignette" to "true"))
+        done(env, handle.replace(fixture.frame()))
+        assertEquals(255, fixture.opacity())
+        assertEquals(listOf(listOf(Key.key("dialogue:vignette"))), fixture.output)
+        done(env, handle.closeAsync())
+        assertTrue(fixture.displays().isEmpty())
+    }
+
+    private fun groundsFixture(env: Env, time: AtomicLong) =
+        Fixture(
+            env,
+            CompletableFuture.completedFuture(null),
+            GROUNDS_ASSETS,
+            time,
+        )
+
+    private fun openFading(env: Env, fixture: Fixture): DialogueSurface.SurfaceHandle =
+        fixture.open(
+            env,
+            mapOf("npcBackdrop" to "true", "vignette" to "true", "npcEffectsFadeMs" to "250"),
+        )
+
+    private fun expectOpacity(env: Env, fixture: Fixture, opacity: Int) {
+        assertTrue(env.tickWhile({ fixture.opacity() != opacity }, Duration.ofSeconds(2)))
     }
 
     @Test
@@ -225,6 +474,7 @@ class NpcDialogueSurfaceTest {
                         2,
                         Long.MAX_VALUE,
                         PresentationPreferences("npc", Duration.ZERO, false, emptyMap()),
+                        Duration.ofSeconds(2),
                     )
                 ),
             )
@@ -262,10 +512,7 @@ class NpcDialogueSurfaceTest {
     @Test
     fun backdropIsBundledForBothProfiles() {
         assertTrue(RenderFixtures.ASSETS.hasEntry("assets/dialogue/font/focus.json"))
-        assertTrue(
-            AssetBundle.loadDefault(MinecraftPackProfile.grounds263())
-                .hasEntry("assets/dialogue/textures/font/npc-focus.png")
-        )
+        assertTrue(GROUNDS_ASSETS.hasEntry("assets/dialogue/textures/font/npc-focus.png"))
     }
 
     @Test
@@ -690,7 +937,7 @@ class NpcDialogueSurfaceTest {
     fun lateSpawnIsRemoved(env: Env) {
         val gate = CompletableFuture<Void>()
         val fixture = Fixture(env, gate)
-        val handle = fixture.open(env)
+        val handle = fixture.open(env, mapOf("npcBackdrop" to "true", "npcEffectsFadeMs" to "250"))
         val write = handle.replace(RenderFixtures.frame("npc", "Hello", 5))
         assertTrue(env.tickWhile({ fixture.displays().isEmpty() }, Duration.ofSeconds(2)))
         assertTrue(fixture.displays().all { it.viewers.isEmpty() })

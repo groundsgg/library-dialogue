@@ -606,6 +606,26 @@ void main() {
 }
 """
                         .toByteArray(StandardCharsets.UTF_8)
+                for ((index, strength) in listOf("0.03", "0.06", "0.09", "0.12").withIndex()) {
+                    val suffix = index + 1
+                    files["assets/dialogue/post_effect/vignette_fade_${suffix}.json"] =
+                        """{"targets":{"swap":{}},"passes":[{"vertex_shader":"minecraft:core/screenquad","fragment_shader":"dialogue:post/vignette_fade_${suffix}","inputs":[{"sampler_name":"In","target":"minecraft:main"}],"output":"swap"},{"vertex_shader":"minecraft:core/screenquad","fragment_shader":"minecraft:post/blit","inputs":[{"sampler_name":"In","target":"swap"}],"uniforms":{"BlitConfig":[{"name":"ColorModulate","type":"vec4","value":[1,1,1,1]}]},"output":"minecraft:main"}]}
+"""
+                            .toByteArray(StandardCharsets.UTF_8)
+                    files["assets/dialogue/shaders/post/vignette_fade_${suffix}.fsh"] =
+                        """#version 330
+#extension GL_ARB_separate_shader_objects : require
+uniform sampler2D InSampler;
+layout(location = 0) in vec2 texCoord;
+layout(location = 0) out vec4 fragColor;
+void main() {
+    vec4 scene = texture(InSampler, texCoord);
+    float edge = smoothstep(0.35, 1.35, length((texCoord - vec2(0.5)) * 2.0));
+    fragColor = vec4(scene.rgb * (1.0 - ${strength} * edge), scene.a);
+}
+"""
+                            .toByteArray(StandardCharsets.UTF_8)
+                }
             }
             hudAssets(
                 files,

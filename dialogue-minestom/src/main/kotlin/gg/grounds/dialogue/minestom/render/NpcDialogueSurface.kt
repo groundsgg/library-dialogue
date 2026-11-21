@@ -12,6 +12,7 @@ import gg.grounds.dialogue.minestom.MinestomSpeakerBinding
 import gg.grounds.dialogue.minestom.NpcPanelOptions
 import gg.grounds.dialogue.minestom.asset.AssetBundle
 import gg.grounds.dialogue.minestom.asset.PackStateTracker
+import gg.grounds.dialogue.minestom.channel.DIALOGUE_VIGNETTE_KEYS
 import gg.grounds.dialogue.minestom.channel.OutputChannels
 import gg.grounds.dialogue.minestom.geometry.NpcPanelTransform
 import gg.grounds.dialogue.minestom.input.SurfaceInputTargets
@@ -32,6 +33,7 @@ import java.util.function.Function
 import kotlin.math.PI
 import kotlin.math.ceil
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import net.kyori.adventure.key.Key
 import net.kyori.adventure.text.Component
@@ -213,8 +215,11 @@ internal constructor(
         private val queue =
             SerialCommandQueue(clock) { error ->
                 writes.forEach { it.completeExceptionally(error) }
-                context.cancellation.cancel(DialogueEndReason.FAILED)
-                closeAsync()
+                if (closed.get()) finishCleanup(error)
+                else {
+                    context.cancellation.cancel(DialogueEndReason.FAILED)
+                    closeAsync()
+                }
             }
         private val scope = OwnedScope(queue, clock, context.cleanupBudget)
         private var binding: MinestomSpeakerBinding? = null
@@ -224,8 +229,21 @@ internal constructor(
         private var appliedHinge = Double.NaN
         private var follow: DialogueScheduler.ScheduledTask? = null
         private var backdrop: Display? = null
+        private var backdropPreparation: CompletableFuture<Void>? = null
+        private val backdropLevel = NpcEffectLevel()
+        private val vignetteLevel = NpcEffectLevel()
+        private val hasVignetteSteps =
+            DIALOGUE_VIGNETTE_KEYS.dropLast(1).all {
+                assets.hasEntry("assets/dialogue/post_effect/${it.value()}.json")
+            }
+        private var fadeDuration = Duration.ZERO
+        private var fadeTask: DialogueScheduler.ScheduledTask? = null
+        private var fadeGeneration = 0L
+        private var effectStep = 0
+        private var effectWriting = false
         private var hud: OutputChannels.HudLease? = null
         private var effects: OutputChannels.EffectLease? = null
+        private var effectsPreparation: CompletableFuture<Void>? = null
         private var epoch = 0L
         private var nextHudRefresh = 0L
         private var hudRefreshing = false
@@ -335,9 +353,12 @@ internal constructor(
             val focus = VisualOptions.enabled(preferences, "npcBackdrop", diagnostic)
             val hide = VisualOptions.enabled(preferences, "hideHud", diagnostic)
             val vignette = VisualOptions.enabled(preferences, "vignette", diagnostic)
+            fadeDuration = effectFadeDuration()
             if (encoded.widgets().size * 2 + (if (focus) 1 else 0) > 32) {
                 throw DialogueFailure("DISPLAY_LIMIT", "NPC display budget exceeded")
             }
+            val keepBackdrop =
+                focus || !fadeDuration.isZero && backdrop != null && encoded.widgets().size * 2 < 32
             val operation = ++epoch
             follow?.cancel()
             follow = null
@@ -367,7 +388,7 @@ internal constructor(
                 for (key in panels.keys) {
                     if (
                         key.kind == WidgetFrame.Kind.CHOICE &&
-                            wanted.size < (32 - (if (focus) 1 else 0)) / 2
+                            wanted.size < (32 - (if (keepBackdrop) 1 else 0)) / 2
                     ) {
                         wanted.add(key)
                     }
@@ -377,11 +398,21 @@ internal constructor(
             for (key in panels.keys.filter { it !in wanted }) {
                 pending.add(checkNotNull(panels.remove(key)).release().toCompletableFuture())
             }
-            if (!focus)
-                backdrop?.let {
-                    pending.add(scope.release(it).toCompletableFuture())
-                    backdrop = null
-                }
+            if (!keepBackdrop) {
+                val preparation = backdropPreparation
+                val retirement =
+                    if (preparation == null) releaseBackdrop()
+                    else {
+                        preparation
+                            .handle { _, _ -> null }
+                            .thenCompose {
+                                if (closed.get() || operation != epoch)
+                                    CompletableFuture.completedFuture(null)
+                                else releaseBackdrop()
+                            }
+                    }
+                pending.add(retirement.toCompletableFuture())
+            }
             if (!hide)
                 hud?.let {
                     pending.add(scope.release(it).toCompletableFuture())
@@ -402,12 +433,17 @@ internal constructor(
                         panels.getOrPut(slot) { PanelPair(pose.position()) }.ready
                     )
                     if (focus && backdrop == null) {
-                        acquisitions.add(
-                            create(pose.position())
-                                .thenAccept { backdrop = it }
-                                .toCompletableFuture()
-                        )
+                        if (backdropPreparation == null) {
+                            backdropPreparation =
+                                create(pose.position())
+                                    .thenAccept { backdrop = it }
+                                    .toCompletableFuture()
+                            checkNotNull(backdropPreparation).whenComplete { _, _ ->
+                                queue.execute { backdropPreparation = null }
+                            }
+                        }
                     }
+                    backdropPreparation?.let(acquisitions::add)
                     if (hide && hud == null) {
                         acquisitions.add(
                             scope
@@ -420,8 +456,10 @@ internal constructor(
                                 .toCompletableFuture()
                         )
                     }
-                    if (channels.supportedEffects() && effects == null) {
-                        acquisitions.add(
+                    if (
+                        channels.supportedEffects() && effects == null && effectsPreparation == null
+                    ) {
+                        effectsPreparation =
                             scope
                                 .prepare {
                                     CompletableFuture.completedFuture(
@@ -430,8 +468,11 @@ internal constructor(
                                 }
                                 .thenAccept { effects = it }
                                 .toCompletableFuture()
-                        )
+                        checkNotNull(effectsPreparation).whenComplete { _, _ ->
+                            queue.execute { effectsPreparation = null }
+                        }
                     }
+                    effectsPreparation?.let(acquisitions::add)
                     CompletableFuture.allOf(*acquisitions.toTypedArray()).whenComplete { _, error ->
                         queue.execute {
                             if (writeReady(operation, error, result)) {
@@ -441,6 +482,7 @@ internal constructor(
                                     pose,
                                     operation,
                                     hide,
+                                    focus,
                                     vignette,
                                     verticalOffset,
                                     result,
@@ -476,6 +518,7 @@ internal constructor(
             pose: NpcPanelTransform,
             operation: Long,
             hide: Boolean,
+            focus: Boolean,
             vignette: Boolean,
             verticalOffset: Double,
             result: CompletableFuture<Void>,
@@ -488,23 +531,20 @@ internal constructor(
                         .toCompletableFuture()
                 )
             }
-            val lease = effects
-            if (lease != null) {
-                outputs.add(
-                    lease
-                        .replace(
-                            if (vignette) listOf(Key.key("dialogue:vignette")) else emptyList()
-                        )
-                        .toCompletableFuture()
-                )
-            } else if (vignette) {
-                diagnostic.accept("POST_EFFECT_UNSUPPORTED")
+            if (vignette && effects == null) diagnostic.accept("POST_EFFECT_UNSUPPORTED")
+            // Keep immediate effects in the first frame's acknowledgement.
+            if (fadeDuration.isZero || !hasVignetteSteps) {
+                retargetVignette(vignette, clock.nanoTime())
+                writeVignette(reportFailure = false)?.let { outputs.add(it.toCompletableFuture()) }
             }
             CompletableFuture.allOf(*outputs.toTypedArray()).whenComplete { _, error ->
                 queue.execute {
                     if (writeReady(operation, error, result)) {
                         nextHudRefresh = clock.nanoTime() + HUD_REFRESH_NANOS
+                        retargetEffects(focus, vignette)
+                        updateBackdropOpacity()
                         apply(slots, pose)
+                        scheduleFade()
                         publish(frame, pose)
                         startFollow(verticalOffset)
                         result.complete(null)
@@ -751,6 +791,145 @@ internal constructor(
                 }
         }
 
+        private fun effectFadeDuration(): Duration {
+            val value = preferences.effects()["npcEffectsFadeMs"] ?: return Duration.ZERO
+            val millis = value.toLongOrNull()
+            if (millis == null || millis !in 0L..1000L) {
+                diagnostic.accept("INVALID_EFFECT_VALUE:npcEffectsFadeMs")
+                return Duration.ZERO
+            }
+            return Duration.ofMillis(millis)
+        }
+
+        private fun retargetEffects(focus: Boolean, vignette: Boolean) {
+            val now = clock.nanoTime()
+            val backdropChanged =
+                backdropLevel.retarget(focus && backdrop != null, now, fadeDuration)
+            val vignetteChanged = retargetVignette(vignette, now)
+            if (backdropChanged || vignetteChanged) cancelFadeTask()
+        }
+
+        private fun retargetVignette(vignette: Boolean, now: Long): Boolean =
+            vignetteLevel.retarget(
+                vignette && effects != null,
+                now,
+                if (hasVignetteSteps) fadeDuration else Duration.ZERO,
+                effectStep.toDouble() / DIALOGUE_VIGNETTE_KEYS.size,
+            )
+
+        private fun backdropOpacity(): Int = (backdropLevel.current * 255).roundToInt()
+
+        private fun vignetteStep(): Int =
+            (vignetteLevel.current * DIALOGUE_VIGNETTE_KEYS.size).roundToInt()
+
+        private fun writeVignette(reportFailure: Boolean): CompletionStage<Void>? {
+            val lease = effects ?: return null
+            val step = vignetteStep()
+            if (effectWriting || step == effectStep) return null
+            effectWriting = true
+            val previousStep = effectStep
+            effectStep = step
+            val keys = DIALOGUE_VIGNETTE_KEYS.getOrNull(step - 1)?.let(::listOf) ?: emptyList()
+            return lease.replace(keys).whenComplete { _, error ->
+                queue.execute {
+                    effectWriting = false
+                    if (error != null) {
+                        effectStep = previousStep
+                        if (reportFailure) {
+                            if (closed.get()) finishCleanup(if (canFadeOut()) error else null)
+                            else if (available() && !context.cancellation.isCancelled()) {
+                                context.cancellation.cancel(DialogueEndReason.FAILED)
+                                closeAsync()
+                            }
+                        }
+                    } else if (
+                        !closed.get() && available() && !context.cancellation.isCancelled()
+                    ) {
+                        scheduleFade()
+                    }
+                }
+            }
+        }
+
+        private fun cancelFadeTask() {
+            fadeGeneration++
+            fadeTask?.cancel()
+            fadeTask = null
+        }
+
+        private fun scheduleFade() {
+            if (fadeTask != null) return
+            val now = clock.nanoTime()
+            val remaining = maxOf(backdropLevel.remaining(now), vignetteLevel.remaining(now))
+            if (
+                backdropLevel.settled &&
+                    vignetteLevel.settled &&
+                    (closed.get() || effectWriting || vignetteStep() == effectStep)
+            ) {
+                if (closed.get()) finishCleanup()
+                return
+            }
+            val delay =
+                if (remaining == 0L) FADE_TICK else minOf(FADE_TICK, Duration.ofNanos(remaining))
+            val animation = fadeGeneration
+            fadeTask =
+                clock.schedule(delay) {
+                    queue.execute {
+                        if (animation == fadeGeneration) {
+                            fadeTask = null
+                            tickFade()
+                        }
+                    }
+                }
+        }
+
+        private fun tickFade() {
+            if (closed.get()) {
+                if (!canFadeOut()) {
+                    finishCleanup()
+                    return
+                }
+            } else if (context.cancellation.isCancelled() || !available()) {
+                return
+            }
+            val now = clock.nanoTime()
+            backdropLevel.advance(now)
+            vignetteLevel.advance(now)
+            updateBackdropOpacity()
+            // Releasing the lease publishes the endpoint at zero during surface retirement.
+            if (!closed.get() || vignetteStep() != 0) writeVignette(reportFailure = true)
+            scheduleFade()
+        }
+
+        private fun releaseBackdrop(): CompletionStage<Void> {
+            val display = backdrop ?: return CompletableFuture.completedFuture(null)
+            backdrop = null
+            return scope.release(display)
+        }
+
+        private fun updateBackdropOpacity() {
+            backdrop?.let { display ->
+                (display.entity.entityMeta as TextDisplayMeta).setTextOpacity(
+                    backdropOpacity().toByte()
+                )
+                if (backdropLevel.current == 0.0 && !backdropLevel.enabled) releaseBackdrop()
+            }
+        }
+
+        private fun canFadeOut(): Boolean {
+            if (
+                context.cancellation.reason() !in NORMAL_FADE_ENDS ||
+                    !guard.hasCurrentConnection() ||
+                    !packs.isReady(player, generation, assets.pin())
+            )
+                return false
+            return try {
+                binding?.snapshot?.get()?.valid == true
+            } catch (_: Throwable) {
+                false
+            }
+        }
+
         override fun closeAsync(): CompletionStage<Void> {
             if (closed.compareAndSet(false, true)) {
                 queue.execute {
@@ -760,20 +939,51 @@ internal constructor(
                     follow?.cancel()
                     targets.clear(context.generation)
                     geometries.remove(context.generation)
-                    scope.closeAsync().whenComplete { _, error ->
+                    cancelFadeTask()
+                    if (
+                        !fadeDuration.isZero &&
+                            context.cleanupBudget > fadeDuration.plus(FADE_TICK) &&
+                            (backdrop != null && backdropLevel.current > 0.0 ||
+                                hasVignetteSteps && effectStep > 0) &&
+                            canFadeOut()
+                    ) {
+                        panels.values.forEach { pair ->
+                            pair.displays.filterNotNull().forEach(scope::release)
+                        }
                         panels.clear()
-                        binding = null
-                        transform = null
-                        if (error == null) cleanup.complete(null)
-                        else cleanup.completeExceptionally(error)
-                    }
+                        hud?.let(scope::release)
+                        hud = null
+                        retargetEffects(focus = false, vignette = false)
+                        scheduleFade()
+                    } else finishCleanup()
                 }
             }
             return cleanupView
         }
+
+        private fun finishCleanup(fadeError: Throwable? = null) {
+            cancelFadeTask()
+            panels.clear()
+            binding = null
+            transform = null
+            scope.closeAsync().whenComplete { _, error ->
+                val failure = error ?: fadeError
+                if (failure == null) cleanup.complete(null)
+                else cleanup.completeExceptionally(failure)
+            }
+        }
     }
 
     private companion object {
+        val FADE_TICK = Duration.ofMillis(50)
+        val NORMAL_FADE_ENDS =
+            setOf(
+                null,
+                DialogueEndReason.CANCELLED,
+                DialogueEndReason.COMPLETED,
+                DialogueEndReason.OUT_OF_RANGE,
+                DialogueEndReason.LOOKED_AWAY,
+            )
         val HUD_REFRESH_NANOS = Duration.ofSeconds(1).toNanos()
         val COUNTS = WeakHashMap<Player, AtomicInteger>()
 

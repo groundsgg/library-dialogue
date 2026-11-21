@@ -17,6 +17,9 @@ import net.kyori.adventure.text.Component
 import net.minestom.server.entity.Player
 import net.minestom.server.instance.Instance
 
+internal val DIALOGUE_VIGNETTE_KEYS =
+    (1..4).map { Key.key("dialogue:vignette_fade_$it") } + Key.key("dialogue:vignette")
+
 /**
  * Local registered layers, with serialized asynchronous writes and no foreign calls under locks.
  */
@@ -211,7 +214,11 @@ class LocalOutputChannels(
                     keys.addAll(source.value as List<Key>)
                 }
             }
-            return keys.toList() as T
+            // Overlapping surfaces may register different strengths of the same vignette.
+            val strongest = DIALOGUE_VIGNETTE_KEYS.lastOrNull(keys::contains)
+            return (if (strongest == null) keys.toList()
+            else keys.map { if (it in DIALOGUE_VIGNETTE_KEYS) strongest else it }.distinct())
+                as T
         }
 
         fun pump() {
