@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/groundsgg/library-dialogue/compare/v1.2.1...v1.3.0) (2026-11-22)
+
+
+### Features
+
+* **minestom:** animate NPC vignette in client shaders ([#18](https://github.com/groundsgg/library-dialogue/issues/18)) ([a660389](https://github.com/groundsgg/library-dialogue/commit/a66038944f7091cd5f8d1f7cbd6e525516deeb2d))
+
 ## [1.2.1](https://github.com/groundsgg/library-dialogue/compare/v1.2.0...v1.2.1) (2026-11-21)
 
 
