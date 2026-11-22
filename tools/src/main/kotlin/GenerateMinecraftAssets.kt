@@ -80,9 +80,11 @@ object GenerateMinecraftAssets {
         // Swap hands: two opposing arrows above a pair of simple hand/cuff marks.
         line(3, 4, 2, 1, 0, 6)
         line(3, 9, 1, -1, 1, 2)
+        pixel(3, 10, 2)
         line(3, 9, 3, -1, -1, 2)
         line(3, 10, 5, -1, 0, 6)
         line(3, 5, 4, 1, 1, 2)
+        pixel(3, 4, 5)
         line(3, 5, 6, 1, -1, 2)
         line(3, 4, 9, 1, 0, 3)
         pixel(3, 4, 8)
