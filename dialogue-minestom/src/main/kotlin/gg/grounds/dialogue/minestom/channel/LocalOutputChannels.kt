@@ -7,6 +7,7 @@ import java.util.HashMap
 import java.util.IdentityHashMap
 import java.util.LinkedHashMap
 import java.util.LinkedHashSet
+import java.util.WeakHashMap
 import java.util.concurrent.CancellationException
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionStage
@@ -20,6 +21,19 @@ import net.minestom.server.instance.Instance
 internal val DIALOGUE_VIGNETTE_KEYS =
     (1..4).map { Key.key("dialogue:vignette_fade_$it") } + Key.key("dialogue:vignette")
 
+internal enum class NativeVignetteBank(suffix: String) {
+    A("a"),
+    B("b");
+
+    val enter = Key.key("dialogue:vignette_250_enter_$suffix")
+    val exit = Key.key("dialogue:vignette_250_exit_$suffix")
+
+    fun other(): NativeVignetteBank = if (this == A) B else A
+}
+
+private val NATIVE_ENTERS = NativeVignetteBank.entries.map { it.enter }.toSet()
+private val NATIVE_KEYS = NativeVignetteBank.entries.flatMap { listOf(it.enter, it.exit) }.toSet()
+
 /**
  * Local registered layers, with serialized asynchronous writes and no foreign calls under locks.
  */
@@ -30,6 +44,7 @@ class LocalOutputChannels(
 ) : OutputChannels {
     private val lock = Any()
     private val players = IdentityHashMap<Player, PlayerState>()
+    private val nativeDispatches = WeakHashMap<Player, NativeDispatch>()
     private var sequence = 0L
     private val expiredPlayers = ReferenceQueue<Player>()
     private val generations = HashMap<PlayerKey, Long>()
@@ -93,11 +108,16 @@ class LocalOutputChannels(
         if (!effectsSupported) throw UnsupportedOperationException("POST_EFFECTS_UNAVAILABLE")
         return synchronized(lock) {
             val state = state(player, generation)
+            val world = player.instance
+            val existing = state.effects[generation]
             val channel =
-                state.effects.computeIfAbsent(generation) {
-                    Channel(state, generation, false, effectSink)
-                }
-            val source = EffectSource(channel)
+                if (existing != null && existing.rebindEffects(world)) existing
+                else
+                    Channel(state, generation, false, effectSink).also {
+                        state.effects[generation] = it
+                        existing?.retire()
+                    }
+            val source = EffectSource(channel, world)
             channel.sources[source.id] = source
             state.sources++
             source
@@ -125,10 +145,28 @@ class LocalOutputChannels(
         }
     }
 
-    private inner class EffectSource(channel: Channel<List<Key>>) :
+    private class NativeActivation(val requestedBank: NativeVignetteBank, val sourceId: Long)
+
+    private data class NativeDispatch(
+        val activation: NativeActivation,
+        val bank: NativeVignetteBank,
+    )
+
+    private inner class EffectSource(channel: Channel<List<Key>>, val instance: Instance?) :
         Source<List<Key>>(channel, 0), OutputChannels.EffectLease {
+        var nativeActivation: NativeActivation? = null
+            private set
+
         override fun replace(value: List<Key>): CompletionStage<Void> =
             super.replace(value.toList())
+
+        override fun update(value: List<Key>) {
+            super.update(value)
+            val requested = NativeVignetteBank.entries.firstOrNull { it.enter in value }
+            if (requested != nativeActivation?.requestedBank) {
+                nativeActivation = requested?.let { NativeActivation(it, id) }
+            }
+        }
     }
 
     private open inner class Source<T>(val channel: Channel<T>, val priority: Int) :
@@ -150,11 +188,15 @@ class LocalOutputChannels(
                     result.completeExceptionally(IllegalStateException("OUTPUT_QUEUE_FULL"))
                     return result.minimalCompletionStage()
                 }
-                this.value = value
+                update(value)
                 channel.enqueue(Operation(this, false, result))
             }
             channel.pump()
             return result.minimalCompletionStage()
+        }
+
+        protected open fun update(value: T) {
+            this.value = value
         }
 
         override fun closeAsync(): CompletionStage<Void> {
@@ -182,7 +224,8 @@ class LocalOutputChannels(
         private val isHud: Boolean,
         private val sink: BiFunction<Player, T, CompletionStage<Void>>,
     ) {
-        private val instance: Instance? = state.player.instance
+        private var instance: Instance? = state.player.instance
+        private var replaced = false
         val sources = LinkedHashMap<Long, Source<T>>()
         val queue = ArrayDeque<Operation<T>>()
         private val work = AtomicInteger()
@@ -193,14 +236,40 @@ class LocalOutputChannels(
             state.pending++
         }
 
-        fun current(): Boolean =
-            !state.retired &&
-                state.latest == generation &&
-                state.player.isOnline &&
-                state.player.instance === instance
+        private fun authoritative(): Boolean =
+            !replaced && !state.retired && state.latest == generation && state.player.isOnline
+
+        fun current(): Boolean = authoritative() && state.player.instance === instance
+
+        fun retire() {
+            replaced = true
+        }
+
+        fun rebindEffects(world: Instance?): Boolean {
+            if (instance === world) return true
+            if (!sameDimension(world)) return false
+            instance = world
+            return true
+        }
+
+        private fun sameDimension(world: Instance?): Boolean =
+            world != null && instance?.dimensionName == world.dimensionName
+
+        private fun canDispatch(operation: Operation<T>, world: Instance?): Boolean {
+            if (!authoritative() || (!operation.closing && operation.source.closed)) return false
+            val native = (operation.source as? EffectSource)?.takeIf { it.nativeActivation != null }
+            if (world === instance) {
+                return operation.closing || native == null || native.instance === world
+            }
+            // The client retains post effects across instance changes within one dimension.
+            val lastNativeOwner = nativeDispatches[state.player]?.activation?.sourceId
+            return operation.closing &&
+                (native != null || lastNativeOwner == operation.source.id) &&
+                sameDimension(world)
+        }
 
         @Suppress("UNCHECKED_CAST")
-        private fun payload(): T {
+        private fun payload(world: Instance?): T {
             if (isHud) {
                 return (sources.values
                     .filter { it.value != null && !it.closed }
@@ -209,16 +278,49 @@ class LocalOutputChannels(
                     as T
             }
             val keys = LinkedHashSet<Key>()
+            var selected: EffectSource? = null
             for (source in sources.values) {
-                if (!source.closed && source.value != null) {
-                    keys.addAll(source.value as List<Key>)
+                val layer = source.value as List<Key>? ?: continue
+                if (source.closed) continue
+                val effect = source as EffectSource
+                if (effect.instance === world) {
+                    keys.addAll(layer)
+                    if (effect.nativeActivation != null) selected = effect
+                } else {
+                    keys.addAll(layer.filterNot { it in NATIVE_KEYS })
                 }
             }
-            // Overlapping surfaces may register different strengths of the same vignette.
+            // A legacy effect takes precedence over the native chain.
             val strongest = DIALOGUE_VIGNETTE_KEYS.lastOrNull(keys::contains)
-            return (if (strongest == null) keys.toList()
-            else keys.map { if (it in DIALOGUE_VIGNETTE_KEYS) strongest else it }.distinct())
-                as T
+            val vignette = strongest?.let(::listOf) ?: selected?.let(::nativeKeys).orEmpty()
+            val merged = ArrayList<Key>()
+            var vignetteAdded = false
+            for (key in keys) {
+                when {
+                    key in DIALOGUE_VIGNETTE_KEYS || key in NATIVE_ENTERS -> {
+                        if (!vignetteAdded) {
+                            merged.addAll(vignette)
+                            vignetteAdded = true
+                        }
+                    }
+                    key !in NATIVE_KEYS -> merged.add(key)
+                }
+            }
+            return merged as T
+        }
+
+        private fun nativeKeys(source: EffectSource): List<Key> {
+            val activation = checkNotNull(source.nativeActivation)
+            val previous = nativeDispatches[state.player]
+            val bank =
+                if (previous?.activation === activation) previous.bank
+                else previous?.bank?.other() ?: activation.requestedBank
+            // A queued activation can disappear before the sink sees it. Alternate using the
+            // last dispatched bank so the client never reuses its current clock for a new entry.
+            nativeDispatches[state.player] = NativeDispatch(activation, bank)
+            return if (activation.requestedBank.exit in checkNotNull(source.value)) {
+                listOf(bank.enter, bank.exit)
+            } else listOf(bank.enter)
         }
 
         fun pump() {
@@ -226,21 +328,22 @@ class LocalOutputChannels(
             var missed = 1
             do {
                 var operation: Operation<T>? = null
-                var value: T? = null
                 synchronized(lock) {
                     if (!writing && queue.isNotEmpty()) {
                         operation = queue.remove()
                         state.pending--
                         writing = true
                         state.inflight++
-                        value = payload()
                     }
                 }
                 val pendingOperation = operation
                 if (pendingOperation != null) {
-                    if (
-                        !current() || (!pendingOperation.closing && pendingOperation.source.closed)
-                    ) {
+                    val value =
+                        synchronized(lock) {
+                            val world = state.player.instance
+                            if (canDispatch(pendingOperation, world)) payload(world) else null
+                        }
+                    if (value == null) {
                         finish(
                             pendingOperation,
                             if (pendingOperation.closing) null
@@ -249,7 +352,7 @@ class LocalOutputChannels(
                     } else {
                         val stage =
                             try {
-                                requireNotNull(sink.apply(state.player, value as T))
+                                requireNotNull(sink.apply(state.player, value))
                             } catch (error: Throwable) {
                                 CompletableFuture.failedFuture(error)
                             }

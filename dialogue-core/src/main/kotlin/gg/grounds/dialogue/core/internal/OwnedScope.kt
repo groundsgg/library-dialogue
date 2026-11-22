@@ -92,11 +92,19 @@ class OwnedScope(
         return dispose(resource)
     }
 
-    fun closeAsync(): CompletionStage<Void> {
+    fun closeAsync(): CompletionStage<Void> = closeWithin(budget)
+
+    /** Shares the caller's existing cleanup deadline after a deferred release. */
+    fun closeBy(deadlineNanos: Long): CompletionStage<Void> =
+        closeWithin(
+            minOf(budget, Duration.ofNanos((deadlineNanos - clock.nanoTime()).coerceAtLeast(0)))
+        )
+
+    private fun closeWithin(remaining: Duration): CompletionStage<Void> {
         if (closed) return observation
         closed = true
         timeout =
-            clock.schedule(budget) {
+            clock.schedule(remaining) {
                 queue.execute {
                     if (!completion.isDone) {
                         completion.completeExceptionally(

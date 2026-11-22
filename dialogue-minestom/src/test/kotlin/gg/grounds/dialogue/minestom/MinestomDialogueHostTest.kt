@@ -22,6 +22,8 @@ import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionStage
 import java.util.concurrent.atomic.AtomicInteger
+import net.kyori.adventure.key.Key
+import net.kyori.adventure.resource.ResourcePackStatus
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.coordinate.Vec
 import net.minestom.server.entity.EntityType
@@ -100,7 +102,12 @@ internal class MinestomDialogueHostTest {
                 }
         }
 
-        fun request(id: String, binding: String): MinestomDialogueRequest =
+        fun request(
+            id: String,
+            binding: String,
+            preferences: PresentationPreferences =
+                PresentationPreferences("hud", Duration.ZERO, false, emptyMap()),
+        ): MinestomDialogueRequest =
             MinestomDialogueRequest(
                 id,
                 player,
@@ -116,7 +123,7 @@ internal class MinestomDialogueHostTest {
                 ),
                 emptyMap(),
                 LocaleContext("en", 0, "en"),
-                PresentationPreferences("hud", Duration.ZERO, false, emptyMap()),
+                preferences,
                 mapOf(
                     "npc" to
                         MinestomSpeakerBinding(
@@ -274,6 +281,57 @@ internal class MinestomDialogueHostTest {
         )
         assertEquals(visit, handle.snapshot().nodeVisitId())
         assertEquals("hud", ticket.status().requestedSurface)
+        done(env, host.closeAsync())
+    }
+
+    @Test
+    fun normalHostCancellationRetiresInputWhileNativeVignetteFades(env: Env) {
+        val fixture = Fixture(env)
+        done(env, fixture.host.closeAsync())
+        val profile = MinecraftPackProfile.grounds263()
+        val assets = AssetBundle.loadDefault(profile)
+        val effects = mutableListOf<List<Key>>()
+        val channels =
+            LocalOutputChannels(
+                { _, _ -> CompletableFuture.completedFuture(null) },
+                true,
+                { _, keys ->
+                    effects.add(keys)
+                    CompletableFuture.completedFuture(null)
+                },
+            )
+        val host =
+            MinestomDialogueHost(
+                fixture.options.copy(profile = profile, assets = assets, channels = channels)
+            )
+        val pack = UUID.randomUUID()
+        host.packState().expect(fixture.player, 1, pack, assets.pin())
+        host
+            .packState()
+            .observe(fixture.player, 1, pack, assets.pin(), ResourcePackStatus.SUCCESSFULLY_LOADED)
+        val preferences =
+            PresentationPreferences(
+                "npc",
+                Duration.ZERO,
+                false,
+                mapOf("vignette" to "true", "npcBackdrop" to "true", "npcEffectsFadeMs" to "250"),
+            )
+        val ticket = host.begin(fixture.request("native-vignette", "v1", preferences))
+        assertInstanceOf(DialogueStartResult.Started::class.java, done(env, ticket.result()))
+        assertEquals("npc", ticket.status().effectiveSurface)
+        val enter = Key.key("dialogue:vignette_250_enter_a")
+        val exit = Key.key("dialogue:vignette_250_exit_a")
+        assertEquals(listOf(listOf(enter)), effects)
+        val closing = ticket.cancel(DialogueEndReason.CANCELLED)
+        assertTrue(
+            env.tickWhile({ effects.lastOrNull()?.contains(exit) != true }, Duration.ofSeconds(2))
+        )
+        assertTrue(
+            fixture.player.instance.entities.none { it.entityType == EntityType.TEXT_DISPLAY }
+        )
+        assertFalse(closing.toCompletableFuture().isDone)
+        done(env, closing)
+        assertEquals(listOf(listOf(enter), listOf(enter, exit), emptyList()), effects)
         done(env, host.closeAsync())
     }
 

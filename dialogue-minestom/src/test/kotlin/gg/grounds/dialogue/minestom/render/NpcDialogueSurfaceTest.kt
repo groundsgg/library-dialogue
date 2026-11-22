@@ -1,10 +1,13 @@
 package gg.grounds.dialogue.minestom.render
 
+import com.google.gson.Gson
+import com.google.gson.JsonParser
 import gg.grounds.dialogue.core.port.DialogueScheduler
 import gg.grounds.dialogue.core.runtime.CancellationToken
 import gg.grounds.dialogue.core.runtime.DialogueEndReason
 import gg.grounds.dialogue.core.runtime.DialogueView
 import gg.grounds.dialogue.core.runtime.PresentationPreferences
+import gg.grounds.dialogue.core.validation.ContentFingerprint
 import gg.grounds.dialogue.minestom.MinestomSpeakerBinding
 import gg.grounds.dialogue.minestom.asset.AssetBundle
 import gg.grounds.dialogue.minestom.asset.MinecraftPackProfile
@@ -51,6 +54,49 @@ import org.junit.jupiter.api.Test
 class NpcDialogueSurfaceTest {
     private companion object {
         val GROUNDS_ASSETS by lazy { AssetBundle.loadDefault(MinecraftPackProfile.grounds263()) }
+        val LEGACY_GROUNDS_ASSETS by lazy {
+            rebindGrounds(GROUNDS_ASSETS.entries() - NATIVE_PATHS.toSet())
+        }
+        val NATIVE_PATHS =
+            listOf(
+                    "post_effect/vignette_250_enter_a.json",
+                    "post_effect/vignette_250_exit_a.json",
+                    "post_effect/vignette_250_enter_b.json",
+                    "post_effect/vignette_250_exit_b.json",
+                    "shaders/post/vignette_state.fsh",
+                    "shaders/post/vignette_animated.fsh",
+                    "shaders/post/vignette_copy.fsh",
+                    "shaders/include/vignette_clock.glsl",
+                )
+                .map { "assets/dialogue/$it" }
+        val FADING_EFFECTS =
+            mapOf("npcBackdrop" to "true", "vignette" to "true", "npcEffectsFadeMs" to "250")
+
+        private fun rebindGrounds(entries: Map<String, ByteArray>): AssetBundle {
+            val manifest =
+                JsonParser.parseString(GROUNDS_ASSETS.manifestBytes().decodeToString()).asJsonObject
+            val hashes = entries.mapValues { ContentFingerprint.hash(it.value).sha256 }
+            val gson = Gson()
+            manifest.add("files", gson.toJsonTree(hashes))
+            manifest.addProperty(
+                "pin",
+                ContentFingerprint.hash(
+                        ContentFingerprint.canonicalBytes(
+                            mapOf(
+                                "profile" to GROUNDS_ASSETS.profile().id,
+                                "files" to hashes,
+                                "glyphs" to gson.fromJson(manifest.get("glyphs"), Map::class.java),
+                            )
+                        )
+                    )
+                    .sha256,
+            )
+            return AssetBundle.load(
+                GROUNDS_ASSETS.profile(),
+                manifest.toString().encodeToByteArray(),
+                entries,
+            )
+        }
     }
 
     private fun <T> done(env: Env, stage: CompletionStage<T>): T =
@@ -135,6 +181,8 @@ class NpcDialogueSurfaceTest {
         fun open(
             env: Env,
             effects: Map<String, String> = emptyMap(),
+            cleanupBudget: Duration = Duration.ofSeconds(2),
+            surfaceGeneration: Long = 1,
         ): DialogueSurface.SurfaceHandle =
             done(
                 env,
@@ -146,10 +194,10 @@ class NpcDialogueSurfaceTest {
                         "npc",
                         "profile",
                         token,
-                        1,
+                        surfaceGeneration,
                         Long.MAX_VALUE,
                         PresentationPreferences("npc", Duration.ZERO, false, effects),
-                        Duration.ofSeconds(2),
+                        cleanupBudget,
                     )
                 ),
             )
@@ -366,18 +414,262 @@ class NpcDialogueSurfaceTest {
         assertTrue(fixture.displays().isEmpty())
     }
 
+    @Test
+    fun nativeVignetteKeepsPanelsImmediateAndAppendsMatchingExitOnEarlyClose(env: Env) {
+        val time = AtomicLong()
+        val fixture = nativeFixture(env, time)
+        val handle = openFading(env, fixture)
+        val entryGate = CompletableFuture<Void>()
+        fixture.writeGate = entryGate
+        val frame = fixture.frame()
+        done(env, handle.replace(frame))
+        val enter = Key.key("dialogue:vignette_250_enter_a")
+        val exit = Key.key("dialogue:vignette_250_exit_a")
+        assertEquals(listOf(listOf(enter)), fixture.output)
+        assertEquals(255, fixture.opacity())
+        assertNotNull(fixture.targets.current())
+        assertEquals(frame.widgets().size * 2 + 1, fixture.displays().size)
+
+        time.set(Duration.ofMillis(50).toNanos())
+        val close = handle.closeAsync()
+        assertTrue(env.tickWhile({ fixture.displays().isNotEmpty() }, Duration.ofSeconds(2)))
+        assertNull(fixture.targets.current())
+        assertFalse(close.toCompletableFuture().isDone)
+        fixture.writeGate = CompletableFuture.completedFuture(null)
+        entryGate.complete(null)
+        expectVignette(env, fixture, exit)
+        assertEquals(listOf(listOf(enter), listOf(enter, exit)), fixture.output)
+        time.set(Duration.ofMillis(549).toNanos())
+        env.tick()
+        assertFalse(close.toCompletableFuture().isDone)
+        time.set(Duration.ofMillis(550).toNanos())
+        done(env, close)
+        assertEquals(listOf(listOf(enter), listOf(enter, exit), emptyList()), fixture.output)
+    }
+
+    @Test
+    fun nativeEntryPersistsWithoutPaletteWritesAndNextActivationUsesOtherBank(env: Env) {
+        val time = AtomicLong()
+        val fixture = nativeFixture(env, time)
+        val first = openFading(env, fixture)
+        val enterA = Key.key("dialogue:vignette_250_enter_a")
+        val exitA = Key.key("dialogue:vignette_250_exit_a")
+        val enterB = Key.key("dialogue:vignette_250_enter_b")
+        val exitB = Key.key("dialogue:vignette_250_exit_b")
+        done(env, first.replace(fixture.frame()))
+        for (elapsed in listOf(50L, 100L, 250L, 400L)) {
+            time.set(Duration.ofMillis(elapsed).toNanos())
+            done(env, first.replace(fixture.frame("More")))
+            assertEquals(255, fixture.opacity())
+            assertEquals(listOf(listOf(enterA)), fixture.output)
+        }
+        val firstClose = first.closeAsync()
+        expectVignette(env, fixture, exitA)
+        val second = fixture.open(env, FADING_EFFECTS, surfaceGeneration = 2)
+        done(env, second.replace(fixture.frame()))
+        assertEquals(listOf(enterB), fixture.output.last())
+        time.set(Duration.ofMillis(900).toNanos())
+        done(env, firstClose)
+        assertEquals(listOf(enterB), fixture.output.last())
+        assertNotNull(fixture.targets.current())
+
+        val secondClose = second.closeAsync()
+        expectVignette(env, fixture, exitB)
+        assertEquals(listOf(enterB, exitB), fixture.output.last())
+        time.set(Duration.ofMillis(1400).toNanos())
+        done(env, secondClose)
+        val third = fixture.open(env, FADING_EFFECTS, surfaceGeneration = 3)
+        done(env, third.replace(fixture.frame()))
+        assertEquals(listOf(enterA), fixture.output.last())
+        fixture.token.cancel(DialogueEndReason.HOST_CLOSED)
+        done(env, third.closeAsync())
+    }
+
+    @Test
+    fun pendingTransportCannotKeepNativeLeasePastCloseDeadline(env: Env) {
+        val time = AtomicLong()
+        val fixture = nativeFixture(env, time)
+        val enter = Key.key("dialogue:vignette_250_enter_a")
+        val gate = CompletableFuture<Void>()
+        fixture.writeGate = gate
+        val handle = openFading(env, fixture)
+        done(env, handle.replace(fixture.frame()))
+        val close = handle.closeAsync()
+        assertTrue(env.tickWhile({ fixture.displays().isNotEmpty() }, Duration.ofSeconds(2)))
+        time.set(Duration.ofMillis(500).toNanos())
+        // Schedule enough instance work for the guard poll to retire the effect source.
+        assertFalse(env.tickWhile({ true }, Duration.ofMillis(150)))
+        fixture.writeGate = CompletableFuture.completedFuture(null)
+        gate.complete(null)
+        done(env, close)
+        assertEquals(listOf(listOf(enter), emptyList()), fixture.output)
+    }
+
+    @Test
+    fun failedNativeEntryRemovesPublishedPanelsAndOwnedEffect(env: Env) {
+        val fixture = nativeFixture(env, AtomicLong())
+        val gate = CompletableFuture<Void>()
+        fixture.writeGate = gate
+        val handle = openFading(env, fixture)
+        done(env, handle.replace(fixture.frame()))
+        assertNotNull(fixture.targets.current())
+        assertTrue(fixture.displays().isNotEmpty())
+        fixture.writeGate = CompletableFuture.completedFuture(null)
+        gate.completeExceptionally(IOException("Effect write failed"))
+        assertTrue(env.tickWhile({ fixture.token.reason() == null }, Duration.ofSeconds(2)))
+        done(env, handle.closeAsync())
+        assertEquals(DialogueEndReason.FAILED, fixture.token.reason())
+        assertNull(fixture.targets.current())
+        assertTrue(fixture.displays().isEmpty())
+        assertEquals(emptyList<Key>(), fixture.output.last())
+    }
+
+    @Test
+    fun nativeGraceEndsWhenPackOrConnectionGuardIsLost(env: Env) {
+        for (loseGuard in listOf(false, true)) {
+            val fixture = nativeFixture(env, AtomicLong())
+            val enter = Key.key("dialogue:vignette_250_enter_a")
+            val exit = Key.key("dialogue:vignette_250_exit_a")
+            val handle = openFading(env, fixture)
+            done(env, handle.replace(fixture.frame()))
+            val close = handle.closeAsync()
+            expectVignette(env, fixture, exit)
+            if (loseGuard) fixture.guard.invalidate() else fixture.packs.forget(fixture.first)
+            done(env, close)
+            assertEquals(listOf(listOf(enter), listOf(enter, exit), emptyList()), fixture.output)
+        }
+    }
+
+    @Test
+    fun hardNativeCloseDoesNotSendAnExitEffect(env: Env) {
+        for (reason in listOf(DialogueEndReason.HOST_CHANGED, DialogueEndReason.DISCONNECTED)) {
+            val fixture = nativeFixture(env, AtomicLong())
+            val handle = openFading(env, fixture)
+            done(env, handle.replace(fixture.frame()))
+            val world = fixture.first.instance
+            val before = fixture.output.toList()
+            if (reason == DialogueEndReason.HOST_CHANGED) {
+                fixture.first.setInstance(env.createFlatInstance(), Pos(0.0, 42.0, 0.0)).join()
+            } else {
+                fixture.first.kick("Disconnected")
+                assertFalse(fixture.first.isOnline)
+            }
+            fixture.token.cancel(reason)
+            done(env, handle.closeAsync())
+            assertTrue(world.entities.none { it.entityType == EntityType.TEXT_DISPLAY })
+            assertNull(fixture.targets.current())
+            assertEquals(
+                if (reason == DialogueEndReason.HOST_CHANGED) before + listOf(emptyList())
+                else before,
+                fixture.output,
+            )
+        }
+    }
+
+    @Test
+    fun nativeCloseWithInsufficientBudgetReleasesEffectsImmediately(env: Env) {
+        val fixture = nativeFixture(env, AtomicLong())
+        val handle = fixture.open(env, FADING_EFFECTS, Duration.ofMillis(500))
+        done(env, handle.replace(fixture.frame()))
+        done(env, handle.closeAsync())
+        assertEquals(
+            listOf(listOf(Key.key("dialogue:vignette_250_enter_a")), emptyList()),
+            fixture.output,
+        )
+    }
+
+    @Test
+    fun livePreferencesReplaceNativeEffectAndRestartWithOtherBank(env: Env) {
+        val fixture = nativeFixture(env, AtomicLong())
+        val handle = openFading(env, fixture)
+        val frame = fixture.frame()
+        done(env, handle.replace(frame))
+        assertEquals(listOf(Key.key("dialogue:vignette_250_enter_a")), fixture.output.last())
+
+        fun renderWith(effects: Map<String, String>) {
+            done(
+                env,
+                handle.configure(PresentationPreferences("npc", Duration.ZERO, false, effects)),
+            )
+            done(env, handle.replace(frame))
+        }
+
+        renderWith(FADING_EFFECTS + ("npcEffectsFadeMs" to "100"))
+        assertEquals(listOf(Key.key("dialogue:vignette")), fixture.output.last())
+        renderWith(FADING_EFFECTS)
+        assertEquals(listOf(Key.key("dialogue:vignette_250_enter_b")), fixture.output.last())
+        renderWith(FADING_EFFECTS + ("vignette" to "false"))
+        assertEquals(emptyList<Key>(), fixture.output.last())
+        renderWith(FADING_EFFECTS)
+        assertEquals(listOf(Key.key("dialogue:vignette_250_enter_a")), fixture.output.last())
+        fixture.token.cancel(DialogueEndReason.HOST_CLOSED)
+        done(env, handle.closeAsync())
+    }
+
+    @Test
+    fun nativeAssetsKeepLegacyPaletteForOtherDurations(env: Env) {
+        val time = AtomicLong()
+        val fixture = nativeFixture(env, time)
+        val handle = fixture.open(env, FADING_EFFECTS + ("npcEffectsFadeMs" to "100"))
+        done(env, handle.replace(fixture.frame()))
+        assertEquals(emptyList<List<Key>>(), fixture.output)
+        time.set(Duration.ofMillis(50).toNanos())
+        expectVignette(env, fixture, Key.key("dialogue:vignette_fade_3"))
+        fixture.token.cancel(DialogueEndReason.HOST_CLOSED)
+        done(env, handle.closeAsync())
+    }
+
+    @Test
+    fun missingNativeClockAssetUsesLegacyPalette(env: Env) {
+        val entries =
+            GROUNDS_ASSETS.entries() - "assets/dialogue/shaders/include/vignette_clock.glsl"
+        val time = AtomicLong()
+        val fixture =
+            Fixture(env, CompletableFuture.completedFuture(null), rebindGrounds(entries), time)
+        val handle = openFading(env, fixture)
+        done(env, handle.replace(fixture.frame()))
+        assertEquals(emptyList<List<Key>>(), fixture.output)
+        time.set(Duration.ofMillis(50).toNanos())
+        expectVignette(env, fixture, Key.key("dialogue:vignette_fade_1"))
+        fixture.token.cancel(DialogueEndReason.HOST_CLOSED)
+        done(env, handle.closeAsync())
+    }
+
+    @Test
+    fun closingWhileNativePanelsAreSpawningCannotDispatchAnEnterOrExit(env: Env) {
+        val spawnGate = CompletableFuture<Void>()
+        val fixture = Fixture(env, spawnGate, GROUNDS_ASSETS, AtomicLong())
+        val handle = openFading(env, fixture)
+        val rendering = handle.replace(fixture.frame())
+        assertTrue(env.tickWhile({ fixture.displays().isEmpty() }, Duration.ofSeconds(2)))
+        assertTrue(fixture.output.isEmpty())
+        val closing = handle.closeAsync()
+        assertTrue(
+            env.tickWhile({ !rendering.toCompletableFuture().isDone }, Duration.ofSeconds(2))
+        )
+        assertNull(fixture.targets.current())
+        assertFalse(closing.toCompletableFuture().isDone)
+        spawnGate.complete(null)
+        done(env, closing)
+        assertTrue(fixture.displays().isEmpty())
+        assertEquals(listOf(emptyList<Key>()), fixture.output)
+    }
+
+    private fun nativeFixture(env: Env, time: AtomicLong): Fixture =
+        Fixture(env, CompletableFuture.completedFuture(null), GROUNDS_ASSETS, time)
+
     private fun groundsFixture(env: Env, time: AtomicLong) =
         Fixture(
             env,
             CompletableFuture.completedFuture(null),
-            GROUNDS_ASSETS,
+            LEGACY_GROUNDS_ASSETS,
             time,
         )
 
     private fun openFading(env: Env, fixture: Fixture): DialogueSurface.SurfaceHandle =
         fixture.open(
             env,
-            mapOf("npcBackdrop" to "true", "vignette" to "true", "npcEffectsFadeMs" to "250"),
+            FADING_EFFECTS,
         )
 
     private fun expectVignette(env: Env, fixture: Fixture, key: Key) {

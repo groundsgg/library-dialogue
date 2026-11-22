@@ -13,6 +13,7 @@ import gg.grounds.dialogue.minestom.NpcPanelOptions
 import gg.grounds.dialogue.minestom.asset.AssetBundle
 import gg.grounds.dialogue.minestom.asset.PackStateTracker
 import gg.grounds.dialogue.minestom.channel.DIALOGUE_VIGNETTE_KEYS
+import gg.grounds.dialogue.minestom.channel.NativeVignetteBank
 import gg.grounds.dialogue.minestom.channel.OutputChannels
 import gg.grounds.dialogue.minestom.geometry.NpcPanelTransform
 import gg.grounds.dialogue.minestom.input.SurfaceInputTargets
@@ -146,6 +147,13 @@ internal constructor(
 
     fun geometry(): Geometry? = targets.current()?.let { geometries[it.surfaceGeneration()] }
 
+    private fun nextNativeBank(): NativeVignetteBank =
+        synchronized(NATIVE_BANKS) {
+            val bank = NATIVE_BANKS[player]?.other() ?: NativeVignetteBank.A
+            NATIVE_BANKS[player] = bank
+            bank
+        }
+
     private fun available(): Boolean =
         guard.isCurrent() && packs.isReady(player, generation, assets.pin())
 
@@ -230,11 +238,18 @@ internal constructor(
         private var follow: DialogueScheduler.ScheduledTask? = null
         private var backdrop: Display? = null
         private var backdropPreparation: CompletableFuture<Void>? = null
-        private val vignetteLevel = NpcEffectLevel()
+        private var vignetteLevel = NpcEffectLevel()
         private val hasVignetteSteps =
             DIALOGUE_VIGNETTE_KEYS.dropLast(1).all {
                 assets.hasEntry("assets/dialogue/post_effect/${it.value()}.json")
             }
+        private val hasNativeVignette = NATIVE_VIGNETTE_ASSETS.all {
+            assets.hasEntry("assets/dialogue/$it")
+        }
+        private var nativeBank: NativeVignetteBank? = null
+        private var effectRevision = 0L
+        private var nativeCloseStarted = 0L
+        private var nativeCleanupDeadline: Long? = null
         private var fadeDuration = Duration.ZERO
         private var fadeTask: DialogueScheduler.ScheduledTask? = null
         private var fadeGeneration = 0L
@@ -530,8 +545,9 @@ internal constructor(
                 )
             }
             if (vignette && effects == null) diagnostic.accept("POST_EFFECT_UNSUPPORTED")
-            // Keep immediate effects in the first frame's acknowledgement.
-            if (fadeDuration.isZero || !hasVignetteSteps) {
+            val native = fadeDuration == NATIVE_FADE && hasNativeVignette && effects != null
+            // Keep immediate legacy effects in the first frame's acknowledgement.
+            if (!native && nativeBank == null && (fadeDuration.isZero || !hasVignetteSteps)) {
                 retargetVignette(vignette, clock.nanoTime())
                 writeVignette(reportFailure = false)?.let { outputs.add(it.toCompletableFuture()) }
             }
@@ -539,11 +555,16 @@ internal constructor(
                 queue.execute {
                     if (writeReady(operation, error, result)) {
                         nextHudRefresh = clock.nanoTime() + HUD_REFRESH_NANOS
-                        retargetEffects(vignette)
                         apply(slots, pose)
-                        scheduleFade()
                         publish(frame, pose)
                         startFollow(verticalOffset)
+                        if (native) {
+                            updateNativeVignette(vignette)
+                        } else {
+                            if (nativeBank != null) switchToLegacyVignette(vignette)
+                            retargetEffects(vignette)
+                            scheduleFade()
+                        }
                         result.complete(null)
                     }
                 }
@@ -799,6 +820,84 @@ internal constructor(
             return Duration.ofMillis(millis)
         }
 
+        private fun updateNativeVignette(vignette: Boolean) {
+            if (vignette) {
+                if (nativeBank != null) return
+                cancelFadeTask()
+                effectRevision++
+                effectWriting = false
+                effectStep = 0
+                vignetteLevel = NpcEffectLevel()
+                val bank = nextNativeBank()
+                nativeBank = bank
+                writeNativeVignette(listOf(bank.enter))
+            } else if (
+                nativeBank != null || vignetteLevel.enabled || effectWriting || effectStep > 0
+            ) {
+                cancelFadeTask()
+                nativeBank = null
+                effectRevision++
+                effectWriting = false
+                effectStep = 0
+                vignetteLevel = NpcEffectLevel()
+                writeNativeVignette(emptyList())
+            }
+        }
+
+        private fun switchToLegacyVignette(vignette: Boolean) {
+            nativeBank = null
+            effectRevision++
+            if (vignette) {
+                // Keep the installed vignette visible when preferences change duration.
+                vignetteLevel.retarget(true, clock.nanoTime(), Duration.ZERO)
+                writeVignette(reportFailure = true)
+            } else {
+                writeNativeVignette(emptyList())
+            }
+        }
+
+        private fun writeNativeVignette(keys: List<Key>) {
+            val lease = effects ?: return
+            val revision = effectRevision
+            val stage =
+                try {
+                    lease.replace(keys)
+                } catch (error: Throwable) {
+                    CompletableFuture.failedFuture(error)
+                }
+            stage.whenComplete { _, error ->
+                if (error != null) {
+                    queue.execute {
+                        if (revision != effectRevision) return@execute
+                        if (closed.get()) finishCleanup(if (canFadeNative()) error else null)
+                        else if (available() && !context.cancellation.isCancelled()) {
+                            context.cancellation.cancel(DialogueEndReason.FAILED)
+                            closeAsync()
+                        }
+                    }
+                }
+            }
+        }
+
+        // Session cancellation disables input before requesting surface cleanup.
+        private fun canFadeNative(): Boolean =
+            canFadeOut() && (context.cancellation.reason() != null || guard.isCurrent())
+
+        private fun tickNativeClose() {
+            val elapsed = clock.nanoTime() - nativeCloseStarted
+            val remaining = NATIVE_CLOSE_GRACE.minusNanos(elapsed)
+            if (!canFadeNative() || remaining.isNegative || remaining.isZero) {
+                finishCleanup()
+                return
+            }
+            fadeTask =
+                clock.schedule(minOf(FADE_TICK, remaining)) {
+                    queue.execute {
+                        if (nativeBank != null) tickNativeClose()
+                    }
+                }
+        }
+
         private fun retargetEffects(vignette: Boolean) {
             val now = clock.nanoTime()
             val vignetteChanged = retargetVignette(vignette, now)
@@ -824,8 +923,10 @@ internal constructor(
             val previousStep = effectStep
             effectStep = step
             val keys = DIALOGUE_VIGNETTE_KEYS.getOrNull(step - 1)?.let(::listOf) ?: emptyList()
+            val revision = effectRevision
             return lease.replace(keys).whenComplete { _, error ->
                 queue.execute {
+                    if (revision != effectRevision) return@execute
                     effectWriting = false
                     if (error != null) {
                         effectStep = previousStep
@@ -922,20 +1023,24 @@ internal constructor(
                     targets.clear(context.generation)
                     geometries.remove(context.generation)
                     cancelFadeTask()
-                    if (
+                    val bank = nativeBank
+                    if (bank != null) {
+                        if (context.cleanupBudget > NATIVE_CLOSE_GRACE && canFadeNative()) {
+                            nativeCloseStarted = clock.nanoTime()
+                            nativeCleanupDeadline =
+                                nativeCloseStarted + context.cleanupBudget.toNanos()
+                            releaseVisibleOutput()
+                            writeNativeVignette(listOf(bank.enter, bank.exit))
+                            tickNativeClose()
+                        } else finishCleanup()
+                    } else if (
                         !fadeDuration.isZero &&
                             context.cleanupBudget > fadeDuration.plus(FADE_TICK) &&
                             hasVignetteSteps &&
                             effectStep > 0 &&
                             canFadeOut()
                     ) {
-                        panels.values.forEach { pair ->
-                            pair.displays.filterNotNull().forEach(scope::release)
-                        }
-                        panels.clear()
-                        releaseBackdrop()
-                        hud?.let(scope::release)
-                        hud = null
+                        releaseVisibleOutput()
                         retargetEffects(vignette = false)
                         scheduleFade()
                     } else finishCleanup()
@@ -944,12 +1049,25 @@ internal constructor(
             return cleanupView
         }
 
+        private fun releaseVisibleOutput() {
+            panels.values.forEach { pair ->
+                pair.displays.filterNotNull().forEach(scope::release)
+            }
+            panels.clear()
+            releaseBackdrop()
+            hud?.let(scope::release)
+            hud = null
+        }
+
         private fun finishCleanup(fadeError: Throwable? = null) {
+            nativeBank = null
+            effectRevision++
             cancelFadeTask()
             panels.clear()
             binding = null
             transform = null
-            scope.closeAsync().whenComplete { _, error ->
+            val retirement = nativeCleanupDeadline?.let(scope::closeBy) ?: scope.closeAsync()
+            retirement.whenComplete { _, error ->
                 val failure = error ?: fadeError
                 if (failure == null) cleanup.complete(null)
                 else cleanup.completeExceptionally(failure)
@@ -959,6 +1077,22 @@ internal constructor(
 
     private companion object {
         val FADE_TICK = Duration.ofMillis(50)
+        val NATIVE_FADE = Duration.ofMillis(250)
+        val NATIVE_CLOSE_GRACE = Duration.ofMillis(500)
+        val NATIVE_BANKS = WeakHashMap<Player, NativeVignetteBank>()
+        val NATIVE_VIGNETTE_ASSETS =
+            NativeVignetteBank.entries.flatMap {
+                listOf(
+                    "post_effect/${it.enter.value()}.json",
+                    "post_effect/${it.exit.value()}.json",
+                )
+            } +
+                listOf(
+                    "shaders/post/vignette_state.fsh",
+                    "shaders/post/vignette_animated.fsh",
+                    "shaders/post/vignette_copy.fsh",
+                    "shaders/include/vignette_clock.glsl",
+                )
         val NORMAL_FADE_ENDS =
             setOf(
                 null,
