@@ -17,6 +17,8 @@ import kotlin.math.roundToInt
 
 /** Maintenance-only generator. Normal library builds use the checked-in bytes. */
 object GenerateMinecraftAssets {
+    private val controlCodepoints = listOf(0xe790, 0xe791, 0xe792, 0xe793)
+
     private fun json(value: Any): ByteArray = ContentFingerprint.canonicalBytes(value)
 
     private fun bitmap(
@@ -42,6 +44,91 @@ object GenerateMinecraftAssets {
             ImageIO.write(image, "png", output)
             output.toByteArray()
         }
+
+    private fun controlGlyphAssets(): Pair<BufferedImage, String> {
+        val image = BufferedImage(64, 256, BufferedImage.TYPE_INT_ARGB)
+        val g = image.createGraphics()
+        g.color = Color(235, 241, 245)
+        fun pixel(cell: Int, x: Int, y: Int) = g.fillRect(cell * 16 + x, y, 1, 1)
+        fun line(cell: Int, x: Int, y: Int, dx: Int, dy: Int, count: Int) {
+            repeat(count) { pixel(cell, x + dx * it, y + dy * it) }
+        }
+        fun mouseOutline(cell: Int) {
+            line(cell, 5, 1, 1, 0, 5)
+            pixel(cell, 4, 2)
+            pixel(cell, 10, 2)
+            line(cell, 3, 3, 0, 1, 7)
+            line(cell, 11, 3, 0, 1, 7)
+            line(cell, 4, 10, 1, 0, 7)
+            line(cell, 4, 5, 1, 0, 7)
+        }
+        // Mouse-left: separated upper buttons, with only the left button filled.
+        mouseOutline(0)
+        line(0, 7, 2, 0, 1, 3)
+        line(0, 5, 2, 1, 0, 2)
+        line(0, 4, 3, 1, 0, 3)
+        line(0, 4, 4, 1, 0, 3)
+        // Mouse-right: mirror the same upper-button geometry.
+        mouseOutline(1)
+        line(1, 7, 2, 0, 1, 3)
+        line(1, 8, 2, 1, 0, 2)
+        line(1, 8, 3, 1, 0, 3)
+        line(1, 8, 4, 1, 0, 3)
+        // Scroll wheel: shared mouse silhouette with a centered vertical wheel mark.
+        mouseOutline(2)
+        line(2, 7, 2, 0, 1, 3)
+        // Swap hands: two opposing arrows above a pair of simple hand/cuff marks.
+        line(3, 4, 2, 1, 0, 6)
+        line(3, 9, 1, -1, 1, 2)
+        pixel(3, 10, 2)
+        line(3, 9, 3, -1, -1, 2)
+        line(3, 10, 5, -1, 0, 6)
+        line(3, 5, 4, 1, 1, 2)
+        pixel(3, 4, 5)
+        line(3, 5, 6, 1, -1, 2)
+        line(3, 4, 9, 1, 0, 3)
+        pixel(3, 4, 8)
+        pixel(3, 4, 10)
+        line(3, 9, 9, 1, 0, 3)
+        pixel(3, 11, 8)
+        pixel(3, 11, 10)
+        g.dispose()
+
+        val metrics = StringBuilder("schemaVersion=1\n")
+        for (cell in controlCodepoints.indices) {
+            var right = -1
+            var top = image.height
+            var bottom = 0
+            for (y in 0 until image.height) for (x in 0 until 16) {
+                if (image.getRGB(cell * 16 + x, y) ushr 24 != 0) {
+                    right = max(right, x)
+                    top = min(top, y)
+                    bottom = max(bottom, y + 1)
+                }
+            }
+            val cp = controlCodepoints[cell]
+            for ((name, scale) in listOf("native" to 1.0, "hud" to .75)) {
+                val advance = ((right + 1) * scale).roundToInt() + 1
+                metrics
+                    .append(name)
+                    .append(".advance.")
+                    .append(cp)
+                    .append('=')
+                    .append(advance)
+                    .append('\n')
+                metrics
+                    .append(name)
+                    .append(".ink.")
+                    .append(cp)
+                    .append('=')
+                    .append(top * scale)
+                    .append(',')
+                    .append(bottom * scale)
+                    .append('\n')
+            }
+        }
+        return image to metrics.toString()
+    }
 
     private fun previewPanel(width: Int, height: Int, selected: Boolean): BufferedImage {
         val image = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
@@ -291,12 +378,17 @@ object GenerateMinecraftAssets {
             }
         }
         for (ascent in ascents) {
+            val controlChars = controlCodepoints.joinToString("") { String(Character.toChars(it)) }
             put(
                 files,
                 "assets/dialogue/font/hud_a_${ascent}.json",
                 mapOf(
                     "providers" to
-                        listOf(bitmap("dialogue:font/hud_letters.png", 192, ascent, chars), spacing)
+                        listOf(
+                            bitmap("dialogue:font/hud_letters.png", 192, ascent, chars),
+                            bitmap("dialogue:font/controls.png", 192, ascent, listOf(controlChars)),
+                            spacing,
+                        )
                 ),
             )
         }
@@ -496,6 +588,10 @@ object GenerateMinecraftAssets {
                 Files.readAllBytes(source.resolveSibling("FONT-LICENSE.txt"))
             files["assets/dialogue/metrics.properties"] =
                 metrics.toString().toByteArray(StandardCharsets.UTF_8)
+            val (controls, controlMetrics) = controlGlyphAssets()
+            files["assets/dialogue/textures/font/controls.png"] = png(controls)
+            files["assets/dialogue/control_glyphs.properties"] =
+                controlMetrics.toByteArray(StandardCharsets.UTF_8)
             val focusImage = BufferedImage(192, 256, BufferedImage.TYPE_INT_ARGB)
             for (y in 0 until 256) {
                 for (x in 0 until 192) {
@@ -584,6 +680,16 @@ object GenerateMinecraftAssets {
                 )
                 providers.add(
                     bitmap("dialogue:font/navigation.png", 256, a, listOf("\ue780\ue781"))
+                )
+                providers.add(
+                    bitmap(
+                        "dialogue:font/controls.png",
+                        256,
+                        a,
+                        listOf(
+                            controlCodepoints.joinToString("") { String(Character.toChars(it)) }
+                        ),
+                    )
                 )
                 providers.add(spacing)
                 put(files, "assets/dialogue/font/a_${a}.json", mapOf("providers" to providers))

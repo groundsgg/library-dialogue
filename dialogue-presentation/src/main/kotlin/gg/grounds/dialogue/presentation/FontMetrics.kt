@@ -2,6 +2,9 @@ package gg.grounds.dialogue.presentation
 
 /** Metrics and glyph coverage are pinned to the same font asset as the eventual surface. */
 interface FontMetrics {
+    /** Legacy and custom fonts opt out unless complete input glyph coverage is available. */
+    fun supportsControlGlyphs(): Boolean = false
+
     /** Foreground ink relative to the glyph origin; line advance remains independent. */
     @JvmRecord
     data class InkBounds(val top: Double, val bottom: Double) {

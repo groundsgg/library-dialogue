@@ -207,8 +207,8 @@ void main() {
         val grounds = AssetBundle.loadDefault(MinecraftPackProfile.grounds263())
         val public = AssetBundle.loadDefault(MinecraftPackProfile.public262())
         val entries = grounds.entries()
-        assertEquals(596, entries.size)
-        assertEquals(578, public.entries().size)
+        assertEquals(598, entries.size)
+        assertEquals(580, public.entries().size)
         val keys =
             listOf(
                 "vignette_250_enter_a",

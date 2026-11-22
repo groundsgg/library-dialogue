@@ -145,6 +145,7 @@ class DialoguePresenter : DialogueRenderer {
                         controls,
                         view.notice(),
                         reasons,
+                        metrics.supportsControlGlyphs(),
                     )
                 )
             )
