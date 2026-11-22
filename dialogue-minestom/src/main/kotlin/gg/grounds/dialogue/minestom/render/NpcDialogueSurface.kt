@@ -236,7 +236,7 @@ internal constructor(
         private var hingePosition = 0.0
         private var appliedHinge = Double.NaN
         private var follow: DialogueScheduler.ScheduledTask? = null
-        private var backdrop: Display? = null
+        private var backdrop: PanelPair? = null
         private var backdropPreparation: CompletableFuture<Void>? = null
         private var vignetteLevel = NpcEffectLevel()
         private val hasVignetteSteps =
@@ -368,7 +368,7 @@ internal constructor(
             val hide = VisualOptions.enabled(preferences, "hideHud", diagnostic)
             val vignette = VisualOptions.enabled(preferences, "vignette", diagnostic)
             fadeDuration = effectFadeDuration()
-            if (encoded.widgets().size * 2 + (if (focus) 1 else 0) > 32) {
+            if (encoded.widgets().size * 2 + (if (focus) 2 else 0) > 32) {
                 throw DialogueFailure("DISPLAY_LIMIT", "NPC display budget exceeded")
             }
             val keepBackdrop = focus
@@ -401,7 +401,7 @@ internal constructor(
                 for (key in panels.keys) {
                     if (
                         key.kind == WidgetFrame.Kind.CHOICE &&
-                            wanted.size < (32 - (if (keepBackdrop) 1 else 0)) / 2
+                            wanted.size < (32 - (if (keepBackdrop) 2 else 0)) / 2
                     ) {
                         wanted.add(key)
                     }
@@ -447,10 +447,9 @@ internal constructor(
                     )
                     if (focus && backdrop == null) {
                         if (backdropPreparation == null) {
-                            backdropPreparation =
-                                create(pose.position())
-                                    .thenAccept { backdrop = it }
-                                    .toCompletableFuture()
+                            val pair = PanelPair(pose.position())
+                            backdrop = pair
+                            backdropPreparation = pair.ready
                             checkNotNull(backdropPreparation).whenComplete { _, _ ->
                                 queue.execute { backdropPreparation = null }
                             }
@@ -653,10 +652,23 @@ internal constructor(
                 }
                 appliedAngle = nextAngle
                 appliedHinge = hingePosition
-                backdrop?.entity?.let { entity ->
+                backdrop?.displays?.forEachIndexed { side, display ->
+                    val entity = checkNotNull(display).entity
+                    val back = side == 1
                     val meta = entity.entityMeta as TextDisplayMeta
+                    val turn = if (back) PI else 0.0
+                    meta.setLeftRotation(
+                        floatArrayOf(
+                            0f,
+                            sin(turn / 2).toFloat(),
+                            0f,
+                            cos(turn / 2).toFloat(),
+                        )
+                    )
                     meta.setScale(Vec(0.6, 0.6, 0.6))
-                    meta.setTranslation(Vec(-0.0075, -0.93, -0.55))
+                    meta.setTranslation(
+                        if (back) Vec(0.0075, -0.93, 0.55) else Vec(-0.0075, -0.93, -0.55)
+                    )
                     meta.setText(
                         Component.text("\ue300")
                             .font(Key.key("dialogue:focus"))
@@ -714,8 +726,9 @@ internal constructor(
                                     moves.add(entity.teleport(position))
                             }
                         }
-                        backdrop?.entity?.let {
-                            if (it.position != position) moves.add(it.teleport(position))
+                        backdrop?.displays?.forEach { display ->
+                            val entity = checkNotNull(display).entity
+                            if (entity.position != position) moves.add(entity.teleport(position))
                         }
                         CompletableFuture.allOf(*moves.toTypedArray()).whenComplete { _, error ->
                             if (error == null) result.complete(null)
@@ -994,9 +1007,9 @@ internal constructor(
         }
 
         private fun releaseBackdrop(): CompletionStage<Void> {
-            val display = backdrop ?: return CompletableFuture.completedFuture(null)
+            val pair = backdrop ?: return CompletableFuture.completedFuture(null)
             backdrop = null
-            return scope.release(display)
+            return pair.release()
         }
 
         private fun canFadeOut(): Boolean {

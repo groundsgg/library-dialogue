@@ -26,6 +26,7 @@ import java.io.IOException
 import java.time.Duration
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionException
 import java.util.concurrent.CompletionStage
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
@@ -214,11 +215,14 @@ class NpcDialogueSurfaceTest {
             )
         }
 
-        fun backdrop(): Entity =
-            displays().single {
+        fun backdrops(): List<Entity> =
+            displays().filter {
                 PlainTextComponentSerializer.plainText()
                     .serialize((it.entityMeta as TextDisplayMeta).text) == "\ue300"
             }
+
+        fun backdrop(): Entity =
+            backdrops().single { (it.entityMeta as TextDisplayMeta).leftRotation[1] == 0f }
 
         fun opacity(): Int = (backdrop().entityMeta as TextDisplayMeta).textOpacity.toInt() and 255
 
@@ -236,10 +240,10 @@ class NpcDialogueSurfaceTest {
         val handle = openFading(env, fixture)
         val frame = fixture.frame()
         done(env, handle.replace(frame))
-        assertEquals(frame.widgets().size * 2 + 1, fixture.displays().size)
+        assertEquals(frame.widgets().size * 2 + 2, fixture.displays().size)
         assertNotNull(fixture.targets.current())
-        val backdrop = fixture.backdrop()
-        val panels = fixture.displays().filter { it !== backdrop }
+        val backdrops = fixture.backdrops()
+        val panels = fixture.displays().filter { it !in backdrops }
         assertTrue(panels.all { (it.entityMeta as TextDisplayMeta).textOpacity.toInt() == -1 })
         assertEquals(255, fixture.opacity())
         assertEquals(listOf(foreignKey), fixture.output.last())
@@ -304,7 +308,7 @@ class NpcDialogueSurfaceTest {
         val pending = handle.replace(frame)
         assertTrue(
             env.tickWhile(
-                { fixture.displays().size < frame.widgets().size * 2 + 1 },
+                { fixture.displays().size < frame.widgets().size * 2 + 2 },
                 Duration.ofSeconds(2),
             )
         )
@@ -428,7 +432,7 @@ class NpcDialogueSurfaceTest {
         assertEquals(listOf(listOf(enter)), fixture.output)
         assertEquals(255, fixture.opacity())
         assertNotNull(fixture.targets.current())
-        assertEquals(frame.widgets().size * 2 + 1, fixture.displays().size)
+        assertEquals(frame.widgets().size * 2 + 2, fixture.displays().size)
 
         time.set(Duration.ofMillis(50).toNanos())
         val close = handle.closeAsync()
@@ -818,6 +822,86 @@ class NpcDialogueSurfaceTest {
     fun backdropIsBundledForBothProfiles() {
         assertTrue(RenderFixtures.ASSETS.hasEntry("assets/dialogue/font/focus.json"))
         assertTrue(GROUNDS_ASSETS.hasEntry("assets/dialogue/textures/font/npc-focus.png"))
+    }
+
+    @Test
+    fun npcBackdropHasPrivateFrontAndRearFacesAtFullOpacity(env: Env) {
+        val fixture = groundsFixture(env, AtomicLong())
+        val handle = fixture.open(env, mapOf("npcBackdrop" to "true"))
+        val frame = fixture.frame()
+        done(env, handle.replace(frame))
+
+        val backdrops = fixture.backdrops()
+        assertEquals(2, backdrops.size)
+        assertEquals(frame.widgets().size * 2 + 2, fixture.displays().size)
+        for (entity in backdrops) {
+            val meta = entity.entityMeta as TextDisplayMeta
+            assertEquals("\ue300", PlainTextComponentSerializer.plainText().serialize(meta.text))
+            assertEquals(255, meta.textOpacity.toInt() and 255)
+            assertEquals(setOf(fixture.first), entity.viewers)
+            assertFalse(entity.viewers.contains(fixture.second))
+            assertEquals(
+                AbstractDisplayMeta.BillboardConstraints.FIXED,
+                meta.billboardRenderConstraints,
+            )
+            assertEquals(Vec(0.6, 0.6, 0.6), meta.scale)
+        }
+        val front = backdrops.single { (it.entityMeta as TextDisplayMeta).leftRotation[1] == 0f }
+        val rear = backdrops.single { (it.entityMeta as TextDisplayMeta).leftRotation[1] > 0.99f }
+        val frontMeta = front.entityMeta as TextDisplayMeta
+        val rearMeta = rear.entityMeta as TextDisplayMeta
+        assertEquals(Vec(-0.0075, -0.93, -0.55), frontMeta.translation)
+        assertEquals(Vec(0.0075, -0.93, 0.55), rearMeta.translation)
+        assertEquals(0.0, frontMeta.leftRotation[1].toDouble(), 1e-6)
+        assertEquals(1.0, rearMeta.leftRotation[1].toDouble(), 1e-6)
+        assertEquals(0.0, rearMeta.leftRotation[3].toDouble(), 1e-6)
+        val transform = checkNotNull(fixture.surface.geometry()).transform()
+        val frontNormal = rotate(Vec(0.0, 0.0, 1.0), frontMeta.leftRotation)
+        val rearNormal = rotate(Vec(0.0, 0.0, 1.0), rearMeta.leftRotation)
+        assertEquals(-1.0, frontNormal.dot(rearNormal), 1e-6)
+        val midpoint =
+            Vec(
+                (frontMeta.translation.x() + rearMeta.translation.x()) / 2,
+                (frontMeta.translation.y() + rearMeta.translation.y()) / 2,
+                (frontMeta.translation.z() + rearMeta.translation.z()) / 2,
+            )
+        assertEquals(Vec(0.0, -0.93, 0.0), midpoint)
+        assertEquals(transform.position(), front.position)
+        assertEquals(transform.position(), rear.position)
+
+        done(env, handle.closeAsync())
+        assertTrue(fixture.displays().isEmpty())
+    }
+
+    @Test
+    fun npcBackdropReservesTwoSlotsAtTheConnectionDisplayBudget(env: Env) {
+        val fixture = groundsFixture(env, AtomicLong())
+        val handle = fixture.open(env, mapOf("npcBackdrop" to "true"))
+        val base = fixture.frame()
+        val template = base.widgets().first { it.kind == WidgetFrame.Kind.TEXT }
+        fun frameWithWidgetCount(count: Int): WidgetFrame {
+            val widgets =
+                base.widgets() +
+                    (base.widgets().size until count).map { template.copy(id = "extra-$it") }
+            return WidgetFrame(
+                base.semantic(),
+                widgets,
+                base.fontPin(),
+                base.theme(),
+                base.chrome(),
+                base.scrollbar(),
+            )
+        }
+
+        done(env, handle.replace(frameWithWidgetCount(15)))
+        assertEquals(32, fixture.displays().size)
+        assertEquals(2, fixture.backdrops().size)
+        assertThrows(CompletionException::class.java) {
+            done(env, handle.replace(frameWithWidgetCount(16)))
+        }
+        assertEquals(32, fixture.displays().size)
+        done(env, handle.closeAsync())
+        assertTrue(fixture.displays().isEmpty())
     }
 
     @Test
