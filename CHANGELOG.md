@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/groundsgg/library-dialogue/compare/v1.3.1...v1.4.0) (2026-11-22)
+
+
+### Features
+
+* **presentation:** show icons in Minecraft input hints ([#22](https://github.com/groundsgg/library-dialogue/issues/22)) ([762e6ef](https://github.com/groundsgg/library-dialogue/commit/762e6efadcbf15fea819b02a0e8b14c446b6ee48))
+
 ## [1.3.1](https://github.com/groundsgg/library-dialogue/compare/v1.3.0...v1.3.1) (2026-11-22)
 
 
