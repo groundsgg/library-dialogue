@@ -167,6 +167,175 @@ class OutputChannelsTest {
     }
 
     @Test
+    fun nativeVignettePairsStayWithinTheirNewestSourceAndYieldToLegacy(env: Env) {
+        val player = env.createConnection().connect(env.createFlatInstance(), Pos(0.0, 42.0, 0.0))
+        val seen = mutableListOf<List<Key>>()
+        val channels =
+            LocalOutputChannels(
+                { _, _ -> CompletableFuture.completedFuture(null) },
+                true,
+                { _, effects ->
+                    seen.add(effects)
+                    CompletableFuture.completedFuture(null)
+                },
+            )
+        val before = Key.key("example:before")
+        val after = Key.key("example:after")
+        val enterA = Key.key("dialogue:vignette_250_enter_a")
+        val exitA = Key.key("dialogue:vignette_250_exit_a")
+        val enterB = Key.key("dialogue:vignette_250_enter_b")
+        val exitB = Key.key("dialogue:vignette_250_exit_b")
+        val legacy = Key.key("dialogue:vignette_fade_2")
+        val oldest = channels.acquireEffects(player, 1)
+        val next = channels.acquireEffects(player, 1)
+        val newest = channels.acquireEffects(player, 1)
+
+        oldest.replace(listOf(before, enterA, exitA, after)).toCompletableFuture().join()
+        next.replace(listOf(exitB)).toCompletableFuture().join()
+        assertEquals(listOf(before, enterA, exitA, after), seen.last())
+        newest.replace(listOf(exitA, enterB)).toCompletableFuture().join()
+        assertEquals(listOf(before, enterB, after), seen.last())
+        oldest.replace(listOf(before, enterA, after)).toCompletableFuture().join()
+        assertEquals(listOf(before, enterB, after), seen.last())
+        next.replace(listOf(legacy)).toCompletableFuture().join()
+        assertEquals(listOf(before, legacy, after), seen.last())
+        next.closeAsync().toCompletableFuture().join()
+        newest.closeAsync().toCompletableFuture().join()
+        assertEquals(listOf(before, enterA, after), seen.last())
+        oldest.closeAsync().toCompletableFuture().join()
+    }
+
+    @Test
+    fun skippedNativeActivationCannotReplayTheLastDispatchedBank(env: Env) {
+        val player = env.createConnection().connect(env.createFlatInstance(), Pos(0.0, 42.0, 0.0))
+        val seen = mutableListOf<List<Key>>()
+        val stalled = CompletableFuture<Void>()
+        val channels =
+            LocalOutputChannels(
+                { _, _ -> CompletableFuture.completedFuture(null) },
+                true,
+                { _, effects ->
+                    seen.add(effects)
+                    if (seen.size == 1) stalled else CompletableFuture.completedFuture(null)
+                },
+            )
+        val enterA = Key.key("dialogue:vignette_250_enter_a")
+        val enterB = Key.key("dialogue:vignette_250_enter_b")
+        val exitA = Key.key("dialogue:vignette_250_exit_a")
+        val exitB = Key.key("dialogue:vignette_250_exit_b")
+        val first = channels.acquireEffects(player, 1)
+        first.replace(listOf(enterA))
+        first.closeAsync()
+        val skipped = channels.acquireEffects(player, 1)
+        skipped.replace(listOf(enterB))
+        skipped.closeAsync()
+        val latest = channels.acquireEffects(player, 1)
+        val dispatched = latest.replace(listOf(enterA))
+        assertEquals(listOf(listOf(enterA)), seen)
+        stalled.complete(null)
+        dispatched.toCompletableFuture().join()
+        assertEquals(listOf(enterB), seen.last())
+        assertTrue(seen.drop(1).all { it == listOf(enterB) })
+        latest.replace(listOf(enterA, exitA)).toCompletableFuture().join()
+        assertEquals(listOf(enterB, exitB), seen.last())
+        latest.closeAsync().toCompletableFuture().join()
+    }
+
+    @Test
+    fun sameDimensionNativeRetirementKeepsForeignAndNewWorldLayers(env: Env) {
+        val world = env.createFlatInstance()
+        val player = env.createConnection().connect(world, Pos(0.0, 42.0, 0.0))
+        val seen = mutableListOf<List<Key>>()
+        val channels =
+            LocalOutputChannels(
+                { _, _ -> CompletableFuture.completedFuture(null) },
+                true,
+                { _, effects ->
+                    seen.add(effects)
+                    CompletableFuture.completedFuture(null)
+                },
+            )
+        val before = Key.key("example:before")
+        val after = Key.key("example:after")
+        val foreign = channels.acquireEffects(player, 1)
+        foreign.replace(listOf(before, after)).toCompletableFuture().join()
+        val enterA = Key.key("dialogue:vignette_250_enter_a")
+        val enterB = Key.key("dialogue:vignette_250_enter_b")
+        val old = channels.acquireEffects(player, 1)
+        old.replace(listOf(enterA)).toCompletableFuture().join()
+        assertEquals(listOf(before, after, enterA), seen.last())
+
+        player.setInstance(env.createFlatInstance(), Pos(0.0, 42.0, 0.0)).join()
+        val current = channels.acquireEffects(player, 1)
+        current.replace(listOf(enterB)).toCompletableFuture().join()
+        old.closeAsync().toCompletableFuture().join()
+        assertEquals(listOf(before, after, enterB), seen.last())
+        current.closeAsync().toCompletableFuture().join()
+        assertEquals(listOf(before, after), seen.last())
+        foreign.closeAsync().toCompletableFuture().join()
+        assertEquals(emptyList<Key>(), seen.last())
+    }
+
+    @Test
+    fun oldWorldNativeRetirementCannotWriteOverANewerConnectionGeneration(env: Env) {
+        val world = env.createFlatInstance()
+        val player = env.createConnection().connect(world, Pos(0.0, 42.0, 0.0))
+        val seen = mutableListOf<List<Key>>()
+        val stalled = CompletableFuture<Void>()
+        val channels =
+            LocalOutputChannels(
+                { _, _ -> CompletableFuture.completedFuture(null) },
+                true,
+                { _, effects ->
+                    seen.add(effects)
+                    if (seen.size == 1) stalled else CompletableFuture.completedFuture(null)
+                },
+            )
+        val enterA = Key.key("dialogue:vignette_250_enter_a")
+        val enterB = Key.key("dialogue:vignette_250_enter_b")
+        val old = channels.acquireEffects(player, 1)
+        old.replace(listOf(enterA))
+        player.setInstance(env.createFlatInstance(), Pos(0.0, 42.0, 0.0)).join()
+        val retire = old.closeAsync()
+        val current = channels.acquireEffects(player, 2)
+        current.replace(listOf(enterB)).toCompletableFuture().join()
+        stalled.complete(null)
+        retire.toCompletableFuture().join()
+        assertEquals(listOf(listOf(enterA), listOf(enterB)), seen)
+        current.closeAsync().toCompletableFuture().join()
+    }
+
+    @Test
+    fun nativeRetirementRepairsSameDimensionWhenQueuedDisableNeverDispatched(env: Env) {
+        val world = env.createFlatInstance()
+        val player = env.createConnection().connect(world, Pos(0.0, 42.0, 0.0))
+        val seen = mutableListOf<List<Key>>()
+        val stalled = CompletableFuture<Void>()
+        val channels =
+            LocalOutputChannels(
+                { _, _ -> CompletableFuture.completedFuture(null) },
+                true,
+                { _, effects ->
+                    seen.add(effects)
+                    if (seen.size == 2) stalled else CompletableFuture.completedFuture(null)
+                },
+            )
+        val enter = Key.key("dialogue:vignette_250_enter_a")
+        val other = Key.key("example:other")
+        val native = channels.acquireEffects(player, 1)
+        native.replace(listOf(enter)).toCompletableFuture().join()
+        val foreign = channels.acquireEffects(player, 1)
+        foreign.replace(listOf(other))
+        native.replace(emptyList())
+        player.setInstance(env.createFlatInstance(), Pos(0.0, 42.0, 0.0)).join()
+        val retiring = native.closeAsync()
+        stalled.complete(null)
+        retiring.toCompletableFuture().join()
+        assertEquals(listOf(listOf(enter), listOf(enter, other), listOf(other)), seen)
+        foreign.closeAsync().toCompletableFuture().join()
+    }
+
+    @Test
     fun removingOneEffectKeepsOtherRegisteredEffects(env: Env) {
         val player = env.createConnection().connect(env.createFlatInstance(), Pos(0.0, 42.0, 0.0))
         val seen = mutableListOf<List<Key>>()

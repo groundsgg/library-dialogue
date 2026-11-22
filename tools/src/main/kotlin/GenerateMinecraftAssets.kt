@@ -589,6 +589,236 @@ object GenerateMinecraftAssets {
                 put(files, "assets/dialogue/font/a_${a}.json", mapOf("providers" to providers))
             }
             if (profile == "grounds-26.3") {
+                val clockInclude =
+                    """const float VIGNETTE_PERIOD_TICKS = 24000.0;
+const float VIGNETTE_TIMESTAMP_SCALE = 16777216.0;
+const float VIGNETTE_ACTIVE_SENTINEL = 0.5;
+const float VIGNETTE_DONE_SENTINEL = 1.0;
+float vignetteTimestamp(vec4 state) {
+    uvec3 bytes = uvec3(round(state.rgb * 255.0));
+    uint encoded = (bytes.r << 16u) | (bytes.g << 8u) | bytes.b;
+    return float(encoded) / VIGNETTE_TIMESTAMP_SCALE;
+}
+float vignetteProgress(vec4 state) {
+    if (state.a == VIGNETTE_DONE_SENTINEL) return 1.0;
+    if (state.a == 0.0) return 0.0;
+    float elapsedTicks = (GameTime - vignetteTimestamp(state)) * VIGNETTE_PERIOD_TICKS;
+    if (elapsedTicks < -VIGNETTE_PERIOD_TICKS * 0.5) elapsedTicks += VIGNETTE_PERIOD_TICKS;
+    return clamp(elapsedTicks / DurationTicks, 0.0, 1.0);
+}
+"""
+                val stateShader =
+                    """#version 330
+#extension GL_ARB_separate_shader_objects : require
+#include <minecraft:globals.glsl>
+layout(std140) uniform FadeConfig {
+    float DurationTicks;
+    float From;
+    float To;
+    float Inverse;
+};
+uniform sampler2D StateSampler;
+layout(location = 0) out vec4 fragColor;
+#include <dialogue:vignette_clock.glsl>
+void main() {
+    vec4 state = texelFetch(StateSampler, ivec2(0), 0);
+    if (state.a == 0.0) {
+        uint encoded = uint(fract(GameTime) * VIGNETTE_TIMESTAMP_SCALE);
+        uvec3 bytes = uvec3(encoded >> 16u, (encoded >> 8u) & 255u, encoded & 255u);
+        fragColor = vec4(vec3(bytes) / 255.0, VIGNETTE_ACTIVE_SENTINEL);
+    } else if (vignetteProgress(state) >= 1.0) {
+        fragColor = vec4(1.0);
+    } else {
+        fragColor = state;
+    }
+}
+"""
+                val animatedShader =
+                    """#version 330
+#extension GL_ARB_separate_shader_objects : require
+#include <minecraft:globals.glsl>
+layout(std140) uniform FadeConfig {
+    float DurationTicks;
+    float From;
+    float To;
+    float Inverse;
+};
+uniform sampler2D StateSampler;
+uniform sampler2D InSampler;
+layout(location = 0) in vec2 texCoord;
+layout(location = 0) out vec4 fragColor;
+#include <dialogue:vignette_clock.glsl>
+void main() {
+    vec4 state = texelFetch(StateSampler, ivec2(0), 0);
+    float progress = vignetteProgress(state);
+    float strength = mix(From, To, progress);
+    vec4 scene = texture(InSampler, texCoord);
+    float edge = smoothstep(0.35, 1.35, length((texCoord - vec2(0.5)) * 2.0));
+    float multiplier = Inverse == 1.0
+        ? 1.0 / (1.0 - edge * strength)
+        : 1.0 - strength * edge;
+    fragColor = vec4(scene.rgb * multiplier, scene.a);
+}
+"""
+                val copyShader =
+                    """#version 330
+uniform sampler2D StateSampler;
+layout(location = 0) out vec4 fragColor;
+void main() {
+    fragColor = texelFetch(StateSampler, ivec2(0), 0);
+}
+"""
+                files["assets/dialogue/shaders/include/vignette_clock.glsl"] =
+                    clockInclude.toByteArray(StandardCharsets.UTF_8)
+                files["assets/dialogue/shaders/post/vignette_state.fsh"] =
+                    stateShader.toByteArray(StandardCharsets.UTF_8)
+                files["assets/dialogue/shaders/post/vignette_animated.fsh"] =
+                    animatedShader.toByteArray(StandardCharsets.UTF_8)
+                files["assets/dialogue/shaders/post/vignette_copy.fsh"] =
+                    copyShader.toByteArray(StandardCharsets.UTF_8)
+                for (enter in listOf(true, false)) {
+                    for (bank in listOf("a", "b")) {
+                        val suffix = if (enter) "enter" else "exit"
+                        val key = "vignette_250_${suffix}_${bank}"
+                        val from = 0.0
+                        val to = 0.15
+                        val inverse = if (enter) 0.0 else 1.0
+                        val effect =
+                            mapOf(
+                                "targets" to
+                                    mapOf(
+                                        "clock" to
+                                            mapOf(
+                                                "width" to 1,
+                                                "height" to 1,
+                                                "persistent" to true,
+                                                "clear_color" to 0,
+                                            ),
+                                        "scratch" to mapOf("width" to 1, "height" to 1),
+                                        "swap" to emptyMap<String, Any>(),
+                                    ),
+                                "passes" to
+                                    listOf(
+                                        mapOf(
+                                            "vertex_shader" to "minecraft:core/screenquad",
+                                            "fragment_shader" to "dialogue:post/vignette_state",
+                                            "output" to "scratch",
+                                            "inputs" to
+                                                listOf(
+                                                    mapOf(
+                                                        "sampler_name" to "State",
+                                                        "target" to "clock",
+                                                    )
+                                                ),
+                                            "uniforms" to
+                                                mapOf(
+                                                    "FadeConfig" to
+                                                        listOf(
+                                                            mapOf(
+                                                                "name" to "DurationTicks",
+                                                                "type" to "float",
+                                                                "value" to 5.0,
+                                                            ),
+                                                            mapOf(
+                                                                "name" to "From",
+                                                                "type" to "float",
+                                                                "value" to from,
+                                                            ),
+                                                            mapOf(
+                                                                "name" to "To",
+                                                                "type" to "float",
+                                                                "value" to to,
+                                                            ),
+                                                            mapOf(
+                                                                "name" to "Inverse",
+                                                                "type" to "float",
+                                                                "value" to inverse,
+                                                            ),
+                                                        )
+                                                ),
+                                        ),
+                                        mapOf(
+                                            "vertex_shader" to "minecraft:core/screenquad",
+                                            "fragment_shader" to "dialogue:post/vignette_animated",
+                                            "output" to "swap",
+                                            "inputs" to
+                                                listOf(
+                                                    mapOf(
+                                                        "sampler_name" to "State",
+                                                        "target" to "scratch",
+                                                    ),
+                                                    mapOf(
+                                                        "sampler_name" to "In",
+                                                        "target" to "minecraft:main",
+                                                    ),
+                                                ),
+                                            "uniforms" to
+                                                mapOf(
+                                                    "FadeConfig" to
+                                                        listOf(
+                                                            mapOf(
+                                                                "name" to "DurationTicks",
+                                                                "type" to "float",
+                                                                "value" to 5.0,
+                                                            ),
+                                                            mapOf(
+                                                                "name" to "From",
+                                                                "type" to "float",
+                                                                "value" to from,
+                                                            ),
+                                                            mapOf(
+                                                                "name" to "To",
+                                                                "type" to "float",
+                                                                "value" to to,
+                                                            ),
+                                                            mapOf(
+                                                                "name" to "Inverse",
+                                                                "type" to "float",
+                                                                "value" to inverse,
+                                                            ),
+                                                        )
+                                                ),
+                                        ),
+                                        mapOf(
+                                            "vertex_shader" to "minecraft:core/screenquad",
+                                            "fragment_shader" to "dialogue:post/vignette_copy",
+                                            "output" to "clock",
+                                            "inputs" to
+                                                listOf(
+                                                    mapOf(
+                                                        "sampler_name" to "State",
+                                                        "target" to "scratch",
+                                                    )
+                                                ),
+                                        ),
+                                        mapOf(
+                                            "vertex_shader" to "minecraft:core/screenquad",
+                                            "fragment_shader" to "minecraft:post/blit",
+                                            "output" to "minecraft:main",
+                                            "inputs" to
+                                                listOf(
+                                                    mapOf(
+                                                        "sampler_name" to "In",
+                                                        "target" to "swap",
+                                                    )
+                                                ),
+                                            "uniforms" to
+                                                mapOf(
+                                                    "BlitConfig" to
+                                                        listOf(
+                                                            mapOf(
+                                                                "name" to "ColorModulate",
+                                                                "type" to "vec4",
+                                                                "value" to listOf(1, 1, 1, 1),
+                                                            )
+                                                        )
+                                                ),
+                                        ),
+                                    ),
+                            )
+                        put(files, "assets/dialogue/post_effect/${key}.json", effect)
+                    }
+                }
                 files["assets/dialogue/post_effect/vignette.json"] =
                     """{"targets":{"swap":{}},"passes":[{"vertex_shader":"minecraft:core/screenquad","fragment_shader":"dialogue:post/vignette","inputs":[{"sampler_name":"In","target":"minecraft:main"}],"output":"swap"},{"vertex_shader":"minecraft:core/screenquad","fragment_shader":"minecraft:post/blit","inputs":[{"sampler_name":"In","target":"swap"}],"uniforms":{"BlitConfig":[{"name":"ColorModulate","type":"vec4","value":[1,1,1,1]}]},"output":"minecraft:main"}]}
 """

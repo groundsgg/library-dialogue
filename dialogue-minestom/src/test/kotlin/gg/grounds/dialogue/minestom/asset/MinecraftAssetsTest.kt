@@ -203,6 +203,110 @@ void main() {
     }
 
     @Test
+    fun groundsBundleContainsFourNativeVignetteBanksWithoutChangingPublicBundle() {
+        val grounds = AssetBundle.loadDefault(MinecraftPackProfile.grounds263())
+        val public = AssetBundle.loadDefault(MinecraftPackProfile.public262())
+        val entries = grounds.entries()
+        assertEquals(596, entries.size)
+        assertEquals(578, public.entries().size)
+        val keys =
+            listOf(
+                "vignette_250_enter_a",
+                "vignette_250_exit_a",
+                "vignette_250_enter_b",
+                "vignette_250_exit_b",
+            )
+        for (key in keys) {
+            val config =
+                JsonParser.parseString(
+                        String(
+                            entries.getValue("assets/dialogue/post_effect/$key.json"),
+                            StandardCharsets.UTF_8,
+                        )
+                    )
+                    .asJsonObject
+            val passes = config.getAsJsonArray("passes")
+            assertEquals(4, passes.size())
+            assertEquals(
+                "dialogue:post/vignette_state",
+                passes[0].asJsonObject.get("fragment_shader").asString,
+            )
+            assertEquals("scratch", passes[0].asJsonObject.get("output").asString)
+            assertEquals(
+                "State",
+                passes[0]
+                    .asJsonObject
+                    .getAsJsonArray("inputs")[0]
+                    .asJsonObject
+                    .get("sampler_name")
+                    .asString,
+            )
+            assertEquals(
+                "dialogue:post/vignette_animated",
+                passes[1].asJsonObject.get("fragment_shader").asString,
+            )
+            assertEquals(
+                "State",
+                passes[1]
+                    .asJsonObject
+                    .getAsJsonArray("inputs")[0]
+                    .asJsonObject
+                    .get("sampler_name")
+                    .asString,
+            )
+            assertEquals(
+                "In",
+                passes[1]
+                    .asJsonObject
+                    .getAsJsonArray("inputs")[1]
+                    .asJsonObject
+                    .get("sampler_name")
+                    .asString,
+            )
+            assertEquals(
+                "dialogue:post/vignette_copy",
+                passes[2].asJsonObject.get("fragment_shader").asString,
+            )
+            assertEquals("clock", passes[2].asJsonObject.get("output").asString)
+            assertEquals(
+                "minecraft:post/blit",
+                passes[3].asJsonObject.get("fragment_shader").asString,
+            )
+            assertEquals("minecraft:main", passes[3].asJsonObject.get("output").asString)
+            val targets = config.getAsJsonObject("targets")
+            assertTrue(targets.getAsJsonObject("clock").get("persistent").asBoolean)
+            val uniforms =
+                passes[0].asJsonObject.getAsJsonObject("uniforms").getAsJsonArray("FadeConfig")
+            assertEquals(4, uniforms.size())
+            assertEquals(5.0, uniforms[0].asJsonObject.get("value").asDouble)
+            assertEquals(0.0, uniforms[1].asJsonObject.get("value").asDouble)
+            assertEquals(0.15, uniforms[2].asJsonObject.get("value").asDouble)
+            assertEquals(
+                if (key.contains("_exit_")) 1.0 else 0.0,
+                uniforms[3].asJsonObject.get("value").asDouble,
+            )
+        }
+        for (path in
+            listOf(
+                "assets/dialogue/shaders/include/vignette_clock.glsl",
+                "assets/dialogue/shaders/post/vignette_state.fsh",
+                "assets/dialogue/shaders/post/vignette_animated.fsh",
+                "assets/dialogue/shaders/post/vignette_copy.fsh",
+            )) {
+            assertTrue(grounds.hasEntry(path), path)
+        }
+        val animated =
+            String(
+                entries.getValue("assets/dialogue/shaders/post/vignette_animated.fsh"),
+                StandardCharsets.UTF_8,
+            )
+        assertTrue(animated.contains("#include <minecraft:globals.glsl>"))
+        assertTrue(animated.contains("float progress = vignetteProgress(state);"))
+        assertFalse(animated.contains("smoothstep(0.0, 1.0, vignetteProgress(state))"))
+        assertTrue(animated.contains("1.0 / (1.0 - edge * strength)"))
+    }
+
+    @Test
     fun bitmapAdvancesMatchFrozenAtlas() {
         for (profile in
             listOf(MinecraftPackProfile.public262(), MinecraftPackProfile.grounds263())) {
