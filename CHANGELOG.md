@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.1](https://github.com/groundsgg/library-dialogue/compare/v1.3.0...v1.3.1) (2026-11-22)
+
+
+### Bug Fixes
+
+* **minestom:** render NPC backdrop from both sides ([#20](https://github.com/groundsgg/library-dialogue/issues/20)) ([954e816](https://github.com/groundsgg/library-dialogue/commit/954e81687b8759d6bb08a145763fb2f9a3bdb31e))
+
 ## [1.3.0](https://github.com/groundsgg/library-dialogue/compare/v1.2.1...v1.3.0) (2026-11-22)
 
 
