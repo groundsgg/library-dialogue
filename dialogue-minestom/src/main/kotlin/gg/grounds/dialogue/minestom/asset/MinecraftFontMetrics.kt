@@ -9,7 +9,17 @@ internal constructor(
     advances: Map<Int, Int>,
     private val height: Double,
     ink: Map<Int, FontMetrics.InkBounds>,
+    private val controlIcons: Boolean,
 ) : FontMetrics {
+    internal constructor(
+        pin: String,
+        advances: Map<Int, Int>,
+        height: Double,
+        ink: Map<Int, FontMetrics.InkBounds>,
+    ) : this(pin, advances, height, ink, false)
+
+    override fun supportsControlGlyphs(): Boolean = controlIcons
+
     private val advances = advances.toMap()
     private val ink = ink.toMap()
 

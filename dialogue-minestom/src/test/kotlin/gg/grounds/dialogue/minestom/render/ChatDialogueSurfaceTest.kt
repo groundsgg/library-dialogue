@@ -72,6 +72,8 @@ class ChatDialogueSurfaceTest {
                 .serialize(messages.first())
                 .contains("Hello there")
         )
+        val plainMessages = messages.map { PlainTextComponentSerializer.plainText().serialize(it) }
+        assertTrue(plainMessages.none { text -> text.any { it in '\ue790'..'\ue793' } })
         handle.closeAsync().toCompletableFuture().join()
         assertNull(targets.current())
     }

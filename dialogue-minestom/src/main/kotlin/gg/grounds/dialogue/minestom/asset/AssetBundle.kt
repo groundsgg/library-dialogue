@@ -42,12 +42,24 @@ private constructor(
         glyphs.forEach { (codePoint, glyph) -> advances[codePoint] = glyph.advance }
         advances[32] = 4
         advances[160] = 4
-        metrics = MinecraftFontMetrics(pin, advances)
+        val controls =
+            ControlGlyphMetadata.parse(files["assets/dialogue/control_glyphs.properties"])
+        val nativeControls = controls["native"]
+        nativeControls?.let { advances.putAll(it.advances) }
+        metrics =
+            MinecraftFontMetrics(
+                pin,
+                advances,
+                16.0,
+                nativeControls?.ink ?: emptyMap(),
+                nativeControls != null,
+            )
 
         val backdropAdvances = HashMap<String, Int>()
         val hud = files["assets/dialogue/hud_metrics.properties"]
         if (hud == null) {
-            hudMetrics = metrics
+            // Without a HUD provider metric document, keep the legacy fallback textual.
+            hudMetrics = MinecraftFontMetrics(pin, advances, 16.0, emptyMap())
         } else {
             if (hud.size > 65536) throw IllegalArgumentException("HUD_METRICS_LIMIT")
             val properties = Properties()
@@ -111,12 +123,18 @@ private constructor(
             if (properties.getProperty("lineHeight", "") != "10") {
                 throw IllegalArgumentException("HUD_METRICS")
             }
+            val hudControls = controls["hud"]
+            hudControls?.let {
+                widths.putAll(it.advances)
+                ink.putAll(it.ink)
+            }
             hudMetrics =
                 MinecraftFontMetrics(
                     ContentFingerprint.hash("hud:$pin".toByteArray(StandardCharsets.UTF_8)).sha256,
                     widths,
                     10.0,
                     ink,
+                    hudControls != null,
                 )
         }
         hudBackdropAdvances = Collections.unmodifiableMap(HashMap(backdropAdvances))

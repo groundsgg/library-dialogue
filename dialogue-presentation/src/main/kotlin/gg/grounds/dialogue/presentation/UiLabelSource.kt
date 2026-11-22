@@ -5,14 +5,19 @@ import java.util.Locale
 
 /** Synchronous projection from already loaded host translations; all output is plain text. */
 fun interface UiLabelSource {
-    class LabelRequest(
+    class LabelRequest
+    @JvmOverloads
+    constructor(
         private val localeTag: String,
         private val phase: DialogueView.HintPhase,
         private val controls: DialoguePresenter.Controls,
         private val notice: String,
         unavailableReasons: Map<String, String>,
+        private val controlIcons: Boolean = false,
     ) {
         private val unavailableReasons = java.util.Map.copyOf(unavailableReasons)
+
+        fun controlIcons(): Boolean = controlIcons
 
         fun localeTag(): String = localeTag
 
@@ -30,14 +35,16 @@ fun interface UiLabelSource {
                 phase == other.phase &&
                 controls == other.controls &&
                 notice == other.notice &&
-                unavailableReasons == other.unavailableReasons
+                unavailableReasons == other.unavailableReasons &&
+                controlIcons == other.controlIcons
 
         override fun hashCode(): Int =
-            (((localeTag.hashCode() * 31 + phase.hashCode()) * 31 + controls.hashCode()) * 31 +
-                notice.hashCode()) * 31 + unavailableReasons.hashCode()
+            ((((localeTag.hashCode() * 31 + phase.hashCode()) * 31 + controls.hashCode()) * 31 +
+                notice.hashCode()) * 31 + unavailableReasons.hashCode()) * 31 +
+                controlIcons.hashCode()
 
         override fun toString(): String =
-            "LabelRequest[localeTag=$localeTag, phase=$phase, controls=$controls, notice=$notice, unavailableReasons=$unavailableReasons]"
+            "LabelRequest[localeTag=$localeTag, phase=$phase, controls=$controls, notice=$notice, unavailableReasons=$unavailableReasons, controlIcons=$controlIcons]"
     }
 
     class UiLabels(hint: String, notice: String, choiceReasons: Map<String, String>) {
@@ -71,12 +78,19 @@ fun interface UiLabelSource {
         fun defaults(): UiLabelSource = UiLabelSource { request ->
             val de = Locale.forLanguageTag(request.localeTag()).language == "de"
             val action =
-                when (request.controls().confirm) {
-                    DialoguePresenter.ConfirmAction.ATTACK -> if (de) "Angreifen" else "Attack"
-                    DialoguePresenter.ConfirmAction.USE -> if (de) "Benutzen" else "Use"
-                    DialoguePresenter.ConfirmAction.SWAP_HANDS ->
-                        if (de) "Offhandwechsel" else "Swap hands"
-                }
+                if (request.controlIcons())
+                    when (request.controls().confirm) {
+                        DialoguePresenter.ConfirmAction.ATTACK -> ControlGlyphs.ATTACK
+                        DialoguePresenter.ConfirmAction.USE -> ControlGlyphs.USE
+                        DialoguePresenter.ConfirmAction.SWAP_HANDS -> ControlGlyphs.SWAP_HANDS
+                    }
+                else
+                    when (request.controls().confirm) {
+                        DialoguePresenter.ConfirmAction.ATTACK -> if (de) "Angreifen" else "Attack"
+                        DialoguePresenter.ConfirmAction.USE -> if (de) "Benutzen" else "Use"
+                        DialoguePresenter.ConfirmAction.SWAP_HANDS ->
+                            if (de) "Offhandwechsel" else "Swap hands"
+                    }
             val verb =
                 when (request.phase()) {
                     DialogueView.HintPhase.REVEAL -> if (de) "Text anzeigen" else "Reveal text"
@@ -87,7 +101,8 @@ fun interface UiLabelSource {
                 }
             val prefix =
                 if (request.controls().scroll && request.phase() == DialogueView.HintPhase.CHOOSE) {
-                    if (de) "Scrollen · " else "Scroll · "
+                    if (request.controlIcons()) "${ControlGlyphs.SCROLL} · "
+                    else if (de) "Scrollen · " else "Scroll · "
                 } else ""
             val unavailable = if (de) "Nicht verfügbar" else "Unavailable"
             val notice =
