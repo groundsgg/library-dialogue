@@ -667,7 +667,7 @@ internal constructor(
                     )
                     meta.setScale(Vec(0.6, 0.6, 0.6))
                     meta.setTranslation(
-                        if (back) Vec(0.0075, -0.93, 0.55) else Vec(-0.0075, -0.93, -0.55)
+                        if (back) Vec(0.0075, -0.93, -0.562) else Vec(-0.0075, -0.93, -0.55)
                     )
                     meta.setText(
                         Component.text("\ue300")
