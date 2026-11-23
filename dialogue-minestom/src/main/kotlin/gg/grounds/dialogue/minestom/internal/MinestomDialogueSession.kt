@@ -14,9 +14,12 @@ import gg.grounds.dialogue.core.runtime.DialogueView
 import gg.grounds.dialogue.core.runtime.InputResult
 import gg.grounds.dialogue.core.runtime.PresentationPreferences
 import gg.grounds.dialogue.core.runtime.RuntimeOptions
+import gg.grounds.dialogue.core.text.Graphemes
 import gg.grounds.dialogue.minestom.DialogueServices
 import gg.grounds.dialogue.minestom.MinestomDialogueOptions
 import gg.grounds.dialogue.minestom.MinestomDialogueRequest
+import gg.grounds.dialogue.minestom.MinestomDialogueSpeechEvent
+import gg.grounds.dialogue.minestom.MinestomDialogueSpeechListener
 import gg.grounds.dialogue.minestom.MinestomSpeakerBinding
 import gg.grounds.dialogue.minestom.geometry.DialogueLeavePolicy
 import gg.grounds.dialogue.minestom.geometry.MinestomOcclusion
@@ -72,6 +75,23 @@ class MinestomDialogueSession(
     private val manualReveals = java.util.concurrent.atomic.AtomicInteger()
     private val soundPlayer = request.player()
     private val soundInstance = request.player().instance
+    private val speechListener = request.speechListener()
+    private var speechEnabled = speechListener !== MinestomDialogueSpeechListener.NO_OP
+    private var speechActive = false
+    private var speechIdentity: SpeechIdentity? = null
+    private var speechRevealed = 0
+    private var speechGraphemes: List<String> = emptyList()
+    private var speechTerminalDelivered = false
+
+    private data class SpeechIdentity(
+        val sessionId: java.util.UUID,
+        val nodeVisitId: Long,
+        val nodeId: String,
+        val localeTag: String,
+        val text: String,
+        val role: String,
+        val speaker: MinestomSpeakerBinding,
+    )
 
     private class SelectionReceipt(val before: DialogueView, val choice: String) {
         var accepted = false
@@ -169,6 +189,7 @@ class MinestomDialogueSession(
                         }
                         val epoch = soundEpoch.incrementAndGet()
                         val suppressed = manualReveals.get() > 0
+                        observeSpeechCandidate(value, epoch)
                         val selection = selectionReceipt?.takeIf {
                             value.sessionId() == it.before.sessionId() &&
                                 value.nodeVisitId() == it.before.nodeVisitId() &&
@@ -176,7 +197,27 @@ class MinestomDialogueSession(
                                 value.stateRevision() > it.before.stateRevision() &&
                                 value.selectedChoiceId() == it.choice
                         }
-                        return surface.replace(value).thenRun {
+                        val replacement = surface.replace(value)
+                        replacement.whenComplete { _, failure ->
+                            if (failure != null && speechEnabled) {
+                                scheduler.execute {
+                                    if (
+                                        soundEpoch.get() == epoch &&
+                                            view === value &&
+                                            !finishing.get() &&
+                                            guard.isCurrent() &&
+                                            !token.isCancelled() &&
+                                            !speechTerminalDelivered
+                                    ) {
+                                        stopSpeech(
+                                            MinestomDialogueSpeechListener.StopReason
+                                                .PRESENTATION_FAILED
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        return replacement.thenRun {
                             scheduler.execute {
                                 if (
                                     soundEpoch.get() != epoch ||
@@ -187,6 +228,7 @@ class MinestomDialogueSession(
                                         soundPlayer.instance !== soundInstance
                                 )
                                     return@execute
+                                observeSpeechPresented(value, suppressed)
                                 if (selection != null && selectionReceipt === selection) {
                                     selection.presented = value
                                     selection.epoch = epoch
@@ -221,6 +263,18 @@ class MinestomDialogueSession(
                         preferences: PresentationPreferences
                     ): CompletionStage<Void> {
                         soundEpoch.incrementAndGet()
+                        if (speechEnabled) {
+                            scheduler.execute {
+                                if (!finishing.get() && guard.isCurrent() && !token.isCancelled()) {
+                                    stopSpeech(
+                                        MinestomDialogueSpeechListener.StopReason.CONTENT_REPLACED
+                                    )
+                                    speechIdentity = null
+                                    speechRevealed = 0
+                                    speechGraphemes = emptyList()
+                                }
+                            }
+                        }
                         return surface.reconfigure(preferences).thenCompose {
                             val applied = CompletableFuture<Void>()
                             scheduler.execute {
@@ -236,6 +290,11 @@ class MinestomDialogueSession(
 
                     override fun closeAsync(): CompletionStage<Void> {
                         soundEpoch.incrementAndGet()
+                        if (speechEnabled) {
+                            scheduler.execute {
+                                stopSpeech(MinestomDialogueSpeechListener.StopReason.PAUSED)
+                            }
+                        }
                         return surface.closeAsync()
                     }
                 }
@@ -285,7 +344,9 @@ class MinestomDialogueSession(
                 } else if (result is DialogueStartResult.Started) {
                     val running = result.handle
                     handle = running
-                    running.completion().whenComplete { _, failure -> finish(failure) }
+                    running.completion().whenComplete { end, failure ->
+                        finish(failure, end?.reason() ?: token.reason())
+                    }
                     inputs.activate().whenComplete { _, failure ->
                         if (failure != null) {
                             finish(failure)
@@ -310,6 +371,119 @@ class MinestomDialogueSession(
             }
         }
         return lastSpeaker
+    }
+
+    private fun speechIdentity(value: DialogueView): SpeechIdentity? {
+        if (value.state() != DialogueView.State.REVEALING) return null
+        val currentRequest = request ?: return null
+        val message =
+            currentRequest.content().definition().nodes()[value.nodeId()]
+                as? DialogueDefinition.Message ?: return null
+        val binding = currentRequest.speakers()[message.speaker()] ?: return null
+        return SpeechIdentity(
+            value.sessionId(),
+            value.nodeVisitId(),
+            value.nodeId(),
+            value.localeTag(),
+            value.text(),
+            message.speaker(),
+            binding,
+        )
+    }
+
+    private fun observeSpeechCandidate(value: DialogueView, epoch: Long) {
+        if (!speechEnabled) return
+        val candidate = speechIdentity(value)
+        val effective = (renderer as? DialogueInputSource)?.effectiveSurface()
+        scheduler.execute {
+            if (soundEpoch.get() != epoch || view !== value || finishing.get()) return@execute
+            val reason =
+                when {
+                    value.state() != DialogueView.State.REVEALING ->
+                        MinestomDialogueSpeechListener.StopReason.PAUSED
+                    effective != "npc" || candidate == null ->
+                        MinestomDialogueSpeechListener.StopReason.PRESENTATION_FALLBACK
+                    speechIdentity != null && speechIdentity != candidate ->
+                        MinestomDialogueSpeechListener.StopReason.CONTENT_REPLACED
+                    else -> null
+                }
+            if (reason != null) stopSpeech(reason)
+            if (candidate == null || effective != "npc" || speechIdentity != candidate) {
+                speechIdentity = null
+                speechRevealed = 0
+                speechGraphemes = emptyList()
+            }
+        }
+    }
+
+    private fun observeSpeechPresented(value: DialogueView, suppressed: Boolean) {
+        if (!speechEnabled || speechTerminalDelivered) return
+        val candidate = speechIdentity(value) ?: return
+        if ((renderer as? DialogueInputSource)?.effectiveSurface() != "npc") {
+            stopSpeech(MinestomDialogueSpeechListener.StopReason.PRESENTATION_FALLBACK)
+            speechIdentity = null
+            speechRevealed = 0
+            speechGraphemes = emptyList()
+            return
+        }
+        if (speechIdentity != candidate) {
+            speechIdentity = candidate
+            speechRevealed = value.revealedGraphemes()
+            speechGraphemes = Graphemes.split(value.text())
+            return
+        }
+        val graphemes = speechGraphemes
+        val current = value.revealedGraphemes().coerceIn(0, graphemes.size)
+        val from = speechRevealed.coerceIn(0, current)
+        speechRevealed = current
+        if (current <= from || suppressed) return
+        if (!speechActive) speechActive = true
+        try {
+            speechListener.onRevealed(
+                MinestomDialogueSpeechEvent(
+                    value,
+                    candidate.role,
+                    candidate.speaker,
+                    graphemes.subList(from, current).joinToString(""),
+                )
+            )
+        } catch (_: Throwable) {
+            speechEnabled = false
+            speechIdentity = null
+            speechRevealed = 0
+            speechGraphemes = emptyList()
+            speechActive = false
+            try {
+                speechListener.onStop(MinestomDialogueSpeechListener.StopReason.LISTENER_FAILED)
+            } catch (_: Throwable) {
+                // Speech hooks are isolated from the dialogue runtime.
+            }
+        }
+    }
+
+    private fun stopSpeech(
+        reason: MinestomDialogueSpeechListener.StopReason,
+        terminal: Boolean = false,
+    ) {
+        if (speechListener === MinestomDialogueSpeechListener.NO_OP) return
+        if (terminal) {
+            if (speechTerminalDelivered) return
+            speechTerminalDelivered = true
+        } else if (!speechActive) return
+        speechActive = false
+        if (!speechEnabled && !terminal) return
+        try {
+            speechListener.onStop(reason)
+        } catch (_: Throwable) {
+            speechEnabled = false
+            if (!terminal) {
+                try {
+                    speechListener.onStop(MinestomDialogueSpeechListener.StopReason.LISTENER_FAILED)
+                } catch (_: Throwable) {
+                    // Speech hooks are isolated from the dialogue runtime.
+                }
+            }
+        }
     }
 
     private fun validAnchor(): Boolean {
@@ -589,10 +763,24 @@ class MinestomDialogueSession(
         }
     }
 
-    private fun finish(initialError: Throwable?) {
+    private fun finish(
+        initialError: Throwable?,
+        terminalReason: DialogueEndReason? = token.reason(),
+    ) {
         if (!finishing.compareAndSet(false, true)) return
         soundEpoch.incrementAndGet()
         guard.invalidate()
+        val speechStop =
+            when {
+                terminalReason == DialogueEndReason.DISCONNECTED ->
+                    MinestomDialogueSpeechListener.StopReason.DISCONNECTED
+                initialError != null || terminalReason == DialogueEndReason.FAILED ->
+                    MinestomDialogueSpeechListener.StopReason.SESSION_FAILED
+                else -> MinestomDialogueSpeechListener.StopReason.SESSION_ENDED
+            }
+        if (speechListener !== MinestomDialogueSpeechListener.NO_OP) {
+            scheduler.execute { stopSpeech(speechStop, terminal = true) }
+        }
         CompletableFuture.allOf(
                 runtime.closeAsync().toCompletableFuture(),
                 inputs.closeAsync().toCompletableFuture(),
