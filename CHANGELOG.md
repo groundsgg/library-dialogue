@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.1](https://github.com/groundsgg/library-dialogue/compare/v1.4.0...v1.4.1) (2026-11-23)
+
+
+### Bug Fixes
+
+* keep NPC backdrop faces on the same plane ([#24](https://github.com/groundsgg/library-dialogue/issues/24)) ([8da6146](https://github.com/groundsgg/library-dialogue/commit/8da61465132e971b4238854964ce234096b2eb15))
+
 ## [1.4.0](https://github.com/groundsgg/library-dialogue/compare/v1.3.1...v1.4.0) (2026-11-22)
 
 
