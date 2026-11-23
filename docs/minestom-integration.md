@@ -285,6 +285,16 @@ The default native world scrollbar supports track heights up to192 GUI
 pixels; unsupported custom geometry falls back intact to chat. All displays
 remain inside the shared per-connection32 budget, including pending/closing ones.
 
+## Optional typing sound
+
+Set `PresentationPreferences.effects()["typingSound"]` to `"true"` to enable a
+quiet vanilla note-block hat tick during natural text reveal on HUD and NPC
+surfaces. The default is silent. Ticks are private to the conversation player,
+limited to one per 90 ms, and only accompany newly revealed letters or digits.
+Whitespace, punctuation, manual reveal skips, full-text rendering and chat
+fallback stay silent. Reduced motion does not disable audio. No resource-pack
+change is required.
+
 ## Compact HUD answer placement
 
 The HUD reuses the original prototype's rounded modal and frozen Monospaced

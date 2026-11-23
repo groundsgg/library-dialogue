@@ -32,7 +32,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import java.util.function.BiConsumer
 import java.util.function.Consumer
+import net.kyori.adventure.sound.Sound
 import net.minestom.server.event.player.PlayerPacketEvent
+import net.minestom.server.sound.SoundEvent
 
 /**
  * One concrete connection's owned core runtime. Shared NPCs and service objects remain borrowed.
@@ -64,6 +66,12 @@ class MinestomDialogueSession(
     private var sampledSpeaker: MinestomSpeakerBinding? = null
     private var leave: DialogueLeavePolicy? = null
     private val distanceGrace: Duration = options.distanceGrace
+    private val typingSound = TypingSound()
+    private var soundPreferences = request.preferences()
+    private val soundEpoch = AtomicLong()
+    private val manualReveals = java.util.concurrent.atomic.AtomicInteger()
+    private val soundPlayer = request.player()
+    private val soundInstance = request.player().instance
 
     init {
         inputs =
@@ -149,14 +157,65 @@ class MinestomDialogueSession(
                                 CancellationException("Anchor expired")
                             )
                         }
-                        return surface.replace(value)
+                        val epoch = soundEpoch.incrementAndGet()
+                        val suppressed = manualReveals.get() > 0
+                        return surface.replace(value).thenRun {
+                            scheduler.execute {
+                                if (
+                                    soundEpoch.get() != epoch ||
+                                        view !== value ||
+                                        finishing.get() ||
+                                        !guard.isCurrent() ||
+                                        token.isCancelled() ||
+                                        soundPlayer.instance !== soundInstance
+                                )
+                                    return@execute
+                                val effective =
+                                    (renderer as? DialogueInputSource)?.effectiveSurface()
+                                val enabled =
+                                    soundPreferences.effects()["typingSound"] == "true" &&
+                                        effective in setOf("hud", "npc")
+                                if (
+                                    typingSound.observe(
+                                        value,
+                                        scheduler.nanoTime(),
+                                        suppressed || !enabled,
+                                    )
+                                ) {
+                                    soundPlayer.playSound(
+                                        Sound.sound(
+                                            SoundEvent.BLOCK_NOTE_BLOCK_HAT,
+                                            Sound.Source.MASTER,
+                                            0.1f,
+                                            1.7f,
+                                        )
+                                    )
+                                }
+                            }
+                        }
                     }
 
                     override fun reconfigure(
                         preferences: PresentationPreferences
-                    ): CompletionStage<Void> = surface.reconfigure(preferences)
+                    ): CompletionStage<Void> {
+                        soundEpoch.incrementAndGet()
+                        return surface.reconfigure(preferences).thenCompose {
+                            val applied = CompletableFuture<Void>()
+                            scheduler.execute {
+                                if (!finishing.get() && guard.isCurrent() && !token.isCancelled()) {
+                                    soundPreferences = preferences
+                                    typingSound.reset()
+                                }
+                                applied.complete(null)
+                            }
+                            applied
+                        }
+                    }
 
-                    override fun closeAsync(): CompletionStage<Void> = surface.closeAsync()
+                    override fun closeAsync(): CompletionStage<Void> {
+                        soundEpoch.incrementAndGet()
+                        return surface.closeAsync()
+                    }
                 }
             }
         }
@@ -397,11 +456,31 @@ class MinestomDialogueSession(
 
     fun nextImpulse(): Long = impulse.incrementAndGet()
 
-    fun submit(input: DialogueInput): CompletionStage<InputResult> =
-        handle?.submit(input) ?: CompletableFuture.completedFuture(InputResult.BUSY)
+    fun submit(input: DialogueInput): CompletionStage<InputResult> {
+        val current = view
+        val stamp = (input as? DialogueInput.Confirm)?.stamp
+        val suppress =
+            current?.state() == DialogueView.State.REVEALING &&
+                (stamp?.let {
+                    it.sessionId == current.sessionId() &&
+                        it.renderRevision == current.renderRevision()
+                } == true ||
+                    input is DialogueInput.RevealFinished &&
+                        input.sessionId == current.sessionId() &&
+                        input.renderRevision == current.renderRevision())
+        if (suppress) manualReveals.incrementAndGet()
+        return try {
+            (handle?.submit(input) ?: CompletableFuture.completedFuture(InputResult.BUSY))
+                .whenComplete { _, _ -> if (suppress) manualReveals.decrementAndGet() }
+        } catch (failure: Throwable) {
+            if (suppress) manualReveals.decrementAndGet()
+            throw failure
+        }
+    }
 
     private fun finish(initialError: Throwable?) {
         if (!finishing.compareAndSet(false, true)) return
+        soundEpoch.incrementAndGet()
         guard.invalidate()
         CompletableFuture.allOf(
                 runtime.closeAsync().toCompletableFuture(),
