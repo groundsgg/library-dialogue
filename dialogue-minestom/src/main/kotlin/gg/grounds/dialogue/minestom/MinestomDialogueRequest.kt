@@ -22,7 +22,37 @@ class MinestomDialogueRequest(
     private val actors: ActorPort?,
     private val controls: InputProfile,
     private val openingImpulse: Long,
+    private val speechListener: MinestomDialogueSpeechListener,
 ) {
+    constructor(
+        requestId: String,
+        player: Player,
+        hostGeneration: Long,
+        content: ValidatedDialogue,
+        services: DialogueServices,
+        context: Map<String, ArgumentValue>,
+        locale: LocaleContext,
+        preferences: PresentationPreferences,
+        speakers: Map<String, MinestomSpeakerBinding>,
+        actors: ActorPort?,
+        controls: InputProfile,
+        openingImpulse: Long,
+    ) : this(
+        requestId,
+        player,
+        hostGeneration,
+        content,
+        services,
+        context,
+        locale,
+        preferences,
+        speakers,
+        actors,
+        controls,
+        openingImpulse,
+        MinestomDialogueSpeechListener.NO_OP,
+    )
+
     private val context = java.util.Map.copyOf(context)
     private val speakers = java.util.Map.copyOf(speakers)
 
@@ -55,6 +85,8 @@ class MinestomDialogueRequest(
     fun controls(): InputProfile = controls
 
     fun openingImpulse(): Long = openingImpulse
+
+    fun speechListener(): MinestomDialogueSpeechListener = speechListener
 
     override fun equals(other: Any?): Boolean =
         other is MinestomDialogueRequest &&
