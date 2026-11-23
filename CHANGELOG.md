@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/groundsgg/library-dialogue/compare/v1.4.1...v1.5.0) (2026-11-23)
+
+
+### Features
+
+* **minestom:** add opt-in private dialogue typing sound ([#26](https://github.com/groundsgg/library-dialogue/issues/26)) ([6d50319](https://github.com/groundsgg/library-dialogue/commit/6d5031989962ebcba7e810812e288ad989eaf818))
+
 ## [1.4.1](https://github.com/groundsgg/library-dialogue/compare/v1.4.0...v1.4.1) (2026-11-23)
 
 
