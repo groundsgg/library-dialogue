@@ -825,7 +825,7 @@ class NpcDialogueSurfaceTest {
     }
 
     @Test
-    fun npcBackdropHasPrivateFrontAndRearFacesAtFullOpacity(env: Env) {
+    fun npcBackdropHasPrivateOpposingFacesOnTheSameNpcSide(env: Env) {
         val fixture = groundsFixture(env, AtomicLong())
         val handle = fixture.open(env, mapOf("npcBackdrop" to "true"))
         val frame = fixture.frame()
@@ -851,7 +851,6 @@ class NpcDialogueSurfaceTest {
         val frontMeta = front.entityMeta as TextDisplayMeta
         val rearMeta = rear.entityMeta as TextDisplayMeta
         assertEquals(Vec(-0.0075, -0.93, -0.55), frontMeta.translation)
-        assertEquals(Vec(0.0075, -0.93, 0.55), rearMeta.translation)
         assertEquals(0.0, frontMeta.leftRotation[1].toDouble(), 1e-6)
         assertEquals(1.0, rearMeta.leftRotation[1].toDouble(), 1e-6)
         assertEquals(0.0, rearMeta.leftRotation[3].toDouble(), 1e-6)
@@ -859,13 +858,18 @@ class NpcDialogueSurfaceTest {
         val frontNormal = rotate(Vec(0.0, 0.0, 1.0), frontMeta.leftRotation)
         val rearNormal = rotate(Vec(0.0, 0.0, 1.0), rearMeta.leftRotation)
         assertEquals(-1.0, frontNormal.dot(rearNormal), 1e-6)
-        val midpoint =
-            Vec(
-                (frontMeta.translation.x() + rearMeta.translation.x()) / 2,
-                (frontMeta.translation.y() + rearMeta.translation.y()) / 2,
-                (frontMeta.translation.z() + rearMeta.translation.z()) / 2,
-            )
-        assertEquals(Vec(0.0, -0.93, 0.0), midpoint)
+        // The native one-line glyph has a one-pixel visual-center offset along local x.
+        // At scale 0.6 each pixel is 0.0075 blocks; the rear rotation reverses that offset.
+        val frontCenter =
+            frontMeta.translation.add(rotate(Vec(0.0075, 0.0, 0.0), frontMeta.leftRotation))
+        val rearCenter =
+            rearMeta.translation.add(rotate(Vec(0.0075, 0.0, 0.0), rearMeta.leftRotation))
+        assertEquals(0.0, frontCenter.x(), 1e-6)
+        assertEquals(frontCenter.x(), rearCenter.x(), 1e-6)
+        assertEquals(frontCenter.y(), rearCenter.y(), 1e-6)
+        assertTrue(frontCenter.z() < 0.0)
+        assertTrue(rearCenter.z() < 0.0)
+        assertEquals(-0.012, rearCenter.sub(frontCenter).dot(frontNormal), 1e-6)
         assertEquals(transform.position(), front.position)
         assertEquals(transform.position(), rear.position)
 
