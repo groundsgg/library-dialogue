@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.0](https://github.com/groundsgg/library-dialogue/compare/v1.6.0...v1.7.0) (2026-11-23)
+
+
+### Features
+
+* **dialogue-minestom:** expose speech lifecycle hooks ([#30](https://github.com/groundsgg/library-dialogue/issues/30)) ([bd116ae](https://github.com/groundsgg/library-dialogue/commit/bd116aec85bb5dd4ddb87910d9d5b2a9ac0bc07a))
+
 ## [1.6.0](https://github.com/groundsgg/library-dialogue/compare/v1.5.0...v1.6.0) (2026-11-23)
 
 
