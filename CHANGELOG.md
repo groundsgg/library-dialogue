@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/groundsgg/library-dialogue/compare/v1.5.0...v1.6.0) (2026-11-23)
+
+
+### Features
+
+* **minestom:** add optional dialogue choice sounds ([#28](https://github.com/groundsgg/library-dialogue/issues/28)) ([736940e](https://github.com/groundsgg/library-dialogue/commit/736940e7a7470e6c3c335df1b67b7451c02b3738))
+
 ## [1.5.0](https://github.com/groundsgg/library-dialogue/compare/v1.4.1...v1.5.0) (2026-11-23)
 
 
