@@ -2,7 +2,16 @@ package gg.grounds.dialogue.minestom
 
 import gg.grounds.dialogue.core.runtime.DialogueView
 
-/** Receives naturally presented dialogue text while a message is being revealed. */
+/**
+ * Optional application hooks for speaker-specific presentation effects.
+ *
+ * Both callbacks run on the player's instance scheduler. [onRevealed] reports only grapheme deltas
+ * from successfully presented NPC-surface REVEALING frames; skipped text and the final
+ * WAITING_FOR_INPUT frame are excluded. [MinestomDialogueSpeechEvent.speakerRole] is the dialogue
+ * graph role key, not its localized display label. An ordinary stop may be followed by a terminal
+ * stop, so cleanup should be idempotent. Exceptions disable these optional hooks without failing
+ * the dialogue.
+ */
 interface MinestomDialogueSpeechListener {
     fun onRevealed(event: MinestomDialogueSpeechEvent)
 

@@ -76,10 +76,11 @@ class MinestomDialogueSession(
     private val soundPlayer = request.player()
     private val soundInstance = request.player().instance
     private val speechListener = request.speechListener()
-    private var speechEnabled = true
+    private var speechEnabled = speechListener !== MinestomDialogueSpeechListener.NO_OP
     private var speechActive = false
     private var speechIdentity: SpeechIdentity? = null
     private var speechRevealed = 0
+    private var speechGraphemes: List<String> = emptyList()
     private var speechTerminalDelivered = false
 
     private data class SpeechIdentity(
@@ -198,9 +199,16 @@ class MinestomDialogueSession(
                         }
                         val replacement = surface.replace(value)
                         replacement.whenComplete { _, failure ->
-                            if (failure != null) {
+                            if (failure != null && speechEnabled) {
                                 scheduler.execute {
-                                    if (!speechTerminalDelivered) {
+                                    if (
+                                        soundEpoch.get() == epoch &&
+                                            view === value &&
+                                            !finishing.get() &&
+                                            guard.isCurrent() &&
+                                            !token.isCancelled() &&
+                                            !speechTerminalDelivered
+                                    ) {
                                         stopSpeech(
                                             MinestomDialogueSpeechListener.StopReason
                                                 .PRESENTATION_FAILED
@@ -255,6 +263,18 @@ class MinestomDialogueSession(
                         preferences: PresentationPreferences
                     ): CompletionStage<Void> {
                         soundEpoch.incrementAndGet()
+                        if (speechEnabled) {
+                            scheduler.execute {
+                                if (!finishing.get() && guard.isCurrent() && !token.isCancelled()) {
+                                    stopSpeech(
+                                        MinestomDialogueSpeechListener.StopReason.CONTENT_REPLACED
+                                    )
+                                    speechIdentity = null
+                                    speechRevealed = 0
+                                    speechGraphemes = emptyList()
+                                }
+                            }
+                        }
                         return surface.reconfigure(preferences).thenCompose {
                             val applied = CompletableFuture<Void>()
                             scheduler.execute {
@@ -270,6 +290,11 @@ class MinestomDialogueSession(
 
                     override fun closeAsync(): CompletionStage<Void> {
                         soundEpoch.incrementAndGet()
+                        if (speechEnabled) {
+                            scheduler.execute {
+                                stopSpeech(MinestomDialogueSpeechListener.StopReason.PAUSED)
+                            }
+                        }
                         return surface.closeAsync()
                     }
                 }
@@ -319,7 +344,9 @@ class MinestomDialogueSession(
                 } else if (result is DialogueStartResult.Started) {
                     val running = result.handle
                     handle = running
-                    running.completion().whenComplete { _, failure -> finish(failure) }
+                    running.completion().whenComplete { end, failure ->
+                        finish(failure, end?.reason() ?: token.reason())
+                    }
                     inputs.activate().whenComplete { _, failure ->
                         if (failure != null) {
                             finish(failure)
@@ -365,6 +392,7 @@ class MinestomDialogueSession(
     }
 
     private fun observeSpeechCandidate(value: DialogueView, epoch: Long) {
+        if (!speechEnabled) return
         val candidate = speechIdentity(value)
         val effective = (renderer as? DialogueInputSource)?.effectiveSurface()
         scheduler.execute {
@@ -383,6 +411,7 @@ class MinestomDialogueSession(
             if (candidate == null || effective != "npc" || speechIdentity != candidate) {
                 speechIdentity = null
                 speechRevealed = 0
+                speechGraphemes = emptyList()
             }
         }
     }
@@ -394,14 +423,16 @@ class MinestomDialogueSession(
             stopSpeech(MinestomDialogueSpeechListener.StopReason.PRESENTATION_FALLBACK)
             speechIdentity = null
             speechRevealed = 0
+            speechGraphemes = emptyList()
             return
         }
         if (speechIdentity != candidate) {
             speechIdentity = candidate
             speechRevealed = value.revealedGraphemes()
+            speechGraphemes = Graphemes.split(value.text())
             return
         }
-        val graphemes = Graphemes.split(value.text())
+        val graphemes = speechGraphemes
         val current = value.revealedGraphemes().coerceIn(0, graphemes.size)
         val from = speechRevealed.coerceIn(0, current)
         speechRevealed = current
@@ -420,6 +451,7 @@ class MinestomDialogueSession(
             speechEnabled = false
             speechIdentity = null
             speechRevealed = 0
+            speechGraphemes = emptyList()
             speechActive = false
             try {
                 speechListener.onStop(MinestomDialogueSpeechListener.StopReason.LISTENER_FAILED)
@@ -433,6 +465,7 @@ class MinestomDialogueSession(
         reason: MinestomDialogueSpeechListener.StopReason,
         terminal: Boolean = false,
     ) {
+        if (speechListener === MinestomDialogueSpeechListener.NO_OP) return
         if (terminal) {
             if (speechTerminalDelivered) return
             speechTerminalDelivered = true
@@ -444,7 +477,6 @@ class MinestomDialogueSession(
         } catch (_: Throwable) {
             speechEnabled = false
             if (!terminal) {
-                speechTerminalDelivered = true
                 try {
                     speechListener.onStop(MinestomDialogueSpeechListener.StopReason.LISTENER_FAILED)
                 } catch (_: Throwable) {
@@ -731,20 +763,24 @@ class MinestomDialogueSession(
         }
     }
 
-    private fun finish(initialError: Throwable?) {
+    private fun finish(
+        initialError: Throwable?,
+        terminalReason: DialogueEndReason? = token.reason(),
+    ) {
         if (!finishing.compareAndSet(false, true)) return
         soundEpoch.incrementAndGet()
         guard.invalidate()
-        val endReason = token.reason()
         val speechStop =
             when {
-                endReason == DialogueEndReason.DISCONNECTED ->
+                terminalReason == DialogueEndReason.DISCONNECTED ->
                     MinestomDialogueSpeechListener.StopReason.DISCONNECTED
-                initialError != null || endReason == DialogueEndReason.FAILED ->
+                initialError != null || terminalReason == DialogueEndReason.FAILED ->
                     MinestomDialogueSpeechListener.StopReason.SESSION_FAILED
                 else -> MinestomDialogueSpeechListener.StopReason.SESSION_ENDED
             }
-        scheduler.execute { stopSpeech(speechStop, terminal = true) }
+        if (speechListener !== MinestomDialogueSpeechListener.NO_OP) {
+            scheduler.execute { stopSpeech(speechStop, terminal = true) }
+        }
         CompletableFuture.allOf(
                 runtime.closeAsync().toCompletableFuture(),
                 inputs.closeAsync().toCompletableFuture(),
