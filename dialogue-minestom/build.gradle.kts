@@ -11,6 +11,11 @@ dependencies {
     testRuntimeOnly("org.slf4j:slf4j-simple:2.0.17")
 }
 
+tasks.withType<Test>().configureEach {
+    // Minestom world and connection fixtures exceed the default 512 MiB in the full suite.
+    maxHeapSize = "1g"
+}
+
 tasks.test {
     systemProperty("minestom.inside-test", "true")
     systemProperty("java.awt.headless", "true")

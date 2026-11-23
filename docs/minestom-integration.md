@@ -295,6 +295,17 @@ Whitespace, punctuation, manual reveal skips, full-text rendering and chat
 fallback stay silent. Reduced motion does not disable audio. No resource-pack
 change is required.
 
+## Optional choice sounds
+
+Set `PresentationPreferences.effects()["choiceSounds"]` to `"true"` to enable
+quiet private vanilla button clicks for answer navigation and confirmation on
+HUD and NPC surfaces. This is independent of `typingSound` and silent by default.
+Navigation plays only for accepted selection changes after successful display,
+limited to one per 85 ms. Confirmation uses a distinct lower tone, including
+choices that finish the conversation. Initial selection, repeated hover,
+provider refreshes, reveal skips, plain Continue and chat fallback stay silent.
+No resource-pack change is required.
+
 ## Compact HUD answer placement
 
 The HUD reuses the original prototype's rounded modal and frozen Monospaced
