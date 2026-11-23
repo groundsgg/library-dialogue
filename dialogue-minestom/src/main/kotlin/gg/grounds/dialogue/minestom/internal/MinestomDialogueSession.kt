@@ -73,6 +73,15 @@ class MinestomDialogueSession(
     private val soundPlayer = request.player()
     private val soundInstance = request.player().instance
 
+    private class SelectionReceipt(val before: DialogueView, val choice: String) {
+        var accepted = false
+        var presented: DialogueView? = null
+        var epoch = -1L
+    }
+
+    private var selectionReceipt: SelectionReceipt? = null
+    private var lastChoiceSoundNanos: Long? = null
+
     init {
         inputs =
             MinestomInputAdapter(
@@ -106,8 +115,9 @@ class MinestomDialogueSession(
                         source()?.browse(displayed, start)
                             ?: CompletableFuture.completedFuture(InputResult.STALE)
 
+                    // Adapter routing and hover work already run on the instance owner queue.
                     override fun submit(input: DialogueInput): CompletionStage<InputResult> =
-                        this@MinestomDialogueSession.submit(input)
+                        this@MinestomDialogueSession.submitOwned(input)
                 },
                 NpcHitTest.OcclusionTest { from, to ->
                     MinestomOcclusion.visible(request.player().instance, from, to)
@@ -159,6 +169,13 @@ class MinestomDialogueSession(
                         }
                         val epoch = soundEpoch.incrementAndGet()
                         val suppressed = manualReveals.get() > 0
+                        val selection = selectionReceipt?.takeIf {
+                            value.sessionId() == it.before.sessionId() &&
+                                value.nodeVisitId() == it.before.nodeVisitId() &&
+                                value.renderRevision() == it.before.renderRevision() &&
+                                value.stateRevision() > it.before.stateRevision() &&
+                                value.selectedChoiceId() == it.choice
+                        }
                         return surface.replace(value).thenRun {
                             scheduler.execute {
                                 if (
@@ -170,6 +187,11 @@ class MinestomDialogueSession(
                                         soundPlayer.instance !== soundInstance
                                 )
                                     return@execute
+                                if (selection != null && selectionReceipt === selection) {
+                                    selection.presented = value
+                                    selection.epoch = epoch
+                                    playSelection(selection)
+                                }
                                 val effective =
                                     (renderer as? DialogueInputSource)?.effectiveSurface()
                                 val enabled =
@@ -457,7 +479,77 @@ class MinestomDialogueSession(
     fun nextImpulse(): Long = impulse.incrementAndGet()
 
     fun submit(input: DialogueInput): CompletionStage<InputResult> {
+        val result = CompletableFuture<InputResult>()
+        scheduler.execute {
+            try {
+                submitOwned(input).whenComplete { value, failure ->
+                    if (failure != null) result.completeExceptionally(failure)
+                    else result.complete(value)
+                }
+            } catch (failure: Throwable) {
+                result.completeExceptionally(failure)
+            }
+        }
+        return result
+    }
+
+    private fun choiceAudioEnabled(): Boolean =
+        soundPreferences.effects()["choiceSounds"] == "true" &&
+            (renderer as? DialogueInputSource)?.effectiveSurface() in setOf("hud", "npc")
+
+    private fun playSelection(receipt: SelectionReceipt) {
+        val presented = receipt.presented ?: return
+        if (!receipt.accepted || selectionReceipt !== receipt) return
+        selectionReceipt = null
+        if (
+            view !== presented ||
+                soundEpoch.get() != receipt.epoch ||
+                finishing.get() ||
+                !guard.isCurrent() ||
+                token.isCancelled() ||
+                !choiceAudioEnabled()
+        )
+            return
+        val now = scheduler.nanoTime()
+        if (lastChoiceSoundNanos?.let { now - it < Duration.ofMillis(85).toNanos() } == true) return
+        lastChoiceSoundNanos = now
+        playChoiceSound(0.08f, 1.4f)
+    }
+
+    private fun playChoiceSound(volume: Float, pitch: Float) {
+        soundPlayer.playSound(
+            Sound.sound(SoundEvent.UI_BUTTON_CLICK, Sound.Source.MASTER, volume, pitch)
+        )
+    }
+
+    private fun submitOwned(input: DialogueInput): CompletionStage<InputResult> {
         val current = view
+        val eligible =
+            current != null &&
+                !finishing.get() &&
+                guard.isCurrent() &&
+                !token.isCancelled() &&
+                choiceAudioEnabled()
+        val selection =
+            (input as? DialogueInput.Select)
+                ?.takeIf {
+                    eligible && it.choiceId != null && it.choiceId != current.selectedChoiceId()
+                }
+                ?.let { SelectionReceipt(current!!, it.choiceId!!) }
+        selectionReceipt = selection
+        val confirmation =
+            (input as? DialogueInput.Confirm)?.takeIf { confirm ->
+                eligible &&
+                    current.state() == DialogueView.State.WAITING_FOR_INPUT &&
+                    current.hint() == DialogueView.HintPhase.CHOOSE &&
+                    confirm.choiceId != null &&
+                    current.selectedChoiceId() == confirm.choiceId &&
+                    current.choices().any {
+                        it.id == confirm.choiceId &&
+                            it.availability == DialogueView.Availability.AVAILABLE
+                    }
+            }
+
         val stamp = (input as? DialogueInput.Confirm)?.stamp
         val suppress =
             current?.state() == DialogueView.State.REVEALING &&
@@ -471,7 +563,26 @@ class MinestomDialogueSession(
         if (suppress) manualReveals.incrementAndGet()
         return try {
             (handle?.submit(input) ?: CompletableFuture.completedFuture(InputResult.BUSY))
-                .whenComplete { _, _ -> if (suppress) manualReveals.decrementAndGet() }
+                .whenComplete { accepted, failure ->
+                    if (suppress) manualReveals.decrementAndGet()
+                    if (failure == null && accepted == InputResult.ACCEPTED) {
+                        if (selection != null && selectionReceipt === selection) {
+                            selection.accepted = true
+                            playSelection(selection)
+                        }
+                        if (
+                            confirmation != null &&
+                                soundPlayer.instance === soundInstance &&
+                                guard.hasCurrentConnection() &&
+                                ((!finishing.get() && guard.isCurrent() && !token.isCancelled()) ||
+                                    token.reason() == DialogueEndReason.COMPLETED)
+                        ) {
+                            // This callback runs inline on the core owner queue at accepted commit.
+                            // Normal completion invalidates the guard before returning ACCEPTED.
+                            playChoiceSound(0.14f, 1.0f)
+                        }
+                    } else if (selectionReceipt === selection) selectionReceipt = null
+                }
         } catch (failure: Throwable) {
             if (suppress) manualReveals.decrementAndGet()
             throw failure
