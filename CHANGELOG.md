@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.0](https://github.com/groundsgg/library-dialogue/compare/v1.7.0...v1.8.0) (2026-11-24)
+
+
+### Features
+
+* expose authoritative typing timing for speech ([#32](https://github.com/groundsgg/library-dialogue/issues/32)) ([1ba016c](https://github.com/groundsgg/library-dialogue/commit/1ba016c4633100467d186845a44d4d8e9f6c164e))
+
 ## [1.7.0](https://github.com/groundsgg/library-dialogue/compare/v1.6.0...v1.7.0) (2026-11-23)
 
 
