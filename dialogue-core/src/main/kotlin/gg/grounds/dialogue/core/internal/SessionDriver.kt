@@ -8,12 +8,14 @@ import gg.grounds.dialogue.core.port.ConditionProvider.*
 import gg.grounds.dialogue.core.port.OutcomeSink.*
 import gg.grounds.dialogue.core.runtime.*
 import gg.grounds.dialogue.core.runtime.DialogueView.*
+import gg.grounds.dialogue.core.runtime.TypingTiming
 import gg.grounds.dialogue.core.text.*
 import gg.grounds.dialogue.core.validation.ContentFingerprint
 import gg.grounds.dialogue.core.validation.ContentPin
 import java.nio.charset.StandardCharsets
 import java.time.Duration
 import java.util.*
+import java.util.Optional
 import java.util.concurrent.*
 import java.util.concurrent.atomic.*
 import java.util.function.BiConsumer
@@ -113,6 +115,14 @@ class SessionDriver(
 
     private fun admitEffect() = synchronized(dispatchGate) { active() }
 
+    private fun invalidateTyping() {
+        try {
+            renderer?.invalidateTyping()
+        } catch (_: Throwable) {
+            // Optional typing notifications must not interrupt the owner queue.
+        }
+    }
+
     private fun cancelReveal() {
         revealGeneration++
         revealTimer?.cancel()
@@ -176,7 +186,21 @@ class SessionDriver(
             )
         renderAcknowledgements.add(ack)
         val frame = view
-        await(call { r.replace(frame) }, options.budgets.text) { _, e ->
+        val timing =
+            if (frame.state() == State.REVEALING && !preferences.graphemeDelay().isZero)
+                Optional.of(
+                    TypingTiming(
+                        id,
+                        visit,
+                        renderRevision,
+                        preferences.graphemeDelay().toNanos(),
+                        enteredNanos,
+                        enteredNanos +
+                            frame.totalGraphemes() * preferences.graphemeDelay().toNanos(),
+                    )
+                )
+            else Optional.empty()
+        await(call { r.replace(frame, timing) }, options.budgets.text) { _, e ->
             renderAcknowledgements.remove(ack)
             if (!active()) {
                 ack.completeExceptionally(CancellationException("Session closed"))
@@ -821,6 +845,7 @@ class SessionDriver(
             return
         }
         if (view.state() == State.REVEALING) {
+            invalidateTyping()
             cancelReveal()
             setView(
                 State.WAITING_FOR_INPUT,
@@ -999,6 +1024,7 @@ class SessionDriver(
                 result.complete(RefreshResult.STALE)
                 return@execute
             }
+            invalidateTyping()
             localePending?.complete(RefreshResult.STALE)
             localePending = result
             locale = effectiveLocale(requested)
@@ -1036,6 +1062,7 @@ class SessionDriver(
             val previous = preferences
             val generation = ++preferenceGeneration
             switching = true
+            invalidateTyping()
             renderRevision++
             cancelReveal()
             await(call { renderer!!.reconfigure(next) }, options.budgets.prepare) { _, error ->
@@ -1138,6 +1165,7 @@ class SessionDriver(
     private fun stopNow() {
         if (closing) return
         closing = true
+        invalidateTyping()
         val e = CancellationException("Session closing")
         renderAcknowledgements.forEach { it.completeExceptionally(e) }
         renderAcknowledgements.clear()

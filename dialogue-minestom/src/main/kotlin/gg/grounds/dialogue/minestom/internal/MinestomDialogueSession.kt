@@ -14,12 +14,15 @@ import gg.grounds.dialogue.core.runtime.DialogueView
 import gg.grounds.dialogue.core.runtime.InputResult
 import gg.grounds.dialogue.core.runtime.PresentationPreferences
 import gg.grounds.dialogue.core.runtime.RuntimeOptions
+import gg.grounds.dialogue.core.runtime.TypingTiming
 import gg.grounds.dialogue.core.text.Graphemes
 import gg.grounds.dialogue.minestom.DialogueServices
 import gg.grounds.dialogue.minestom.MinestomDialogueOptions
 import gg.grounds.dialogue.minestom.MinestomDialogueRequest
+import gg.grounds.dialogue.minestom.MinestomDialogueSpeechBeginEvent
 import gg.grounds.dialogue.minestom.MinestomDialogueSpeechEvent
 import gg.grounds.dialogue.minestom.MinestomDialogueSpeechListener
+import gg.grounds.dialogue.minestom.MinestomDialogueTimedSpeechListener
 import gg.grounds.dialogue.minestom.MinestomSpeakerBinding
 import gg.grounds.dialogue.minestom.geometry.DialogueLeavePolicy
 import gg.grounds.dialogue.minestom.geometry.MinestomOcclusion
@@ -28,6 +31,7 @@ import gg.grounds.dialogue.minestom.input.MinestomInputAdapter
 import gg.grounds.dialogue.minestom.input.TargetSnapshot
 import gg.grounds.dialogue.minestom.render.NpcDialogueSurface
 import java.time.Duration
+import java.util.Optional
 import java.util.concurrent.CancellationException
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionStage
@@ -72,10 +76,12 @@ class MinestomDialogueSession(
     private val typingSound = TypingSound()
     private var soundPreferences = request.preferences()
     private val soundEpoch = AtomicLong()
+    private val speechInvalidationEpoch = AtomicLong()
     private val manualReveals = java.util.concurrent.atomic.AtomicInteger()
     private val soundPlayer = request.player()
     private val soundInstance = request.player().instance
     private val speechListener = request.speechListener()
+    private val timedSpeechListener = speechListener as? MinestomDialogueTimedSpeechListener
     private var speechEnabled = speechListener !== MinestomDialogueSpeechListener.NO_OP
     private var speechActive = false
     private var speechIdentity: SpeechIdentity? = null
@@ -174,7 +180,29 @@ class MinestomDialogueSession(
         val decorated = DialogueRenderer { prepare ->
             requireNotNull(renderer).prepare(prepare).thenApply { surface ->
                 object : DialogueRenderer.PresentationHandle {
-                    override fun replace(value: DialogueView): CompletionStage<Void> {
+                    override fun replace(value: DialogueView): CompletionStage<Void> =
+                        replace(value, Optional.empty())
+
+                    override fun invalidateTyping() {
+                        if (timedSpeechListener != null) {
+                            speechInvalidationEpoch.incrementAndGet()
+                            scheduler.execute {
+                                stopSpeech(
+                                    MinestomDialogueSpeechListener.StopReason.CONTENT_REPLACED
+                                )
+                            }
+                        }
+                        try {
+                            surface.invalidateTyping()
+                        } catch (_: Throwable) {
+                            // Optional delegate notifications must not prevent speech cleanup.
+                        }
+                    }
+
+                    override fun replace(
+                        value: DialogueView,
+                        timing: Optional<TypingTiming>,
+                    ): CompletionStage<Void> {
                         if (!guard.isCurrent() || token.isCancelled()) {
                             return CompletableFuture.failedFuture(
                                 CancellationException("Connection expired")
@@ -188,8 +216,9 @@ class MinestomDialogueSession(
                             )
                         }
                         val epoch = soundEpoch.incrementAndGet()
+                        val speechEpoch = speechInvalidationEpoch.get()
                         val suppressed = manualReveals.get() > 0
-                        observeSpeechCandidate(value, epoch)
+                        observeSpeechCandidate(value, epoch, speechEpoch)
                         val selection = selectionReceipt?.takeIf {
                             value.sessionId() == it.before.sessionId() &&
                                 value.nodeVisitId() == it.before.nodeVisitId() &&
@@ -197,12 +226,13 @@ class MinestomDialogueSession(
                                 value.stateRevision() > it.before.stateRevision() &&
                                 value.selectedChoiceId() == it.choice
                         }
-                        val replacement = surface.replace(value)
+                        val replacement = surface.replace(value, timing)
                         replacement.whenComplete { _, failure ->
                             if (failure != null && speechEnabled) {
                                 scheduler.execute {
                                     if (
                                         soundEpoch.get() == epoch &&
+                                            speechInvalidationEpoch.get() == speechEpoch &&
                                             view === value &&
                                             !finishing.get() &&
                                             guard.isCurrent() &&
@@ -228,7 +258,8 @@ class MinestomDialogueSession(
                                         soundPlayer.instance !== soundInstance
                                 )
                                     return@execute
-                                observeSpeechPresented(value, suppressed)
+                                if (speechInvalidationEpoch.get() == speechEpoch)
+                                    observeSpeechPresented(value, suppressed, timing.orElse(null))
                                 if (selection != null && selectionReceipt === selection) {
                                     selection.presented = value
                                     selection.epoch = epoch
@@ -391,12 +422,18 @@ class MinestomDialogueSession(
         )
     }
 
-    private fun observeSpeechCandidate(value: DialogueView, epoch: Long) {
+    private fun observeSpeechCandidate(value: DialogueView, epoch: Long, speechEpoch: Long) {
         if (!speechEnabled) return
         val candidate = speechIdentity(value)
         val effective = (renderer as? DialogueInputSource)?.effectiveSurface()
         scheduler.execute {
-            if (soundEpoch.get() != epoch || view !== value || finishing.get()) return@execute
+            if (
+                soundEpoch.get() != epoch ||
+                    speechInvalidationEpoch.get() != speechEpoch ||
+                    view !== value ||
+                    finishing.get()
+            )
+                return@execute
             val reason =
                 when {
                     value.state() != DialogueView.State.REVEALING ->
@@ -416,7 +453,14 @@ class MinestomDialogueSession(
         }
     }
 
-    private fun observeSpeechPresented(value: DialogueView, suppressed: Boolean) {
+    private var speechBegun: SpeechIdentity? = null
+    private var speechBeginRevision = Long.MIN_VALUE
+
+    private fun observeSpeechPresented(
+        value: DialogueView,
+        suppressed: Boolean,
+        timing: TypingTiming?,
+    ) {
         if (!speechEnabled || speechTerminalDelivered) return
         val candidate = speechIdentity(value) ?: return
         if ((renderer as? DialogueInputSource)?.effectiveSurface() != "npc") {
@@ -425,6 +469,35 @@ class MinestomDialogueSession(
             speechRevealed = 0
             speechGraphemes = emptyList()
             return
+        }
+        if (
+            timedSpeechListener != null &&
+                !suppressed &&
+                value.revealedGraphemes() > 0 &&
+                (speechBegun != candidate || speechBeginRevision != value.renderRevision()) &&
+                timing != null &&
+                timing.sessionId() == value.sessionId() &&
+                timing.nodeVisitId() == value.nodeVisitId() &&
+                timing.renderRevision() == value.renderRevision() &&
+                timing.remainingNanos(scheduler.nanoTime()) > 0
+        ) {
+            speechBegun = candidate
+            speechBeginRevision = value.renderRevision()
+            speechActive = true
+            try {
+                timedSpeechListener.onBegin(
+                    MinestomDialogueSpeechBeginEvent(
+                        value,
+                        candidate.role,
+                        candidate.speaker,
+                        timing,
+                    )
+                )
+            } catch (_: Throwable) {
+                stopSpeech(MinestomDialogueSpeechListener.StopReason.LISTENER_FAILED)
+                speechEnabled = false
+                return
+            }
         }
         if (speechIdentity != candidate) {
             speechIdentity = candidate

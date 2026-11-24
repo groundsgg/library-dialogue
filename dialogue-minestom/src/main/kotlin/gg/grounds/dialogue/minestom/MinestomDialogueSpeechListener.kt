@@ -1,6 +1,7 @@
 package gg.grounds.dialogue.minestom
 
 import gg.grounds.dialogue.core.runtime.DialogueView
+import gg.grounds.dialogue.core.runtime.TypingTiming
 
 /**
  * Optional application hooks for speaker-specific presentation effects.
@@ -53,4 +54,25 @@ class MinestomDialogueSpeechEvent(
     fun speaker(): MinestomSpeakerBinding = speaker
 
     fun revealed(): String = revealed
+}
+
+/** The first positive NPC frame presented before the authoritative typing deadline. */
+class MinestomDialogueSpeechBeginEvent(
+    private val view: DialogueView,
+    private val speakerRole: String,
+    private val speaker: MinestomSpeakerBinding,
+    private val timing: TypingTiming,
+) {
+    fun view(): DialogueView = view
+
+    fun speakerRole(): String = speakerRole
+
+    fun speaker(): MinestomSpeakerBinding = speaker
+
+    fun timing(): TypingTiming = timing
+}
+
+/** Opt-in hooks for authoritative typing phase deadlines, preserving legacy listener behavior. */
+interface MinestomDialogueTimedSpeechListener : MinestomDialogueSpeechListener {
+    fun onBegin(event: MinestomDialogueSpeechBeginEvent)
 }
