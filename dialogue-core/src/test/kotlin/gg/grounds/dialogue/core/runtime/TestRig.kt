@@ -40,6 +40,9 @@ constructor(
         ),
 ) {
     @JvmField val scheduler = ManualScheduler()
+    @JvmField val timings = mutableListOf<Pair<DialogueView, java.util.Optional<TypingTiming>>>()
+    @JvmField var typingInvalidations = 0
+    @JvmField var failTypingInvalidation = false
     @JvmField val frames = mutableListOf<DialogueView>()
     @JvmField val cues = mutableListOf<ActorPort.ActorCue>()
     @JvmField val content: ValidatedDialogue
@@ -81,6 +84,19 @@ constructor(
                     override fun replace(view: DialogueView): CompletionStage<Void> {
                         frames.add(view)
                         return CompletableFuture.completedFuture(null)
+                    }
+
+                    override fun replace(
+                        view: DialogueView,
+                        timing: java.util.Optional<TypingTiming>,
+                    ): CompletionStage<Void> {
+                        timings.add(view to timing)
+                        return replace(view)
+                    }
+
+                    override fun invalidateTyping() {
+                        typingInvalidations++
+                        if (failTypingInvalidation) error("optional invalidation failure")
                     }
 
                     override fun reconfigure(

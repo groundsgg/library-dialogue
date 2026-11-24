@@ -81,7 +81,9 @@ class MinestomDialogueSpeechListenerTest {
         }
     }
 
-    private class RecordingListener : MinestomDialogueSpeechListener {
+    private open class RecordingListener : MinestomDialogueSpeechListener {
+        val begun =
+            CopyOnWriteArrayList<gg.grounds.dialogue.minestom.MinestomDialogueSpeechBeginEvent>()
         val revealed = CopyOnWriteArrayList<MinestomDialogueSpeechEvent>()
         val stopped = CopyOnWriteArrayList<MinestomDialogueSpeechListener.StopReason>()
         var failOnReveal = false
@@ -98,8 +100,16 @@ class MinestomDialogueSpeechListenerTest {
         }
     }
 
+    private class TimedRecordingListener :
+        RecordingListener(), gg.grounds.dialogue.minestom.MinestomDialogueTimedSpeechListener {
+        override fun onBegin(event: gg.grounds.dialogue.minestom.MinestomDialogueSpeechBeginEvent) {
+            begun.add(event)
+        }
+    }
+
     private class Renderer(var effective: String = "npc") : DialogueRenderer, DialogueInputSource {
         var gateOnReveal: Int? = null
+        var gateAllPositive = false
         val gate = CompletableFuture<Void>()
         var failOnReveal = false
 
@@ -122,6 +132,9 @@ class MinestomDialogueSpeechListenerTest {
                                 CompletableFuture.failedFuture(
                                     IllegalStateException("presentation failed")
                                 )
+                            gateAllPositive &&
+                                view.revealedGraphemes() > 0 &&
+                                view.state() == DialogueView.State.REVEALING -> gate
                             gateOnReveal == view.revealedGraphemes() -> gate
                             else -> CompletableFuture.completedFuture(null)
                         }
@@ -233,7 +246,7 @@ class MinestomDialogueSpeechListenerTest {
 
     @Test
     fun naturalPresentedDeltasStopOnPauseAndTerminalCloseIsStillReported(env: Env) {
-        val fixture = Fixture(env)
+        val fixture = Fixture(env, TimedRecordingListener())
         assertTrue(
             env.tickWhile(
                 { fixture.session.snapshot()?.state() != DialogueView.State.WAITING_FOR_INPUT },
@@ -242,6 +255,14 @@ class MinestomDialogueSpeechListenerTest {
         )
         env.tick()
 
+        assertEquals(1, fixture.listener.begun.size)
+        val beginning = fixture.listener.begun.single()
+        assertTrue(beginning.view().revealedGraphemes() > 0)
+        assertEquals(beginning.view().sessionId(), beginning.timing().sessionId())
+        assertEquals(
+            beginning.view().totalGraphemes() * 90_000_000L,
+            beginning.timing().endNanos() - beginning.timing().enteredNanos(),
+        )
         assertEquals("Hell", fixture.listener.revealed.joinToString("") { it.revealed() })
         assertTrue(
             fixture.listener.revealed.all { it.view().state() == DialogueView.State.REVEALING }
@@ -285,6 +306,39 @@ class MinestomDialogueSpeechListenerTest {
             MinestomDialogueSpeechListener.StopReason.SESSION_ENDED,
             fixture.listener.stopped.last(),
         )
+    }
+
+    @Test
+    fun delayedCompletedPresentationDoesNotBeginSpeech(env: Env) {
+        val renderer = Renderer().also { it.gateAllPositive = true }
+        val fixture = Fixture(env, TimedRecordingListener(), renderer)
+        assertTrue(
+            env.tickWhile(
+                { fixture.session.snapshot()?.state() != DialogueView.State.WAITING_FOR_INPUT },
+                Duration.ofSeconds(2),
+            )
+        )
+        renderer.gate.complete(null)
+        env.tick()
+        assertTrue(fixture.listener.begun.isEmpty())
+        fixture.close()
+        env.tick()
+    }
+
+    @Test
+    fun acceptedLocalePreventsDelayedOldBegin(env: Env) {
+        val renderer = Renderer().also { it.gateAllPositive = true }
+        val fixture = Fixture(env, TimedRecordingListener(), renderer)
+        fixture.waitForRevealed(1)
+        MinestomDialogueHostTest.done(
+            env,
+            fixture.coreHandle().refreshLocale(LocaleContext("de", 1, "en")),
+        )
+        renderer.gate.complete(null)
+        env.tick()
+        assertTrue(fixture.listener.begun.isEmpty())
+        fixture.close()
+        env.tick()
     }
 
     @Test

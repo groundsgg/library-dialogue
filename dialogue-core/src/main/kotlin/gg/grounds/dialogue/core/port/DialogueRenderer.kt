@@ -5,7 +5,9 @@ import gg.grounds.dialogue.core.runtime.DialogueFailure
 import gg.grounds.dialogue.core.runtime.DialogueView
 import gg.grounds.dialogue.core.runtime.PresentationPreferences
 import gg.grounds.dialogue.core.runtime.RuntimeOptions
+import gg.grounds.dialogue.core.runtime.TypingTiming
 import java.time.Duration
+import java.util.Optional
 import java.util.UUID
 import java.util.concurrent.CompletionStage
 
@@ -62,6 +64,11 @@ fun interface DialogueRenderer {
 
     interface PresentationHandle : OwnedResource {
         fun replace(view: DialogueView): CompletionStage<Void>
+
+        fun replace(view: DialogueView, timing: Optional<TypingTiming>): CompletionStage<Void> =
+            replace(view)
+
+        fun invalidateTyping() = Unit
 
         fun reconfigure(preferences: PresentationPreferences): CompletionStage<Void>
     }
