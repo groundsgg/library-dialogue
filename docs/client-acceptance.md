@@ -1,5 +1,11 @@
 # Package C client acceptance
 
+> Historical acceptance record. Results below apply to the named candidates and
+> tested scope; they are not a fresh verification of every later release. The
+> agreed scope was completed, with the explicit 26.2 test waivers preserved below.
+> For current integration, use [Minestom integration](minestom-integration.md),
+> [host contracts](host-contracts.md) and the [quickstart](quickstart.md).
+
 Status: Package C implementation and the agreed client-acceptance scope are
 complete as of2026-11-17. The independent whole-branch review found one Critical
 and ten Important issues; all have regression-first corrections. The minor
@@ -52,12 +58,12 @@ passed both required jobs.
 
 Runtime evidence for that HUD client result:
 
-| Artifact | SHA-256 |
-|---|---|
-| Grounds 26.3 pack | `a959fe0361131e898b62c0d4ea0deee5191bb8556cd2f36dfb3fbc4295c208ab` |
-| dialogue-core | `febb99136f126137de8c8852eeb5b5196c7aefd2dac335510162c06f75c145a9` |
+| Artifact              | SHA-256                                                            |
+| --------------------- | ------------------------------------------------------------------ |
+| Grounds 26.3 pack     | `a959fe0361131e898b62c0d4ea0deee5191bb8556cd2f36dfb3fbc4295c208ab` |
+| dialogue-core         | `febb99136f126137de8c8852eeb5b5196c7aefd2dac335510162c06f75c145a9` |
 | dialogue-presentation | `6644449433312cce80eeb18382ace6826438cc190f1c090392f0e86a08d73b83` |
-| dialogue-minestom | `fe18909401cba1e2e1eefdd4b3400d236611d34d4e0ad08cfa94642316a73627` |
+| dialogue-minestom     | `fe18909401cba1e2e1eefdd4b3400d236611d34d4e0ad08cfa94642316a73627` |
 
 The neutral personal-NPC demo uses loopback 25578, pack 25579 and the explicit
 Grounds 26.3 profile. The old prototype is unchanged. Run the candidate build only
@@ -65,26 +71,26 @@ after current publication pins, independent consumers and the fork gate pass.
 Record commit, actual JAR hashes and pack SHA-256 with each client result. Smoke
 reports under `.evidence` deliberately set `visual_client_verified=false`.
 
-| Check | Public 26.2 client | Grounds 26.3 client |
-|---|---|---|
-| Actual client metadata and correct pack formats | Installed protocol776/pack88.0 verified; targeted rendered-client basic pass2c0c0fd | Grounds26.3/protocol777/pack97.1 demo; repeated targeted graphics checks through60fd5c2, scoped below |
-| Pack accept, decline, download failure and removal | Initial pack load/basic rendering accepted2c0c0fd; owned removal, actual404 failure, same-dialogue recovery and explicit Prompt decline/re-allow accepted60fd5c2 | Explicit decline/re-allow acceptedb133d53; live owned removal, actual404 failure and graphical recovery accepted8b3f8c0 |
-| No pack request when opening/reopening a dialogue | Reopen/cancel and HUD/NPC/chat switching without pack prompt/loading accepted60fd5c2 | Accepted7186e71: reopen/cancel and HUD/NPC/chat switching within one connection without request/download/interruption |
-| HUD: fonts, centering, typewriter, choices and final End hint | Basic rendering pass2c0c0fd; HUD styles/positions, stable viewport and final End/normal close accepted60fd5c2 | Layout/styles/cards and frozen foreground alignment accepted1ff1860; binding-appropriate final End hint and one-confirm close accepted60fd5c2 |
-| GUI scale 1/2/3/Auto, window sizes and screen-edge clipping | Representative Cards left/right at1/2/3/Auto and smaller window readable/aligned accepted60fd5c2; not exhaustive cross-product | Targeted layout pass4e5c121 for left/right cards at scales1/2/3/Auto and smaller window; foreground vertical alignment subsequently accepted1ff1860 |
-| NPC: fixed world size, body-front yaw limit and near-head spacing | Fixed size/anchor through movement/offscreen and limited follow rotation accepted60fd5c2 | Fixed size/offscreen accepted70f7e67; gap/fold acceptedeb8cb5e; bounded front-follow rotation accepteddc5440a |
-| NPC: closed backs, no Z-fighting, hover and selection growth | Hover/growth and closed backs without text bleed/flicker accepted60fd5c2 | Hover/growth and scrollbar back accepted through6e3c91c; closed speech/name/answer backs without text bleed/flicker and front-hover return accepted60fd5c2 |
+| Check                                                                       | Public 26.2 client                                                                                                                                                       | Grounds 26.3 client                                                                                                                                                     |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Actual client metadata and correct pack formats                             | Installed protocol776/pack88.0 verified; targeted rendered-client basic pass2c0c0fd                                                                                      | Grounds26.3/protocol777/pack97.1 demo; repeated targeted graphics checks through60fd5c2, scoped below                                                                   |
+| Pack accept, decline, download failure and removal                          | Initial pack load/basic rendering accepted2c0c0fd; owned removal, actual404 failure, same-dialogue recovery and explicit Prompt decline/re-allow accepted60fd5c2         | Explicit decline/re-allow acceptedb133d53; live owned removal, actual404 failure and graphical recovery accepted8b3f8c0                                                 |
+| No pack request when opening/reopening a dialogue                           | Reopen/cancel and HUD/NPC/chat switching without pack prompt/loading accepted60fd5c2                                                                                     | Accepted7186e71: reopen/cancel and HUD/NPC/chat switching within one connection without request/download/interruption                                                   |
+| HUD: fonts, centering, typewriter, choices and final End hint               | Basic rendering pass2c0c0fd; HUD styles/positions, stable viewport and final End/normal close accepted60fd5c2                                                            | Layout/styles/cards and frozen foreground alignment accepted1ff1860; binding-appropriate final End hint and one-confirm close accepted60fd5c2                           |
+| GUI scale 1/2/3/Auto, window sizes and screen-edge clipping                 | Representative Cards left/right at1/2/3/Auto and smaller window readable/aligned accepted60fd5c2; not exhaustive cross-product                                           | Targeted layout pass4e5c121 for left/right cards at scales1/2/3/Auto and smaller window; foreground vertical alignment subsequently accepted1ff1860                     |
+| NPC: fixed world size, body-front yaw limit and near-head spacing           | Fixed size/anchor through movement/offscreen and limited follow rotation accepted60fd5c2                                                                                 | Fixed size/offscreen accepted70f7e67; gap/fold acceptedeb8cb5e; bounded front-follow rotation accepteddc5440a                                                           |
+| NPC: closed backs, no Z-fighting, hover and selection growth                | Hover/growth and closed backs without text bleed/flicker accepted60fd5c2                                                                                                 | Hover/growth and scrollbar back accepted through6e3c91c; closed speech/name/answer backs without text bleed/flicker and front-hover return accepted60fd5c2              |
 | Seven answers reachable through three cards; disabled/occluded/back targets | All7 reachable, stable3-slot HUD, arrow selection retention and wheel selection accepted60fd5c2; additional disabled/occluded/back-target tests waived by user2026-11-17 | Three-slot paging, partial last page, stable answer identity and wheel selection accepted6e3c91c; corrected unavailable/occluded/back-face confirmation accepteddc5440a |
-| Chat: complete sections, all choices, current/stale click behaviour | All7 readable, nonfirst click works and stale links inert accepted60fd5c2 | Nonfirst/stale links accepted4e5c121; all7 choices fully visible accepteddc5440a |
-| Use/Attack/Swap with empty hands, main/offhand items and shield | All9 equipped main/offhand/shield combinations accepted60fd5c2; additional empty-hand tests waived by user2026-11-17 | Targeted HUD pass: empty hands1ff1860; Use/Attack/Swap with main/offhand/shield7186e71 |
-| Held button, fast clicks, scroll and jitter without accidental confirmation | Equipped HUD fast/brief-held confirm and scrolling controlled60fd5c2; additional cases waived by user2026-11-17 | Fast/held/wheel control accepted1ff1860; manual-hover priority/paging accepted6e3c91c; exact movement thresholds native-tested |
-| Current inventory and server slot preserved; visible vs covered hotbar | Inventory check PASS for all9 equipped HUD combinations60fd5c2; Use+shield covered-HUD/normal-end return and direct PASS also accepted60fd5c2 | HUD inventory/cursor/slot PASS7186e71 for all bindings and item modes; Use+shield covered-HUD return also confirmed |
-| Language switch during reveal and action wait | HUD/NPC de/en during reveal and action wait without restart/duplicate action accepted60fd5c2 | Accepted4e5c121 in HUD/NPC, no restart/duplicate task |
-| Optional cover/vignette/backdrop toggled independently | Vignette unsupported | Targeted NPC pass7186e71: backdrop remains while vignette/cover toggle; cancel clears all effects/panels |
-| Ordinary hearts/hunger/hotbar covered; extra-heart limits noted | Use+shield HUD cover stable at least15s, controls/return accepted60fd5c2; extra-heart variants untested; additional client tests waived by user2026-11-17 | Ordinary Use+shield cover/control/return accepted7186e71; extra/stacked rows outside documented initial claim |
-| Normal looking remains open; strong turn/distance ends after grace | Additional26.2 test waived by user2026-11-17; not run | Targeted NPC pass7186e71: normal gaze/answers remain open, strong turn/distance end and restore play |
-| Two visible clients: private gesture/sound and shared restoration | Additional26.2 test waived by user2026-11-17; not run | Accepted7186e71: A-only personalwave private to A; sequential cancel restores shared without disturbing other dialogue |
-| Disconnect/instance change during active/preparing dialogue | Preparing cancel/instance/disconnect and clean reopening accepted60fd5c2; additional active-dialogue tests waived by user2026-11-17 | Active instance travel with cover, preparing cancel/instance/disconnect and reopening accepted60fd5c2; earlier reveal/reconnect accepted7186e71 |
+| Chat: complete sections, all choices, current/stale click behaviour         | All7 readable, nonfirst click works and stale links inert accepted60fd5c2                                                                                                | Nonfirst/stale links accepted4e5c121; all7 choices fully visible accepteddc5440a                                                                                        |
+| Use/Attack/Swap with empty hands, main/offhand items and shield             | All9 equipped main/offhand/shield combinations accepted60fd5c2; additional empty-hand tests waived by user2026-11-17                                                     | Targeted HUD pass: empty hands1ff1860; Use/Attack/Swap with main/offhand/shield7186e71                                                                                  |
+| Held button, fast clicks, scroll and jitter without accidental confirmation | Equipped HUD fast/brief-held confirm and scrolling controlled60fd5c2; additional cases waived by user2026-11-17                                                          | Fast/held/wheel control accepted1ff1860; manual-hover priority/paging accepted6e3c91c; exact movement thresholds native-tested                                          |
+| Current inventory and server slot preserved; visible vs covered hotbar      | Inventory check PASS for all9 equipped HUD combinations60fd5c2; Use+shield covered-HUD/normal-end return and direct PASS also accepted60fd5c2                            | HUD inventory/cursor/slot PASS7186e71 for all bindings and item modes; Use+shield covered-HUD return also confirmed                                                     |
+| Language switch during reveal and action wait                               | HUD/NPC de/en during reveal and action wait without restart/duplicate action accepted60fd5c2                                                                             | Accepted4e5c121 in HUD/NPC, no restart/duplicate task                                                                                                                   |
+| Optional cover/vignette/backdrop toggled independently                      | Vignette unsupported                                                                                                                                                     | Targeted NPC pass7186e71: backdrop remains while vignette/cover toggle; cancel clears all effects/panels                                                                |
+| Ordinary hearts/hunger/hotbar covered; extra-heart limits noted             | Use+shield HUD cover stable at least15s, controls/return accepted60fd5c2; extra-heart variants untested; additional client tests waived by user2026-11-17                | Ordinary Use+shield cover/control/return accepted7186e71; extra/stacked rows outside documented initial claim                                                           |
+| Normal looking remains open; strong turn/distance ends after grace          | Additional26.2 test waived by user2026-11-17; not run                                                                                                                    | Targeted NPC pass7186e71: normal gaze/answers remain open, strong turn/distance end and restore play                                                                    |
+| Two visible clients: private gesture/sound and shared restoration           | Additional26.2 test waived by user2026-11-17; not run                                                                                                                    | Accepted7186e71: A-only personalwave private to A; sequential cancel restores shared without disturbing other dialogue                                                  |
+| Disconnect/instance change during active/preparing dialogue                 | Preparing cancel/instance/disconnect and clean reopening accepted60fd5c2; additional active-dialogue tests waived by user2026-11-17                                      | Active instance travel with cover, preparing cancel/instance/disconnect and reopening accepted60fd5c2; earlier reveal/reconnect accepted7186e71                         |
 
 Suggested first pass: accept the new pack, `/dialogue`, then `/renderer npc` and
 `/renderer chat`; switch `/lang de` and `/lang en` during reveal and the task wait.
@@ -136,12 +142,12 @@ arrows can scroll the selected answer out of view and back without changing it.
 That same run reported intermittent flicker while scrolling, so this is scoped
 acceptance of the controls and back position, not smoothness or the full matrix.
 
-| Accepted runtime artifact | SHA-256 |
-|---|---|
-| Grounds26.3 pack | `fe5df36b8589ea87e71ef679831e1c1eb13323214fd9f49f8c94b58eb36c5435` |
-| dialogue-core | `febb99136f126137de8c8852eeb5b5196c7aefd2dac335510162c06f75c145a9` |
-| dialogue-presentation | `ba399f5952f6a82fa5bf531a272f293dd85552ed3d2d1131627f1e6a6e7b17eb` |
-| dialogue-minestom | `ad00267ac931a6ede4c97da43ff9163ff297b28506fac159c93e5832ff078600` |
+| Accepted runtime artifact | SHA-256                                                            |
+| ------------------------- | ------------------------------------------------------------------ |
+| Grounds26.3 pack          | `fe5df36b8589ea87e71ef679831e1c1eb13323214fd9f49f8c94b58eb36c5435` |
+| dialogue-core             | `febb99136f126137de8c8852eeb5b5196c7aefd2dac335510162c06f75c145a9` |
+| dialogue-presentation     | `ba399f5952f6a82fa5bf531a272f293dd85552ed3d2d1131627f1e6a6e7b17eb` |
+| dialogue-minestom         | `ad00267ac931a6ede4c97da43ff9163ff297b28506fac159c93e5832ff078600` |
 
 The follow-up reuses physical viewport display slots, including transparent
 unused slots on the partial last page, and batches visual metadata updates.
@@ -152,13 +158,12 @@ correct. This accepts that targeted refinement; all other matrix rows remain
 open. [CI for the tested product build](https://github.com/groundsgg/library-dialogue/actions/runs/43908532029)
 is recorded separately from the client result.
 
-| Smooth-paging runtime artifact | SHA-256 |
-|---|---|
-| Grounds26.3 pack | `fe5df36b8589ea87e71ef679831e1c1eb13323214fd9f49f8c94b58eb36c5435` |
-| dialogue-core | `febb99136f126137de8c8852eeb5b5196c7aefd2dac335510162c06f75c145a9` |
-| dialogue-presentation | `ba399f5952f6a82fa5bf531a272f293dd85552ed3d2d1131627f1e6a6e7b17eb` |
-| dialogue-minestom | `7079efd610634bbadac163268f58be178775f311b5616a880c9884604b8c75f1` |
-
+| Smooth-paging runtime artifact | SHA-256                                                            |
+| ------------------------------ | ------------------------------------------------------------------ |
+| Grounds26.3 pack               | `fe5df36b8589ea87e71ef679831e1c1eb13323214fd9f49f8c94b58eb36c5435` |
+| dialogue-core                  | `febb99136f126137de8c8852eeb5b5196c7aefd2dac335510162c06f75c145a9` |
+| dialogue-presentation          | `ba399f5952f6a82fa5bf531a272f293dd85552ed3d2d1131627f1e6a6e7b17eb` |
+| dialogue-minestom              | `7079efd610634bbadac163268f58be178775f311b5616a880c9884604b8c75f1` |
 
 ## Earlier iteration history
 
@@ -283,12 +288,12 @@ Accepted runtime: Grounds 26.3 on localhost:25578, product
 `1ff18606fb3064a0b7f5fc6ac4998882a75095bf`; [CI](https://github.com/groundsgg/library-dialogue/actions/runs/43927232691)
 passed both required jobs.
 
-| Artifact | SHA-256 |
-|---|---|
-| Grounds 26.3 pack | `15a7eaf6163538a695ed859013e0a13e7e0f10a57d588062dd635d49a62ee1dc` |
-| dialogue-core | `febb99136f126137de8c8852eeb5b5196c7aefd2dac335510162c06f75c145a9` |
+| Artifact              | SHA-256                                                            |
+| --------------------- | ------------------------------------------------------------------ |
+| Grounds 26.3 pack     | `15a7eaf6163538a695ed859013e0a13e7e0f10a57d588062dd635d49a62ee1dc` |
+| dialogue-core         | `febb99136f126137de8c8852eeb5b5196c7aefd2dac335510162c06f75c145a9` |
 | dialogue-presentation | `2cdd43bef760546d32c59c28e09110b4fedcaed279c0f199f3205294d79911b5` |
-| dialogue-minestom | `8eae1e7a61afb38cfb8c9e13d6c101ff83dee24d206374fcf0a7f683527b74b5` |
+| dialogue-minestom     | `8eae1e7a61afb38cfb8c9e13d6c101ff83dee24d206374fcf0a7f683527b74b5` |
 
 ## HUD empty-hand input accepted (2026-11-16)
 

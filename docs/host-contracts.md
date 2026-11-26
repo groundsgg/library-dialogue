@@ -1,5 +1,8 @@
 # Host integration contracts
 
+Current 1.x integration contract. Start with the [quickstart](quickstart.md) and
+[API/ownership map](architecture.md) for the corresponding public types.
+
 ## Local ownership
 
 `DialogueStart` binds audience ID, host/connection generation, content pin, author-catalogue generation, validation policy, binding generation, a stable request ID, locale, preferences and a host cancellation token. The token is useful before `Started`. Identical pending requests return the same future; conflicting data under an ID is rejected. The request register lasts for that runtime, defaults to 65,536 requests and rejects new IDs when full. Closed handles do not retain live renderer/actor/provider handles or full content catalogues. Configure capacity/lifetime for the workload; there is no implicit distributed deduplication or expiring-ID replay.
@@ -18,7 +21,7 @@ Input adapters assign monotonic impulse IDs and use the server-issued session/re
 
 `stateRevision` orders snapshots. `renderRevision` invalidates targets on node, locale, surface or answer-offer changes; reveal frames and purely visual selection do not invalidate targets. Confirm identifies the current selected choice. Before confirm, conditions are rechecked; changed offers are republished and that impulse does not choose a replacement.
 
-Bindings represent Minecraft actions, not a guaranteed physical F/right/left key. The presenter has an action-label profile; the future platform adapter owns actual event binding, packet debouncing and geometric hover validation. The host must accept only targets actually issued by its current visible surface generation.
+Bindings represent Minecraft actions, not a guaranteed physical F/right/left key. The presenter has an action-label profile; the platform adapter owns actual event binding, packet debouncing and geometric hover validation. The host must accept only targets actually issued by its current visible surface generation.
 
 ## Rendering and language
 
@@ -26,7 +29,7 @@ One core session owns reveal and active choice ID. A locale refresh uses the lat
 
 Surface `open` prepares hidden resources; first `replace` activates output. Frames replace the whole view. A surface prevents late mutation after `closeAsync`. The presenter serializes same-surface frame writes and owns every prepared surface, including late ones. Layout uses full text, explicit availability and fixed hit rectangles. Visual scale is separate.
 
-A semantic surface can render the original view without font measurement. For graphical overflow/missing glyphs, `FallbackRequired` carries a diagnostic. Hosts can preflight content or intercept that result and request their semantic/chat surface through the session. The library does not silently truncate or swap resource packs. Actual Minestom pack, inventory/HUD, focus and camera resources belong to package C and its host coordinator.
+A semantic surface can render the original view without font measurement. For graphical overflow/missing glyphs, `FallbackRequired` carries a diagnostic. Hosts can preflight content or intercept that result and request their semantic/chat surface through the session. The library does not silently truncate or swap resource packs. Actual Minestom pack, inventory/HUD, focus and camera resources belong to the native adapter and its host coordinator.
 
 `ReconfigurationRejected` means the previous surface remains intact. A generic failure or timeout can mean a partially completed handoff; the session ends instead of claiming the old surface is active. A completed preference update already exposes the new snapshot/frame. Cancellation and cleanup bypass the bounded user-input queue (default 256 waiting inputs).
 
@@ -66,9 +69,12 @@ Read [Minestom integration](minestom-integration.md) for the output coordinator,
 control/leave policy, explicit profiles and limits. Output priority participants
 must share `OutputChannels`; a suppressing HUD coordinator must implement
 `HudLease.visible()`. Unregistered external HUD/effect writers cannot be restored
-reliably. Three public headless modules still need no Minestom runtime. Native
-visual acceptance remains [pending separately](client-acceptance.md).
+reliably. Three public headless modules still need no Minestom runtime. The agreed native
+client scope is recorded in [historical acceptance](client-acceptance.md), including
+explicit waivers; it is not a blanket pending gate for the current source.
 
 ## Supported API and format baseline
 
-Public/protected types, constructors and members outside `.internal` in the four original modules are frozen for package D. Nested public types and sealed permitted-subclass contracts are included. `compatibility/baseline.json` records the accepted C commit, JDK 25 and hashes of javap signatures and the three v1 schemas. Capture uses an immutable git archive and a distinct unpublished version. Run `python3 tools/check_dialogue_compatibility.py --check --repository .evidence/maven --version 0.1.0-SNAPSHOT` after review publication. This checks strict equality, not general future SemVer compatibility.
+The compatibility checker preserves baseline public/protected types, constructors and members outside `.internal`, including nested public types. It compares type declarations and sealed permitted-subclass lists and permits additive types and members. Explicit record-header allowances cover the Kotlin value types converted to manual classes for defensive copying or normalization; other types, including `RuntimeOptions` and `RuntimeOptions.Budgets`, remain actual `@JvmRecord` records.
+
+[The original baseline](../compatibility/baseline.json) records the accepted C commit, JDK 25 and hashes of javap signatures for the four original modules and the three v1 schemas. [The tooling baseline](../compatibility/tooling-baseline.json) covers CLI and Testkit, so all six artifacts are checked. The original capture uses an immutable git archive and a distinct unpublished version. Run `python3 tools/check_dialogue_compatibility.py --check --repository .evidence/maven --version 0.1.0-SNAPSHOT` after review publication. Schema hashes must match exactly; the API checks are not strict equality or a general future SemVer checker.

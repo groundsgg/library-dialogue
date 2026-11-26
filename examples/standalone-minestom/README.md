@@ -1,4 +1,4 @@
-# Standalone Java dialogue demo
+# Standalone Kotlin dialogue demo
 
 This independent build resolves the three runtime libraries from the selected Maven
 repository. It does not include project sources or use a composite build. Public
