@@ -1,5 +1,8 @@
 # Minestom integration
 
+Current 1.x adapter guide. See the [quickstart](quickstart.md) for installation and
+the [architecture map](architecture.md) for scheduler and ownership entry points.
+
 `dialogue-minestom` adds one local connection owner over the existing core and
 presenter. HUD, NPC panels and chat share graph/reveal/conditions/choices/actions,
 layout, UI labels, native encoder and ownership contracts. The native host has no
@@ -74,7 +77,10 @@ fallback. An explicit later preference change may request graphics again.
 Default host surfaces use the neutral profiles. `DialoguePresenter`,
 `MinestomDialogueRenderer`, the native surfaces and widget encoder are public
 building blocks for a custom presentation pipeline; the default host's internal
-factory is not a general dependency-injection framework.
+factory is not a general dependency-injection framework. Some concrete constructors
+currently require `.internal.ConnectionGuard`; ordinary integration should use
+`MinestomDialogueHost`. Public bytecode alone does not make internal helpers a
+supported extension API.
 
 ## Speakers and personal actors
 
@@ -97,7 +103,7 @@ Its `ActorPort` prepares hidden private presentations, publishes once during
 activation, cues private clips/head look and closes only the owned presentations.
 It reuses NPC 1.0.0's engine, clock, rendering and viewer-only sounds. The shared
 parent survives. The base adapter requires no NPC package. Scene/Map/Grounds
-adapters and quest services remain later integration work.
+adapters and quest services are supplied by consuming applications, not this SDK.
 
 ## Controls, zones and lifecycle
 

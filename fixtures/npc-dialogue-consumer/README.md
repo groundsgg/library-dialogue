@@ -18,7 +18,7 @@ repository. From the repository root:
   --args=--smoke
 ```
 
-Use `--args=--smoke` for the automated application run. The normal Java demo uses
+Use `--args=--smoke` for the automated application run. The normal Kotlin demo uses
 `localhost:25578` and pack port `25579`; stop another instance using those demo
 ports first. The exact Grounds 26.3 profile is opt-in, without changing the public
 source-build dependency. No stage/production service is used.
