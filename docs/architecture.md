@@ -1,6 +1,6 @@
 # Dialogue architecture
 
-This maps the current 1.8.0 source. There are six version-aligned artifacts; Kotlin implements the library and Java remains a consumer language. The [README](../README.md) selects modules; the [quickstart](quickstart.md) runs the existing examples.
+The public contract described here is based on release 1.8.0. Source links describe this branch, which extracts frame composition from the presenter without changing that public contract. There are six version-aligned artifacts; Kotlin implements the library and Java remains a consumer language. The [README](../README.md) selects modules; the [quickstart](quickstart.md) runs the existing examples.
 
 ```mermaid
 flowchart LR
@@ -11,6 +11,7 @@ flowchart LR
     Presentation --> Core
     JSON[dialogue-json] --> Core
     CLI[dialogue-cli] --> JSON
+    CLI --> Core
     Testkit[dialogue-testkit] --> Core
     Testkit --> Presentation
 ```
@@ -42,7 +43,7 @@ The native host borrows player, instance, speaker body and Minestom engine. It n
 
 Builder and JSON inputs converge on the same definitions, validator and content fingerprint. A message has `next` or choices; each choice list needs an unconditional option. Conditions are rechecked before confirm. The library accepts named bytes and does not discover map folders or activate content.
 
-[DialoguePresenter](../dialogue-presentation/src/main/kotlin/gg/grounds/dialogue/presentation/DialoguePresenter.kt) retains the profile registry and owns surface acquisition, serialized writes, replacement acknowledgements, switching and cleanup. Its public `compose` facade delegates to implementation-only [frame composition](../dialogue-presentation/src/main/kotlin/gg/grounds/dialogue/presentation/internal/DialogueFrameComposer.kt): label resolution and routing select generic panel layout or the existing HUD raster layout. Those composers consume view/profile/preferences snapshots and optional choice cursor offsets; they own no scheduler, surface handles or mutable session state. Shared pure helpers keep text fallback, widget geometry, scrollbar rounding and surface profile pins consistent.
+[DialoguePresenter](../dialogue-presentation/src/main/kotlin/gg/grounds/dialogue/presentation/DialoguePresenter.kt) retains the profile registry and owns surface acquisition, serialized writes, replacement acknowledgements, switching and cleanup. Its public `compose` facade delegates to implementation-only [frame composition](../dialogue-presentation/src/main/kotlin/gg/grounds/dialogue/presentation/internal/DialogueFrameComposer.kt): label resolution and routing select generic panel layout or the existing HUD raster layout. The composers are stateless and own no scheduler, surface handles or mutable session state. Only the PANELS path receives the optional explicit `choiceStart` cursor offset; HUD paging derives its window from the selected choice. Layout resolution, label lookup and font metrics invoke supplied implementations, so deterministic output depends on those providers rather than on deeply immutable, pure inputs. Shared helpers keep text fallback, widget geometry, scrollbar rounding and surface profile pins consistent; profile pin calculation also resolves layout through the supplied callback.
 
 Presentation composes a full view into widgets and owned frame writes. Semantic surfaces can render without glyph metrics. Graphical missing-glyph/overflow errors are typed; the Minestom host can retain the session and fall back to chat. Graphical hover rectangles remain fixed while selection visuals grow. The host owns pack composition, hosting and transmission; exact successful registration is required for graphics. See [Minestom integration](minestom-integration.md).
 
