@@ -15,6 +15,10 @@ from verify_public_artifacts import artifact
 ROOT = Path(__file__).resolve().parents[1]
 COMMIT = 'e299b88d56df3e745ac45b319bdc88199d1ddaee'
 BASE_VERSION = '0.0.0-compat-e299b88-SNAPSHOT'
+FROZEN_CONSUMERS = Path('compatibility/consumers/e299b88-v1')
+FROZEN_SOURCE_COMMIT = 'f6772e81efd070cf8ca52a770061da5a90b67bf5'
+FROZEN_MANIFEST_SHA256 = '8fe1774803de03d9710dc8f6377eb4f932c759d2841d2860b8cb6f2028e5252a'
+GRADLE_FLAGS = ('--no-parallel', '--max-workers=1', '--refresh-dependencies')
 MODULES = ('dialogue-core', 'dialogue-json', 'dialogue-presentation', 'dialogue-minestom')
 
 def jdk(name):
@@ -149,7 +153,7 @@ def capture(commit, output):
         with tar.open('wb') as handle: subprocess.run(['git', 'archive', COMMIT], cwd=ROOT, stdout=handle, check=True)
         subprocess.run(['tar', '-xf', str(tar), '-C', str(source)], check=True)
         tasks = [f':{m}:publishAllPublicationsToReviewRepository' for m in MODULES]
-        subprocess.run([str(source/'gradlew'), *tasks, '-PversionOverride='+BASE_VERSION], cwd=source, check=True)
+        subprocess.run([str(source/'gradlew'), *GRADLE_FLAGS, *tasks, '-PversionOverride='+BASE_VERSION], cwd=source, check=True)
         repository = source / '.evidence/maven'
         api = {}
         for module in MODULES:
@@ -185,7 +189,37 @@ def check(repository, version, baseline):
             compare_api(json.loads(signature.read_text()),api_signature(jar))
     print('API_COMPATIBILITY_OK'); print('SCHEMA_COMPATIBILITY_OK')
 
+def validate_frozen_consumers():
+    """Reject altered historical source, harness or provenance before any Gradle call."""
+    snapshot = ROOT / FROZEN_CONSUMERS
+    try:
+        manifest_bytes = (snapshot / 'manifest.json').read_bytes()
+        manifest = json.loads(manifest_bytes)
+    except (OSError, ValueError) as error:
+        raise ValueError('FROZEN_CONSUMER_MANIFEST_INVALID') from error
+    if (not isinstance(manifest, dict) or manifest.get('format') != 1
+            or manifest.get('source_commit') != FROZEN_SOURCE_COMMIT
+            or manifest.get('source_path') != 'fixtures'
+            or manifest.get('legacy_sdk') != {'commit': COMMIT, 'version': BASE_VERSION, 'java': 25}):
+        raise ValueError('FROZEN_CONSUMER_PROVENANCE_FAILED')
+    # Pin the manifest itself as well as its file hashes: removing an input or
+    # changing both a source and its digest must not silently redefine history.
+    if hashlib.sha256(manifest_bytes).hexdigest() != FROZEN_MANIFEST_SHA256:
+        raise ValueError('FROZEN_CONSUMER_MANIFEST_HASH_FAILED')
+    entries = list(snapshot.rglob('*'))
+    if snapshot.is_symlink() or any(entry.is_symlink() for entry in entries):
+        raise ValueError('FROZEN_CONSUMER_SYMLINK_REJECTED')
+    files = {str(entry.relative_to(snapshot)) for entry in entries if entry.is_file()}
+    if files != set(manifest['files']) | {'manifest.json'}:
+        raise ValueError('FROZEN_CONSUMER_FILES_CHANGED')
+    for name, digest in manifest['files'].items():
+        if hashlib.sha256((snapshot / name).read_bytes()).hexdigest() != digest:
+            raise ValueError('FROZEN_CONSUMER_HASH_FAILED: ' + name)
+    return snapshot
+
+
 def binary_consumers(repository, version):
+    snapshot = validate_frozen_consumers()
     baseline=ROOT/'.evidence/compatibility-baseline-maven'
     if not baseline.exists():
         with tempfile.TemporaryDirectory(dir=ROOT/'.evidence') as temporary:
@@ -193,15 +227,15 @@ def binary_consumers(repository, version):
     for language in ('java','kotlin'):
         with tempfile.TemporaryDirectory(dir=ROOT/'.evidence',prefix='binary-'+language+'-') as temporary:
             folder=Path(temporary)/'consumer'
-            shutil.copytree(ROOT/'fixtures'/f'{language}-consumer',folder,ignore=shutil.ignore_patterns('build','.gradle','.kotlin'))
-            compile_result=subprocess.run([str(ROOT/'gradlew'),'-p',str(folder),'classes','-PdialogueRepository='+baseline.as_uri(),'-PdialogueVersion='+BASE_VERSION],capture_output=True,text=True,check=True)
+            shutil.copytree(snapshot/f'{language}-consumer',folder)
+            subprocess.run([str(ROOT/'gradlew'),*GRADLE_FLAGS,'-p',str(folder),'classes','-PdialogueRepository='+baseline.as_uri(),'-PdialogueVersion='+BASE_VERSION],capture_output=True,text=True,check=True)
             original=folder/'build/classes'/language/'main'
             frozen=Path(temporary)/'frozen';shutil.copytree(original,frozen)
             def hashes():return {str(p.relative_to(frozen)):hashlib.sha256(p.read_bytes()).hexdigest() for p in frozen.rglob('*.class')}
             before=hashes()
             if not before:raise ValueError('BINARY_CLASSES_MISSING')
             shutil.rmtree(folder/'src/main');shutil.rmtree(folder/'build/classes')
-            result=subprocess.run([str(ROOT/'gradlew'),'-p',str(folder),'runBinaryCompatibility','-PbinaryClassesDir='+str(frozen),'-PdialogueRepository='+Path(repository).resolve().as_uri(),'-PdialogueVersion='+version],capture_output=True,text=True,check=True)
+            result=subprocess.run([str(ROOT/'gradlew'),*GRADLE_FLAGS,'-p',str(folder),'runBinaryCompatibility','-PbinaryClassesDir='+str(frozen),'-PdialogueRepository='+Path(repository).resolve().as_uri(),'-PdialogueVersion='+version],capture_output=True,text=True,check=True)
             if re.search(r'^> Task :compile',result.stdout,re.M) or before!=hashes():raise ValueError('BINARY_CLASSES_RECOMPILED')
             from verify_consumer_origins import verify_logs
             candidate={module:{'sha256':hashlib.sha256(artifact(Path(repository)/'gg/grounds'/module/version,module,version,'jar').read_bytes()).hexdigest()} for module in MODULES}

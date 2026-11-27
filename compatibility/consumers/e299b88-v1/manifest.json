@@ -1,0 +1,18 @@
+{
+  "files": {
+    "java-consumer/build.gradle.kts": "dc13b9c826e847beecc1b551dc9cabd2466dcd7bc9f74841a00af40bf71edc85",
+    "java-consumer/settings.gradle.kts": "9d5b8be75757128e1033e57b20cb9416a19ac2cab2c3db30b9c7515333084da1",
+    "java-consumer/src/main/java/example/Consumer.java": "88eaa9f2d6de924e43cbfd1eb0fcdc22887a62f117d01717ea4e79068af79da7",
+    "kotlin-consumer/build.gradle.kts": "f3d398832f848bb04bab4bb2d981e65f6a3c68848b437367a7d4e0ad1bbf6971",
+    "kotlin-consumer/settings.gradle.kts": "5600c1b8850842cfc95f8368f78b7c16e0486accc25121a63ac7978f7bc74be5",
+    "kotlin-consumer/src/main/kotlin/example/Consumer.kt": "ceae1031dc3256aea7f9fe668e82e12e892989a74a3d3a0da0e0e779eeae244c"
+  },
+  "format": 1,
+  "legacy_sdk": {
+    "commit": "e299b88d56df3e745ac45b319bdc88199d1ddaee",
+    "java": 25,
+    "version": "0.0.0-compat-e299b88-SNAPSHOT"
+  },
+  "source_commit": "f6772e81efd070cf8ca52a770061da5a90b67bf5",
+  "source_path": "fixtures"
+}

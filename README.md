@@ -89,7 +89,7 @@ Library code: MIT. The bundled unchanged DejaVu Sans font keeps its Bitstream Ve
 
 ## Author tooling and deterministic tests
 
-Two optional modules complete the public distribution: `gg.grounds:dialogue-cli` (Core/JSON/internal Gson) and `gg.grounds:dialogue-testkit` (Core/Presentation/JDK only). All six modules share one release version. The four original public APIs and v1 schemas are frozen against `compatibility/baseline.json` from accepted C.
+Two optional modules complete the public distribution: `gg.grounds:dialogue-cli` (Core/JSON/internal Gson) and `gg.grounds:dialogue-testkit` (Core/Presentation/JDK only). All six modules share one release version. The four original public APIs and v1 schemas are frozen against `compatibility/baseline.json` from accepted C. [Compatibility inputs](compatibility/README.md) distinguish the evolving source consumers from the immutable legacy binary consumers.
 
 Use the [CLI guide](dialogue-cli/README.md) to validate `examples/headless-dialogue/src/main/resources` from a standalone ZIP with JDK25. Humans and AI use the same structured diagnostics and host catalogue. A valid contentPin identifies the read snapshot, not a map activation.
 
