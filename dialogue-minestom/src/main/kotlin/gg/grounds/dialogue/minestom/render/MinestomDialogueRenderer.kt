@@ -437,6 +437,8 @@ class MinestomDialogueRenderer(
                 it.selected = frame
                 it.page = page
             }
+            // Staging has not called replace: its failure belongs only to this browse group.
+            var stagingFailed = false
             val output =
                 if (page == null || currentDelegate !is ChoiceViewport.Controller) {
                     attempted.forEach { it.pageAccepted = false }
@@ -448,8 +450,10 @@ class MinestomDialogueRenderer(
                             queue.execute {
                                 if (closed.get() || epoch != writeEpoch) {
                                     writing.completeExceptionally(CancellationException())
-                                } else if (error != null) writing.completeExceptionally(error)
-                                else {
+                                } else if (error != null) {
+                                    stagingFailed = true
+                                    writing.completeExceptionally(error)
+                                } else {
                                     attempted.forEach { it.pageAccepted = changed == true }
                                     call { currentDelegate.replace(frame) }
                                         .whenComplete { _, failure ->
@@ -466,7 +470,7 @@ class MinestomDialogueRenderer(
                     if (closed.get() || epoch != writeEpoch) return@execute
                     inflight = false
                     if (error != null) {
-                        if (frameRejection(error) != null) {
+                        if (stagingFailed || frameRejection(error) != null) {
                             val rejected = waiters.filter {
                                 !it.acknowledged &&
                                     (it in attempted || (it.selected == frame && it.page === page))

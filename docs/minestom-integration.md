@@ -33,6 +33,10 @@ failure unless their own early validation proves the enclosing frame is unchange
 Browse correlation includes page-intent identity, and staging/drawing are one
 serialized attempt. Superseded unattempted pages on the same acknowledged view
 may share the selected attempt's outcome; every superseded page need not be drawn.
+A layout resolver failure while staging a browse fails that selected browse group
+before replacement begins. Prior acknowledged output and targets remain usable,
+and newer queued work keeps its existing deadline. Actual replacement failures
+retain their normal failure handling.
 The short renderer overload and explicit null tokens preserve output, but require
 external resolution through the surface's issuing token store.
 

@@ -26,6 +26,7 @@ class NativeBrowseIntentTest {
         var write: (WidgetFrame) -> CompletionStage<Void> = {
             CompletableFuture.completedFuture(null)
         }
+        var layout: () -> LayoutProfile = { LayoutProfile.npc() }
         val surface = DialogueSurface { context ->
             CompletableFuture.completedFuture(
                 object : DialogueSurface.SurfaceHandle {
@@ -66,6 +67,7 @@ class NativeBrowseIntentTest {
                             DialogueTheme.neutral(),
                             FontMetrics.defaults(),
                             false,
+                            { layout() },
                         ),
                     "chat" to DialoguePresenter.SurfaceProfile.semantic(surface),
                 ),
@@ -134,6 +136,145 @@ class NativeBrowseIntentTest {
         fun drain() {
             if (clock is RendererFallbackTest.Clock) clock.drain() else repeat(15) { env.tick() }
         }
+    }
+
+    @Test
+    fun transientLayoutFailureKeepsAcknowledgedOutputAndAllowsRetry(env: Env) {
+        val clock = RendererFallbackTest.Clock()
+        val f = Fixture(env, clock)
+        val page = f.targets.current()!!
+        f.layout = {
+            f.layout = { LayoutProfile.npc() }
+            throw IllegalStateException("resolver unavailable on browse")
+        }
+        val failed = f.renderer.browse(page, 3).toCompletableFuture()
+        f.drain()
+        assertEquals(
+            "resolver unavailable on browse",
+            assertThrows(CompletionException::class.java) { failed.join() }.cause!!.message,
+        )
+        assertEquals(1, f.frames.size)
+        assertSame(page, f.targets.current())
+        assertNull(f.token.reason())
+        assertEquals("npc", f.renderer.effectiveSurface())
+        // A retired failed batch must not cancel the following independent batch.
+        clock.advance(Duration.ofSeconds(4))
+        val gate = CompletableFuture<Void>()
+        f.write = { gate }
+        val retry = f.renderer.browse(page, 3).toCompletableFuture()
+        f.drain()
+        clock.advance(Duration.ofSeconds(1))
+        assertFalse(retry.isDone)
+        assertNull(f.token.reason())
+        gate.complete(null)
+        assertEquals(InputResult.ACCEPTED, f.done(retry))
+        f.write = { CompletableFuture.completedFuture(null) }
+        f.renderer.refreshOutput()
+        f.drain()
+        assertEquals(listOf("c4", "c5", "c6"), f.frames.last())
+        f.done(f.handle.closeAsync())
+    }
+
+    @Test
+    fun stagingFailureRejectsDuplicatesButWritesNewerQueuedIntent(env: Env) {
+        val f = Fixture(env, RendererFallbackTest.Clock())
+        val page = f.targets.current()!!
+        val gate = CompletableFuture<Void>()
+        f.write = { gate }
+        lateinit var duplicate: CompletableFuture<InputResult>
+        lateinit var newer: CompletableFuture<InputResult>
+        f.layout = {
+            f.layout = { LayoutProfile.npc() }
+            duplicate = f.renderer.browse(page, 3).toCompletableFuture()
+            newer = f.renderer.browse(page, 6).toCompletableFuture()
+            throw IllegalStateException("staging failed")
+        }
+        val failed = f.renderer.browse(page, 3).toCompletableFuture()
+        f.drain()
+        assertTrue(failed.isCompletedExceptionally)
+        assertTrue(duplicate.isCompletedExceptionally)
+        assertFalse(newer.isDone)
+        assertEquals(listOf(listOf("c1", "c2", "c3"), listOf("c7")), f.frames)
+        assertSame(page, f.targets.current())
+        assertNull(f.token.reason())
+        gate.complete(null)
+        assertEquals(InputResult.ACCEPTED, f.done(newer))
+        f.write = { CompletableFuture.completedFuture(null) }
+        f.renderer.refreshOutput()
+        f.drain()
+        assertEquals(listOf("c7"), f.frames.last())
+        f.done(f.handle.closeAsync())
+    }
+
+    @Test
+    fun stagingFailureCannotExtendSurvivingBatchDeadline(env: Env) {
+        val clock = RendererFallbackTest.Clock()
+        val f = Fixture(env, clock)
+        val page = f.targets.current()!!
+        val gate = CompletableFuture<Void>()
+        f.write = { gate }
+        lateinit var newer: CompletableFuture<InputResult>
+        f.layout = {
+            f.layout = { LayoutProfile.npc() }
+            newer = f.renderer.browse(page, 6).toCompletableFuture()
+            clock.now += Duration.ofSeconds(4).toNanos()
+            throw IllegalStateException("staging failed")
+        }
+        val failed = f.renderer.browse(page, 3).toCompletableFuture()
+        f.drain()
+        assertTrue(failed.isCompletedExceptionally)
+        assertFalse(newer.isDone)
+        assertNull(f.token.reason())
+        clock.advance(Duration.ofSeconds(1))
+        assertTrue(newer.isCompletedExceptionally)
+        assertEquals(DialogueEndReason.FAILED, f.token.reason())
+        gate.complete(null)
+        f.drain()
+        assertNull(f.targets.current())
+        f.done(f.handle.closeAsync())
+    }
+
+    @Test
+    fun closeDuringStagingPreventsLateReplacement(env: Env) {
+        val f = Fixture(env, RendererFallbackTest.Clock())
+        val page = f.targets.current()!!
+        lateinit var closing: CompletionStage<Void>
+        f.layout = {
+            closing = f.handle.closeAsync()
+            throw IllegalStateException("staging failed after close")
+        }
+        val failed = f.renderer.browse(page, 3).toCompletableFuture()
+        f.drain()
+        assertTrue(failed.isCompletedExceptionally)
+        f.done(closing)
+        assertEquals(1, f.frames.size)
+        assertNull(f.targets.current())
+        assertEquals(InputResult.STALE, f.done(f.renderer.browse(page, 6)))
+    }
+
+    @Test
+    fun stagingFailureDoesNotRejectAnAlreadyAcknowledgedObserver(env: Env) {
+        val f = Fixture(env, RendererFallbackTest.Clock())
+        val gate = CompletableFuture<Void>()
+        f.write = { gate }
+        val first = f.renderer.browse(f.targets.current()!!, 3).toCompletableFuture()
+        f.drain()
+        val duplicate = f.renderer.browse(f.targets.current()!!, 3).toCompletableFuture()
+        f.drain()
+        f.layout = {
+            f.layout = { LayoutProfile.npc() }
+            throw IllegalStateException("redraw staging failed")
+        }
+        gate.complete(null)
+        f.drain()
+        assertEquals(InputResult.ACCEPTED, f.done(first))
+        assertTrue(duplicate.isCompletedExceptionally)
+        assertEquals(2, f.frames.size)
+        assertEquals(setOf("c4", "c5", "c6"), f.targets.current()!!.choices().keys)
+        assertNull(f.token.reason())
+        f.write = { CompletableFuture.completedFuture(null) }
+        assertEquals(InputResult.ACCEPTED, f.done(f.renderer.browse(f.targets.current()!!, 6)))
+        f.done(f.handle.closeAsync())
     }
 
     @Test
