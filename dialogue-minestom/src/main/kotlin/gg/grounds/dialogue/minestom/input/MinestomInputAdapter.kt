@@ -11,8 +11,8 @@ import gg.grounds.dialogue.core.runtime.DialogueInput
 import gg.grounds.dialogue.core.runtime.DialogueView
 import gg.grounds.dialogue.core.runtime.InputResult
 import gg.grounds.dialogue.core.runtime.RuntimeOptions
+import gg.grounds.dialogue.minestom.MinestomConnectionScope
 import gg.grounds.dialogue.minestom.geometry.NpcHitTest
-import gg.grounds.dialogue.minestom.internal.ConnectionGuard
 import gg.grounds.dialogue.minestom.render.NpcDialogueSurface
 import java.time.Duration
 import java.util.ArrayDeque
@@ -26,7 +26,6 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.Supplier
 import net.minestom.server.coordinate.Point
 import net.minestom.server.coordinate.Vec
-import net.minestom.server.entity.Player
 import net.minestom.server.event.player.PlayerPacketEvent
 import net.minestom.server.network.packet.client.ClientPacket
 import net.minestom.server.network.packet.client.common.ClientPongPacket
@@ -42,12 +41,16 @@ import net.minestom.server.network.packet.server.play.BlockChangePacket
 import net.minestom.server.network.packet.server.play.BundlePacket
 import net.minestom.server.network.packet.server.play.HeldItemChangePacket
 
-/** Session-owned packet routing; the core alone evaluates offers and executes actions. */
+/**
+ * Session-owned packet routing sharing [scope] with the renderer and its target registry. The
+ * application wires [target] to that renderer and Core handle; Core alone authorizes offers. Both
+ * public overloads preserve asynchronous activation and cleanup budgets. Keep [clock] schedulable
+ * until close settles: a late catcher is still owned and must be released. After invalidation,
+ * restoration is allowed only for the same online connection and owning instance.
+ */
 class MinestomInputAdapter
 internal constructor(
-    private val player: Player,
-    private val generation: Long,
-    private val guard: ConnectionGuard,
+    private val scope: MinestomConnectionScope,
     private val profile: InputProfile,
     private val clock: DialogueScheduler,
     private val cancellation: CancellationToken,
@@ -56,6 +59,9 @@ internal constructor(
     private val budgets: RuntimeOptions.Budgets,
     private val catcherFactory: Supplier<CompletionStage<PrivateInteractionCatcher>>,
 ) : OwnedResource {
+    private val player = scope.player
+    private val generation = scope.generation
+
     interface Target {
         fun view(): DialogueView?
 
@@ -87,7 +93,7 @@ internal constructor(
             cancellation.cancel(DialogueEndReason.FAILED)
             closeAsync()
         }
-    private val scope = OwnedScope(queue, clock, budgets.cleanup)
+    private val resources = OwnedScope(queue, clock, budgets.cleanup)
     private val burst = ClickBurstGate(profile.quietPeriod())
     private val slots = SlotCursor(player.heldSlot.toInt(), generation)
     private val closed = AtomicBoolean()
@@ -111,18 +117,14 @@ internal constructor(
     private var manualSurface = 0L
 
     constructor(
-        player: Player,
-        generation: Long,
-        guard: ConnectionGuard,
+        scope: MinestomConnectionScope,
         profile: InputProfile,
         clock: DialogueScheduler,
         cancellation: CancellationToken,
         target: Target,
         occlusion: NpcHitTest.OcclusionTest,
     ) : this(
-        player,
-        generation,
-        guard,
+        scope,
         profile,
         clock,
         cancellation,
@@ -137,9 +139,7 @@ internal constructor(
     )
 
     constructor(
-        player: Player,
-        generation: Long,
-        guard: ConnectionGuard,
+        scope: MinestomConnectionScope,
         profile: InputProfile,
         clock: DialogueScheduler,
         cancellation: CancellationToken,
@@ -147,16 +147,14 @@ internal constructor(
         occlusion: NpcHitTest.OcclusionTest,
         budgets: RuntimeOptions.Budgets,
     ) : this(
-        player,
-        generation,
-        guard,
+        scope,
         profile,
         clock,
         cancellation,
         target,
         occlusion,
         budgets,
-        Supplier { PrivateInteractionCatcher.open(player, guard) },
+        Supplier { PrivateInteractionCatcher.open(scope) },
     )
 
     init {
@@ -164,7 +162,7 @@ internal constructor(
     }
 
     private fun active(): Boolean =
-        !closed.get() && guard.isCurrent() && !cancellation.isCancelled()
+        !closed.get() && scope.isCurrent() && !cancellation.isCancelled()
 
     fun activate(): CompletionStage<Void> {
         val result = CompletableFuture<Void>()
@@ -194,7 +192,7 @@ internal constructor(
             val currentCatcher = catcher
             if (currentCatcher != null) {
                 catcher = null
-                return scope.release(currentCatcher)
+                return resources.release(currentCatcher)
             }
             return preparing?.minimalCompletionStage() ?: CompletableFuture.completedFuture(null)
         }
@@ -211,13 +209,13 @@ internal constructor(
                 queue,
                 clock,
                 budgets.prepare,
-                scope.prepare(catcherFactory),
+                resources.prepare(catcherFactory),
             ) { value, error ->
                 acquiring = false
                 if (error != null) {
                     promise.completeExceptionally(error)
                 } else if (!active() || !graphical()) {
-                    scope.release(checkNotNull(value)).whenComplete { _, releaseError ->
+                    resources.release(checkNotNull(value)).whenComplete { _, releaseError ->
                         if (releaseError == null) promise.complete(null)
                         else promise.completeExceptionally(releaseError)
                     }
@@ -640,7 +638,7 @@ internal constructor(
     override fun closeAsync(): CompletionStage<Void> {
         if (closed.compareAndSet(false, true)) {
             queue.execute {
-                if (guard.hasCurrentConnection()) {
+                if (scope.hasCurrentConnection()) {
                     player.inventory.update(player)
                     for (pending in packets) {
                         val packet = pending.packet
@@ -657,10 +655,10 @@ internal constructor(
                 packets.clear()
                 acquireWait?.cancel()
                 preparing?.takeUnless { it.isDone }?.completeExceptionally(CancellationException())
-                if (scrolled && guard.hasCurrentConnection()) {
+                if (scrolled && scope.hasCurrentConnection()) {
                     player.sendPacket(HeldItemChangePacket(player.heldSlot.toByte()))
                 }
-                scope.closeAsync().whenComplete { _, error ->
+                resources.closeAsync().whenComplete { _, error ->
                     catcher = null
                     observed = null
                     lastHover = null

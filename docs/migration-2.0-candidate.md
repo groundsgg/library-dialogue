@@ -1,8 +1,11 @@
-# Kotlin API migration for the 2.0 candidate
+# API migration for the 2.0 candidate
 
-This is an unpublished 2.0 candidate source-API change. It does not publish a
+This is an unpublished 2.0 candidate API migration. It does not publish a
 2.0 release, change the current review Maven coordinates, or accept a new API or
-schema baseline. The ordinary strict legacy JVM/API check remains enabled.
+schema baseline. CI explicitly selects the reviewed major-candidate comparator for the native
+JVM breaks below. The strict legacy CLI remains available and is expected to
+reject those breaks. Schema pins, artifacts, frozen binaries and current Maven
+consumer gates remain active.
 
 `PresentationPreferences` now exposes four immutable Kotlin properties. Update
 Kotlin source as follows:
@@ -103,6 +106,89 @@ two retained Java constructors. It does not change native connection ownership,
 session lifecycle, input, sound, scheduling or presentation behavior.
 
 The historical binary consumer snapshot and all API/schema baselines remain
-unchanged. A broader manifest and gate for intentionally incompatible native
-2.0 JVM signatures remains future work; this unit does not add a major-version
-checker mode or authorize baseline acceptance.
+unchanged. Native JVM constructor and SPI breaks are listed in the exact reviewed
+major-candidate manifest. The broader supported-signature classifier and shared
+helper opt-in remain separate work. No accepted baseline changes.
+
+## Native connection scope and input source
+
+Replace `gg.grounds.dialogue.minestom.internal.ConnectionGuard` with supported
+`gg.grounds.dialogue.minestom.MinestomConnectionScope`. Replace
+`internal.DialogueInputSource` imports with
+`gg.grounds.dialogue.minestom.input.DialogueInputSource`; the renderer implements
+this public SPI. No compatibility aliases are provided. Recompile custom native
+pipelines against the candidate: old native constructor descriptors, renderer
+superinterface and catcher static/companion signatures intentionally change.
+Compiler-emitted constructor/test-seam forms are included in the reviewed JVM
+break inventory; Kotlin-internal seams remain unsupported for application use.
+
+Create one scope, fresh registry and renderer per session, even for the same
+player/generation/instance. Share their exact references across native components:
+
+```kotlin
+val scope = MinestomConnectionScope(player, generation, player.instance)
+val targets = SurfaceInputTargets()
+val tokens = ChatInputTokens(scope, targets, clock::nanoTime)
+val chat = ChatDialogueSurface(scope, targets, tokens, sink, labels, controls, "/dialogue_input")
+val renderer = MinestomDialogueRenderer(
+    scope, mapOf("chat" to DialoguePresenter.SurfaceProfile.semantic(chat)),
+    clock, controls, labels, targets, status, tokens, { null },
+)
+val input: DialogueInputSource = renderer
+```
+
+Java uses the same argument order:
+
+```java
+var scope = new MinestomConnectionScope(player, generation, player.getInstance());
+var targets = new SurfaceInputTargets();
+var tokens = new ChatInputTokens(scope, targets, clock::nanoTime);
+var chat = new ChatDialogueSurface(scope, targets, tokens, sink, labels, controls, "/dialogue_input");
+var renderer = new MinestomDialogueRenderer(scope,
+    Map.of("chat", DialoguePresenter.SurfaceProfile.semantic(chat)),
+    clock, controls, labels, targets, status, tokens, () -> null);
+DialogueInputSource input = renderer;
+```
+
+The renderer's seven-argument overload omits tokens and geometry. It and the full
+constructor with null tokens still render output; their own `resolveChat` returns
+empty. Resolve externally through the exact chat issuer store in that case.
+An explicit store must be the identical object used by every directly known chat
+surface, even if another store has the same scope and registry. Profile maps are
+copied and directly known native surfaces under every key are checked. Custom
+wrappers, sink/speaker/geometry callbacks and input `Target` wiring remain the
+application's responsibility.
+
+HUD now takes `(scope, packs, assets, channels, targets, clock, diagnostic)`;
+NPC appends `speaker` before `diagnostic`. Input adapter constructors take
+`(scope, profile, clock, cancellation, target, occlusion)` and optionally append
+`RuntimeOptions.Budgets`; the short overload retains its existing budgets.
+Catcher acquisition becomes `PrivateInteractionCatcher.open(scope)` in Java,
+or `PrivateInteractionCatcher.Companion.open(scope)` in Kotlin. Spawn targets the
+scope's owning instance. There is no separate player or generation parameter.
+
+Renderer requests and direct surface contexts must use the player's UUID string
+and the scope's host generation. `SurfaceContext.generation` independently retires
+surface output and may differ. Every frame must identify its prepared/open
+session. Invalid ownership fails the asynchronous operation before fallback,
+callbacks, targets or acquisitions change; valid prior output stays usable.
+A borrowed NPC binding must use the exact owning instance before its snapshot is
+read. Foreign bindings cannot become follow or close callback sources.
+
+`isCurrent()` requires validity, online state and exact instance. `matches()` also
+requires player reference and generation. `hasCurrentConnection()` intentionally
+ignores invalidation so accepted terminal sound and guarded restoration can run.
+Invalidation is idempotent and generation is nonnegative. It fences work rather
+than proving Core stopped or cleanup completed. Native cancellation invalidates
+before its own stop work; ticket cancellation signals Core first. Direct Core
+stops follow Core, and native completion observers run after Core completion.
+Exceptional completion/deadline expiry can leave owned late resources: retain the
+scope and keep the scheduler alive until final asynchronous cleanup settles.
+Token resolution retains separate player/generation/online, expiry and current
+semantic-target checks, including same-section rebasing with the original expiry.
+
+The external Maven fixture contains complete [Java](../fixtures/minestom-consumer/src/test/java/example/NativePipeline.java)
+and [Kotlin](../fixtures/minestom-consumer/src/test/kotlin/example/NativePipelineConsumerTest.kt)
+custom pipelines. Both run real output ACK, native targets, chat capability input
+through Core, owner rejection, retirement and owned entity cleanup using published
+JARs and a public scheduler implementation.

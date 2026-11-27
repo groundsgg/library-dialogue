@@ -8,6 +8,7 @@ import gg.grounds.dialogue.core.runtime.DialogueEndReason
 import gg.grounds.dialogue.core.runtime.DialogueFailure
 import gg.grounds.dialogue.core.runtime.DialogueView
 import gg.grounds.dialogue.core.runtime.PresentationPreferences
+import gg.grounds.dialogue.minestom.MinestomConnectionScope
 import gg.grounds.dialogue.minestom.MinestomSpeakerBinding
 import gg.grounds.dialogue.minestom.NpcPanelOptions
 import gg.grounds.dialogue.minestom.asset.AssetBundle
@@ -17,7 +18,6 @@ import gg.grounds.dialogue.minestom.channel.NativeVignetteBank
 import gg.grounds.dialogue.minestom.channel.OutputChannels
 import gg.grounds.dialogue.minestom.geometry.NpcPanelTransform
 import gg.grounds.dialogue.minestom.input.SurfaceInputTargets
-import gg.grounds.dialogue.minestom.internal.ConnectionGuard
 import gg.grounds.dialogue.presentation.DialoguePresenter
 import gg.grounds.dialogue.presentation.DialogueSurface
 import gg.grounds.dialogue.presentation.WidgetFrame
@@ -51,12 +51,17 @@ import net.minestom.server.entity.metadata.display.TextDisplayMeta
 import net.minestom.server.instance.Instance
 import net.minestom.server.network.packet.server.play.BundlePacket
 
-/** Projects shared widgets into private world panels around a borrowed NPC anchor. */
+/**
+ * Private world panels around a borrowed NPC anchor, sharing [scope] and [targets]. Open and frame
+ * identities are checked before native work. A speaker binding must refer to the scope's exact
+ * instance before its snapshot is inspected or it becomes a follow/cleanup source. Foreign bindings
+ * leave previously accepted output usable. Genuine anchor loss retains the existing host-change
+ * stop behavior. Owns private displays and leases, never the shared NPC; close retires input and
+ * releases late acquisitions through [clock].
+ */
 class NpcDialogueSurface
 internal constructor(
-    private val player: Player,
-    private val generation: Long,
-    private val guard: ConnectionGuard,
+    private val scope: MinestomConnectionScope,
     private val packs: PackStateTracker,
     private val assets: AssetBundle,
     private val channels: OutputChannels,
@@ -66,14 +71,15 @@ internal constructor(
     private val diagnostic: Consumer<String>,
     private val spawn: SpawnOperation,
 ) : DialogueSurface {
+    private val player = scope.player
+    private val generation = scope.generation
+
     internal fun interface SpawnOperation {
         fun spawn(entity: Entity, instance: Instance, position: Pos): CompletionStage<Void>
     }
 
     constructor(
-        player: Player,
-        generation: Long,
-        guard: ConnectionGuard,
+        scope: MinestomConnectionScope,
         packs: PackStateTracker,
         assets: AssetBundle,
         channels: OutputChannels,
@@ -82,9 +88,7 @@ internal constructor(
         speaker: Function<DialogueView, MinestomSpeakerBinding?>,
         diagnostic: Consumer<String>,
     ) : this(
-        player,
-        generation,
-        guard,
+        scope,
         packs,
         assets,
         channels,
@@ -141,6 +145,12 @@ internal constructor(
                 "]"
     }
 
+    internal fun requireOwner(scope: MinestomConnectionScope, targets: SurfaceInputTargets) {
+        require(this.scope === scope && this.targets === targets) {
+            "Native surface owner mismatch"
+        }
+    }
+
     private val encoder = MinecraftWidgetEncoder()
     private val geometries = ConcurrentHashMap<Long, Geometry>()
     private val displayCount = synchronized(COUNTS) { COUNTS.getOrPut(player, ::AtomicInteger) }
@@ -155,13 +165,22 @@ internal constructor(
         }
 
     private fun available(): Boolean =
-        guard.isCurrent() && packs.isReady(player, generation, assets.pin())
+        scope.isCurrent() && packs.isReady(player, generation, assets.pin())
 
     override fun open(
         context: DialogueSurface.SurfaceContext
-    ): CompletionStage<DialogueSurface.SurfaceHandle> =
-        if (available()) CompletableFuture.completedFuture(Handle(context))
+    ): CompletionStage<DialogueSurface.SurfaceHandle> {
+        if (
+            context.audienceId != scope.player.uuid.toString() ||
+                context.hostGeneration != scope.generation
+        ) {
+            return CompletableFuture.failedFuture(
+                IllegalArgumentException("Native context owner mismatch")
+            )
+        }
+        return if (available()) CompletableFuture.completedFuture(Handle(context))
         else CompletableFuture.failedFuture(DialoguePresenter.FallbackRequired("MISSING_PACK"))
+    }
 
     private inner class Display : OwnedResource {
         val entity: Entity
@@ -229,7 +248,7 @@ internal constructor(
                     closeAsync()
                 }
             }
-        private val scope = OwnedScope(queue, clock, context.cleanupBudget)
+        private val resources = OwnedScope(queue, clock, context.cleanupBudget)
         private var binding: MinestomSpeakerBinding? = null
         private var transform: NpcPanelTransform? = null
         private var appliedAngle = Double.NaN
@@ -284,7 +303,9 @@ internal constructor(
                 ready.whenComplete { _, creationError ->
                     queue.execute {
                         val removals =
-                            displays.filterNotNull().map { scope.release(it).toCompletableFuture() }
+                            displays.filterNotNull().map {
+                                resources.release(it).toCompletableFuture()
+                            }
                         CompletableFuture.allOf(*removals.toTypedArray()).whenComplete {
                             _,
                             removalError ->
@@ -310,11 +331,11 @@ internal constructor(
             return result.minimalCompletionStage()
         }
 
-        private fun create(position: Pos): CompletionStage<Display> = scope.prepare {
+        private fun create(position: Pos): CompletionStage<Display> = resources.prepare {
             val display = Display()
             val result = CompletableFuture<Display>()
             try {
-                spawn.spawn(display.entity, player.instance, position).whenComplete { _, error ->
+                spawn.spawn(display.entity, scope.instance, position).whenComplete { _, error ->
                     if (error == null) result.complete(display)
                     else
                         display.closeAsync().whenComplete { _, cleanupError ->
@@ -332,6 +353,11 @@ internal constructor(
         }
 
         override fun replace(frame: WidgetFrame): CompletionStage<Void> {
+            if (frame.semantic().sessionId() != context.sessionId) {
+                return CompletableFuture.failedFuture(
+                    IllegalArgumentException("Native frame session mismatch")
+                )
+            }
             val result = CompletableFuture<Void>()
             queue.execute {
                 writes.removeIf { it.isDone }
@@ -357,11 +383,13 @@ internal constructor(
             val speaker =
                 speaker.apply(frame.semantic())
                     ?: throw NullPointerException("Missing logical speaker binding")
-            binding = speaker
-            if (speaker.instance !== player.instance || !speaker.snapshot.get().valid) {
+            require(speaker.instance === scope.instance) { "NPC binding owner mismatch" }
+            val snapshot = speaker.snapshot.get()
+            if (!snapshot.valid) {
                 context.cancellation.cancel(DialogueEndReason.HOST_CHANGED)
                 throw CancellationException("NPC anchor changed")
             }
+            binding = speaker
             val encoded = encoder.encode(frame, assets)
             val verticalOffset = verticalOffset(preferences)
             val focus = VisualOptions.enabled(preferences, "npcBackdrop", diagnostic)
@@ -389,7 +417,7 @@ internal constructor(
                     .minOfOrNull { it.bounds.x } ?: 320.0
             hingePosition = hinge
             val pose =
-                NpcPanelTransform.from(speaker.snapshot.get(), eye())
+                NpcPanelTransform.from(snapshot, eye())
                     .withVerticalOffset(verticalOffset)
                     .withSpeechHeight(height)
                     .withChoiceFold(hinge, NpcPanelOptions.from(preferences).choiceAngle)
@@ -428,7 +456,7 @@ internal constructor(
             }
             if (!hide)
                 hud?.let {
-                    pending.add(scope.release(it).toCompletableFuture())
+                    pending.add(resources.release(it).toCompletableFuture())
                     hud = null
                 }
             CompletableFuture.allOf(*pending.toTypedArray()).whenComplete { _, releaseError ->
@@ -458,7 +486,7 @@ internal constructor(
                     backdropPreparation?.let(acquisitions::add)
                     if (hide && hud == null) {
                         acquisitions.add(
-                            scope
+                            resources
                                 .prepare {
                                     CompletableFuture.completedFuture(
                                         channels.acquireHud(player, generation, 50)
@@ -472,7 +500,7 @@ internal constructor(
                         channels.supportedEffects() && effects == null && effectsPreparation == null
                     ) {
                         effectsPreparation =
-                            scope
+                            resources
                                 .prepare {
                                     CompletableFuture.completedFuture(
                                         channels.acquireEffects(player, generation)
@@ -713,7 +741,7 @@ internal constructor(
                         result.completeExceptionally(oldError)
                         return@execute
                     }
-                    if (closed.get() || !guard.isCurrent() || context.cancellation.isCancelled()) {
+                    if (closed.get() || !scope.isCurrent() || context.cancellation.isCancelled()) {
                         result.completeExceptionally(CancellationException())
                         return@execute
                     }
@@ -788,7 +816,7 @@ internal constructor(
                         try {
                             val anchor = checkNotNull(binding)
                             if (
-                                !guard.isCurrent() ||
+                                !scope.isCurrent() ||
                                     anchor.instance !== player.instance ||
                                     !anchor.snapshot.get().valid
                             ) {
@@ -894,7 +922,7 @@ internal constructor(
 
         // Session cancellation disables input before requesting surface cleanup.
         private fun canFadeNative(): Boolean =
-            canFadeOut() && (context.cancellation.reason() != null || guard.isCurrent())
+            canFadeOut() && (context.cancellation.reason() != null || scope.isCurrent())
 
         private fun tickNativeClose() {
             val elapsed = clock.nanoTime() - nativeCloseStarted
@@ -1015,7 +1043,7 @@ internal constructor(
         private fun canFadeOut(): Boolean {
             if (
                 context.cancellation.reason() !in NORMAL_FADE_ENDS ||
-                    !guard.hasCurrentConnection() ||
+                    !scope.hasCurrentConnection() ||
                     !packs.isReady(player, generation, assets.pin())
             )
                 return false
@@ -1064,11 +1092,11 @@ internal constructor(
 
         private fun releaseVisibleOutput() {
             panels.values.forEach { pair ->
-                pair.displays.filterNotNull().forEach(scope::release)
+                pair.displays.filterNotNull().forEach(resources::release)
             }
             panels.clear()
             releaseBackdrop()
-            hud?.let(scope::release)
+            hud?.let(resources::release)
             hud = null
         }
 
@@ -1079,7 +1107,8 @@ internal constructor(
             panels.clear()
             binding = null
             transform = null
-            val retirement = nativeCleanupDeadline?.let(scope::closeBy) ?: scope.closeAsync()
+            val retirement =
+                nativeCleanupDeadline?.let(resources::closeBy) ?: resources.closeAsync()
             retirement.whenComplete { _, error ->
                 val failure = error ?: fadeError
                 if (failure == null) cleanup.complete(null)

@@ -1,5 +1,6 @@
 package gg.grounds.dialogue.minestom.input
 
+import gg.grounds.dialogue.minestom.MinestomConnectionScope
 import java.security.SecureRandom
 import java.util.Base64
 import java.util.HashMap
@@ -7,13 +8,22 @@ import java.util.Optional
 import java.util.function.LongSupplier
 import net.minestom.server.entity.Player
 
-/** Opaque capabilities scoped to one published semantic section and concrete connection. */
+/**
+ * Opaque capabilities issued for one published semantic section and concrete scope owner.
+ * Resolution checks the exact player reference, generation and online state, plus expiry and the
+ * current target's session/revision/visit/surface/choice. It intentionally does not use the scope's
+ * validity/instance predicate. Rebase preserves the original expiry; close callers clear the store
+ * and retire its target registry. Never share a store across sessions or registries.
+ */
 class ChatInputTokens(
-    private val player: Player,
-    private val generation: Long,
+    private val scope: MinestomConnectionScope,
     private val targets: SurfaceInputTargets,
     private val clock: LongSupplier,
 ) {
+    internal fun requireOwner(scope: MinestomConnectionScope, targets: SurfaceInputTargets) {
+        require(this.scope === scope && this.targets === targets) { "Chat token owner mismatch" }
+    }
+
     @JvmRecord private data class Issued(val target: TargetSnapshot.Target, val expires: Long)
 
     private val random = SecureRandom()
@@ -51,7 +61,7 @@ class ChatInputTokens(
     }
 
     fun resolve(player: Player, generation: Long, token: String): Optional<TargetSnapshot.Target> {
-        if (this.player !== player || this.generation != generation || !player.isOnline) {
+        if (scope.player !== player || scope.generation != generation || !player.isOnline) {
             return Optional.empty()
         }
         val now = clock.asLong

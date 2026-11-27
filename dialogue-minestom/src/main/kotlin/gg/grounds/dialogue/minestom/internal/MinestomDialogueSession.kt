@@ -17,6 +17,7 @@ import gg.grounds.dialogue.core.runtime.RuntimeOptions
 import gg.grounds.dialogue.core.runtime.TypingTiming
 import gg.grounds.dialogue.core.text.Graphemes
 import gg.grounds.dialogue.minestom.DialogueServices
+import gg.grounds.dialogue.minestom.MinestomConnectionScope
 import gg.grounds.dialogue.minestom.MinestomDialogueOptions
 import gg.grounds.dialogue.minestom.MinestomDialogueRequest
 import gg.grounds.dialogue.minestom.MinestomDialogueSpeechBeginEvent
@@ -27,6 +28,7 @@ import gg.grounds.dialogue.minestom.MinestomSpeakerBinding
 import gg.grounds.dialogue.minestom.geometry.DialogueLeavePolicy
 import gg.grounds.dialogue.minestom.geometry.MinestomOcclusion
 import gg.grounds.dialogue.minestom.geometry.NpcHitTest
+import gg.grounds.dialogue.minestom.input.DialogueInputSource
 import gg.grounds.dialogue.minestom.input.MinestomInputAdapter
 import gg.grounds.dialogue.minestom.input.TargetSnapshot
 import gg.grounds.dialogue.minestom.render.NpcDialogueSurface
@@ -49,7 +51,7 @@ import net.minestom.server.sound.SoundEvent
 class MinestomDialogueSession(
     request: MinestomDialogueRequest,
     options: MinestomDialogueOptions,
-    private val guard: ConnectionGuard,
+    private val guard: MinestomConnectionScope,
     private val scheduler: MinestomDialogueScheduler,
     renderer: DialogueRenderer,
     private val token: CancellationToken,
@@ -111,8 +113,6 @@ class MinestomDialogueSession(
     init {
         inputs =
             MinestomInputAdapter(
-                request.player,
-                request.hostGeneration,
                 guard,
                 request.controls,
                 scheduler,

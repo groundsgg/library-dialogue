@@ -2,7 +2,9 @@ package gg.grounds.dialogue.minestom.internal
 
 import gg.grounds.dialogue.core.port.DialogueRenderer
 import gg.grounds.dialogue.core.runtime.*
+import gg.grounds.dialogue.minestom.MinestomConnectionScope
 import gg.grounds.dialogue.minestom.MinestomDialogueHostTest
+import gg.grounds.dialogue.minestom.input.DialogueInputSource
 import gg.grounds.dialogue.minestom.input.TargetSnapshot
 import java.time.Duration
 import java.util.Optional
@@ -102,7 +104,7 @@ class TypingSoundSessionTest {
                 MinestomDialogueSession(
                     request,
                     base.options,
-                    ConnectionGuard(player, 1, player.instance),
+                    MinestomConnectionScope(player, 1, player.instance),
                     MinestomDialogueScheduler(player.instance),
                     renderer,
                     token,

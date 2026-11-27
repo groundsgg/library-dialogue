@@ -12,8 +12,10 @@ import gg.grounds.dialogue.core.validation.HostCatalog
 import gg.grounds.dialogue.core.validation.ValidatedDialogue
 import gg.grounds.dialogue.core.validation.ValidationLimits
 import gg.grounds.dialogue.minestom.DialogueServices
+import gg.grounds.dialogue.minestom.MinestomConnectionScope
 import gg.grounds.dialogue.minestom.MinestomDialogueHostTest
 import gg.grounds.dialogue.minestom.MinestomDialogueRequest
+import gg.grounds.dialogue.minestom.input.DialogueInputSource
 import gg.grounds.dialogue.minestom.input.TargetSnapshot
 import java.time.Duration
 import java.util.Optional
@@ -129,7 +131,7 @@ class ChoiceSoundSessionTest {
                 MinestomDialogueSession(
                     request,
                     base.options,
-                    ConnectionGuard(player, 1, player.instance),
+                    MinestomConnectionScope(player, 1, player.instance),
                     MinestomDialogueScheduler(player.instance),
                     renderer,
                     token,

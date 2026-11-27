@@ -14,7 +14,6 @@ import gg.grounds.dialogue.core.validation.ContentFingerprint
 import gg.grounds.dialogue.minestom.asset.PackStateTracker
 import gg.grounds.dialogue.minestom.input.ChatInputTokens
 import gg.grounds.dialogue.minestom.input.SurfaceInputTargets
-import gg.grounds.dialogue.minestom.internal.ConnectionGuard
 import gg.grounds.dialogue.minestom.internal.MinestomDialogueScheduler
 import gg.grounds.dialogue.minestom.internal.MinestomDialogueSession
 import gg.grounds.dialogue.minestom.render.ChatDialogueSurface
@@ -54,7 +53,7 @@ private constructor(
     internal fun interface RendererFactory {
         fun create(
             request: MinestomDialogueRequest,
-            guard: ConnectionGuard,
+            guard: MinestomConnectionScope,
             clock: DialogueScheduler,
             status: Consumer<PresentationStatus>,
         ): DialogueRenderer
@@ -134,13 +133,12 @@ private constructor(
 
     private fun defaultRenderer(
         request: MinestomDialogueRequest,
-        guard: ConnectionGuard,
+        guard: MinestomConnectionScope,
         clock: DialogueScheduler,
         status: Consumer<PresentationStatus>,
     ): DialogueRenderer {
         val targets = SurfaceInputTargets()
-        val tokens =
-            ChatInputTokens(request.player, request.hostGeneration, targets, clock::nanoTime)
+        val tokens = ChatInputTokens(guard, targets, clock::nanoTime)
         val controls =
             DialoguePresenter.Controls(
                 DialoguePresenter.ConfirmAction.valueOf(request.controls.primaryConfirm().name),
@@ -169,8 +167,6 @@ private constructor(
             }
         val hud =
             HudDialogueSurface(
-                request.player,
-                request.hostGeneration,
                 guard,
                 packs,
                 options.assets,
@@ -182,8 +178,6 @@ private constructor(
         val lastSpeaker = AtomicReference(request.speakers.values.singleOrNull())
         val npc =
             NpcDialogueSurface(
-                request.player,
-                request.hostGeneration,
                 guard,
                 packs,
                 options.assets,
@@ -220,6 +214,7 @@ private constructor(
                     ),
             )
         return MinestomDialogueRenderer(
+            guard,
             profiles,
             clock,
             controls,
@@ -266,7 +261,8 @@ private constructor(
                 return@whenComplete
             }
             if (ticket.cancelled()) return@whenComplete
-            val guard = ConnectionGuard(request.player, request.hostGeneration, admissionInstance)
+            val guard =
+                MinestomConnectionScope(request.player, request.hostGeneration, admissionInstance)
             if (!guard.isCurrent()) {
                 ticket.reject("HOST_CHANGED", null)
                 return@whenComplete

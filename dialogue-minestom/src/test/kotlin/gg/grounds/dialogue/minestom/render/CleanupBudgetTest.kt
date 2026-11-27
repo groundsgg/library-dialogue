@@ -2,10 +2,10 @@ package gg.grounds.dialogue.minestom.render
 
 import gg.grounds.dialogue.core.runtime.CancellationToken
 import gg.grounds.dialogue.core.runtime.PresentationPreferences
+import gg.grounds.dialogue.minestom.MinestomConnectionScope
 import gg.grounds.dialogue.minestom.asset.PackStateTracker
 import gg.grounds.dialogue.minestom.channel.OutputChannels
 import gg.grounds.dialogue.minestom.input.SurfaceInputTargets
-import gg.grounds.dialogue.minestom.internal.ConnectionGuard
 import gg.grounds.dialogue.minestom.internal.MinestomDialogueScheduler
 import gg.grounds.dialogue.presentation.DialogueSurface
 import java.time.Duration
@@ -62,9 +62,7 @@ class CleanupBudgetTest {
             }
         val surface =
             HudDialogueSurface(
-                player,
-                1,
-                ConnectionGuard(player, 1, player.instance),
+                MinestomConnectionScope(player, 1, player.instance),
                 packs,
                 RenderFixtures.ASSETS,
                 channels,

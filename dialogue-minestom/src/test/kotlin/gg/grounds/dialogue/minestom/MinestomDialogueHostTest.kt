@@ -15,9 +15,9 @@ import gg.grounds.dialogue.core.validation.ValidationLimits
 import gg.grounds.dialogue.minestom.asset.AssetBundle
 import gg.grounds.dialogue.minestom.asset.MinecraftPackProfile
 import gg.grounds.dialogue.minestom.channel.LocalOutputChannels
+import gg.grounds.dialogue.minestom.input.DialogueInputSource
 import gg.grounds.dialogue.minestom.input.InputProfile
 import gg.grounds.dialogue.minestom.input.TargetSnapshot
-import gg.grounds.dialogue.minestom.internal.DialogueInputSource
 import gg.grounds.dialogue.presentation.UiLabelSource
 import java.time.Duration
 import java.util.Optional

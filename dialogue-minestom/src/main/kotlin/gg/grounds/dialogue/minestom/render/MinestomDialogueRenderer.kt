@@ -11,10 +11,11 @@ import gg.grounds.dialogue.core.runtime.DialogueFailure
 import gg.grounds.dialogue.core.runtime.DialogueView
 import gg.grounds.dialogue.core.runtime.InputResult
 import gg.grounds.dialogue.core.runtime.PresentationPreferences
+import gg.grounds.dialogue.minestom.MinestomConnectionScope
 import gg.grounds.dialogue.minestom.input.ChatInputTokens
+import gg.grounds.dialogue.minestom.input.DialogueInputSource
 import gg.grounds.dialogue.minestom.input.SurfaceInputTargets
 import gg.grounds.dialogue.minestom.input.TargetSnapshot
-import gg.grounds.dialogue.minestom.internal.DialogueInputSource
 import gg.grounds.dialogue.presentation.ChoiceViewport
 import gg.grounds.dialogue.presentation.DialoguePresenter
 import gg.grounds.dialogue.presentation.DialogueSurface
@@ -33,8 +34,22 @@ import java.util.function.Consumer
 import java.util.function.Supplier
 import net.minestom.server.entity.Player
 
-/** One presenter, one core session; fallback is an output handoff, never a dialogue restart. */
+/**
+ * One presenter and one Core session sharing [scope] and [targets] with native surfaces and input.
+ *
+ * Copies [profiles] and checks every directly known native surface, under any key, against the
+ * exact scope and registry. Explicit [tokens] must be the same issuer used by each chat surface.
+ * With null tokens, output remains enabled and [resolveChat] returns empty. The short constructor
+ * supplies null tokens and empty geometry. Borrowers wire opaque wrappers, [geometry], sinks,
+ * speaker callbacks and input targets consistently.
+ *
+ * Requests must identify the scope player's UUID string and host generation. Frames must match
+ * their prepared session. Ownership failures complete the operation exceptionally before output
+ * state changes and never trigger fallback. Acknowledgement publishes input; close retires it and
+ * waits for owned resources, including late acquisitions, through the supplied scheduler.
+ */
 class MinestomDialogueRenderer(
+    private val scope: MinestomConnectionScope,
     profiles: Map<String, DialoguePresenter.SurfaceProfile>,
     private val clock: DialogueScheduler,
     private val controls: DialoguePresenter.Controls,
@@ -49,16 +64,25 @@ class MinestomDialogueRenderer(
     private val refreshing = AtomicBoolean()
 
     constructor(
+        scope: MinestomConnectionScope,
         profiles: Map<String, DialoguePresenter.SurfaceProfile>,
         clock: DialogueScheduler,
         controls: DialoguePresenter.Controls,
         labels: UiLabelSource,
         targets: SurfaceInputTargets,
         status: Consumer<PresentationStatus>,
-    ) : this(profiles, clock, controls, labels, targets, status, null, Supplier { null })
+    ) : this(scope, profiles, clock, controls, labels, targets, status, null, Supplier { null })
 
     init {
-        require(profiles.containsKey("chat")) { "Chat fallback required" }
+        require(this.profiles.containsKey("chat")) { "Chat fallback required" }
+        tokens?.requireOwner(scope, targets)
+        this.profiles.values.forEach { profile ->
+            when (val surface = profile.surface) {
+                is ChatDialogueSurface -> surface.requireOwner(scope, targets, tokens)
+                is HudDialogueSurface -> surface.requireOwner(scope, targets)
+                is NpcDialogueSurface -> surface.requireOwner(scope, targets)
+            }
+        }
     }
 
     override fun effectiveSurface(): String {
@@ -110,6 +134,14 @@ class MinestomDialogueRenderer(
     override fun prepare(
         request: DialogueRenderer.PresentationRequest
     ): CompletionStage<DialogueRenderer.PresentationHandle> {
+        if (
+            request.audienceId != scope.player.uuid.toString() ||
+                request.hostGeneration != scope.generation
+        ) {
+            return CompletableFuture.failedFuture(
+                IllegalArgumentException("Native request owner mismatch")
+            )
+        }
         val run = Run(request)
         active = run
         run.begin()
@@ -119,7 +151,7 @@ class MinestomDialogueRenderer(
     private inner class Run(val request: DialogueRenderer.PresentationRequest) :
         DialogueRenderer.PresentationHandle {
         val queue = SerialCommandQueue(clock, ::fatal)
-        private val scope = OwnedScope(queue, clock, request.budgets.cleanup)
+        private val resources = OwnedScope(queue, clock, request.budgets.cleanup)
         private val presenter: DialoguePresenter
         val closed = AtomicBoolean()
         private val surfaces = AtomicLong()
@@ -208,7 +240,7 @@ class MinestomDialogueRenderer(
 
         fun begin() {
             queue.execute {
-                scope.prepare {
+                resources.prepare {
                     CompletableFuture.completedFuture(
                         request.cancellation.onCancel { closeAsync() }
                     )
@@ -219,7 +251,7 @@ class MinestomDialogueRenderer(
 
         private fun prepareAttempt(preferences: PresentationPreferences, fallback: Boolean) {
             if (closed.get()) return
-            val work = scope.prepare {
+            val work = resources.prepare {
                 presenter.prepare(
                     DialogueRenderer.PresentationRequest(
                         request.sessionId,
@@ -279,6 +311,11 @@ class MinestomDialogueRenderer(
         }
 
         override fun replace(view: DialogueView): CompletionStage<Void> {
+            if (view.sessionId() != request.sessionId) {
+                return CompletableFuture.failedFuture(
+                    IllegalArgumentException("Native frame session mismatch")
+                )
+            }
             val result = CompletableFuture<Void>()
             queue.execute {
                 if (closed.get()) {
@@ -498,7 +535,7 @@ class MinestomDialogueRenderer(
                 configurations.clear()
                 browsers.forEach { it.completeExceptionally(error) }
                 browsers.clear()
-                scope.closeAsync().whenComplete { _, cleanup ->
+                resources.closeAsync().whenComplete { _, cleanup ->
                     queue.execute {
                         if (active === this) active = null
                         delegate = null

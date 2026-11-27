@@ -2,9 +2,9 @@ package gg.grounds.dialogue.minestom.render
 
 import gg.grounds.dialogue.core.runtime.CancellationToken
 import gg.grounds.dialogue.core.runtime.DialogueView
+import gg.grounds.dialogue.minestom.MinestomConnectionScope
 import gg.grounds.dialogue.minestom.input.ChatInputTokens
 import gg.grounds.dialogue.minestom.input.SurfaceInputTargets
-import gg.grounds.dialogue.minestom.internal.ConnectionGuard
 import gg.grounds.dialogue.presentation.DialoguePresenter
 import gg.grounds.dialogue.presentation.DialogueSurface
 import gg.grounds.dialogue.presentation.UiLabelSource
@@ -25,14 +25,171 @@ import org.junit.jupiter.api.Test
 @EnvTest
 class ChatDialogueSurfaceTest {
     @Test
+    fun rebaseRetainsExpiryAndResolutionHasItsOwnLifetimePredicate(env: Env) {
+        val instance = env.createFlatInstance()
+        val player = env.createConnection().connect(instance, Pos(0.0, 42.0, 0.0))
+        val scope = MinestomConnectionScope(player, 1, instance)
+        val targets = SurfaceInputTargets()
+        val now = AtomicLong()
+        val tokens = ChatInputTokens(scope, targets, now::get)
+        val old = RenderFixtures.view("same section", 1)
+        val frame = WidgetFrame(old, emptyList(), "semantic", "semantic")
+        val choices = mapOf("ask" to WidgetFrame.Rect(0.0, 0.0, 0.0, 0.0))
+        targets.publish(frame, 9, choices)
+        val token = tokens.issue("ask", targets.current()!!)
+        scope.invalidate()
+        player.setInstance(env.createFlatInstance(), Pos(0.0, 42.0, 0.0)).join()
+        assertFalse(scope.hasCurrentConnection())
+        assertTrue(tokens.resolve(player, 1, token).isPresent)
+        val next =
+            DialogueView(
+                old.sessionId(),
+                old.contentPin(),
+                old.nodeId(),
+                old.nodeVisitId(),
+                old.state(),
+                old.stateRevision(),
+                2,
+                old.localeTag(),
+                old.speaker(),
+                old.text(),
+                old.choices(),
+                old.selectedChoiceId(),
+                old.totalGraphemes(),
+                2,
+                old.hint(),
+                old.notice(),
+                old.pendingAction(),
+            )
+        targets.publish(WidgetFrame(next, emptyList(), "semantic", "semantic"), 9, choices)
+        now.set(30_000_000_000L)
+        tokens.rebase(targets.current()!!)
+        assertEquals(2L, tokens.resolve(player, 1, token).orElseThrow().renderRevision)
+        now.incrementAndGet()
+        assertTrue(tokens.resolve(player, 1, token).isEmpty)
+        targets.clear(9)
+        targets.publish(frame, 9, choices)
+        assertNull(targets.current(), "Late output cannot resurrect a retired generation")
+    }
+
+    @Test
+    fun rejectsForeignContextBeforeOutput(env: Env) {
+        val player = env.createConnection().connect(env.createFlatInstance(), Pos(0.0, 42.0, 0.0))
+        val targets = SurfaceInputTargets()
+        val scope = MinestomConnectionScope(player, 1, player.instance)
+        val tokens = ChatInputTokens(scope, targets, System::nanoTime)
+        var writes = 0
+        val surface =
+            ChatDialogueSurface(
+                scope,
+                targets,
+                tokens,
+                {
+                    writes++
+                    CompletableFuture.completedFuture(null)
+                },
+                UiLabelSource.defaults(),
+                DialoguePresenter.Controls.defaults(),
+                "/testinput",
+            )
+        for ((audience, generation) in listOf("foreign" to 1L, player.uuid.toString() to 2L)) {
+            val rejected =
+                surface.open(
+                    DialogueSurface.SurfaceContext(
+                        RenderFixtures.SESSION,
+                        audience,
+                        generation,
+                        "chat",
+                        "semantic",
+                        CancellationToken(),
+                        19,
+                        Long.MAX_VALUE,
+                    )
+                )
+            assertTrue(rejected.toCompletableFuture().isCompletedExceptionally)
+        }
+        assertEquals(0, writes)
+        assertNull(targets.current())
+    }
+
+    @Test
+    fun foreignFramePreservesAcceptedTargetsAndTransport(env: Env) {
+        val player = env.createConnection().connect(env.createFlatInstance(), Pos(0.0, 42.0, 0.0))
+        val targets = SurfaceInputTargets()
+        val scope = MinestomConnectionScope(player, 1, player.instance)
+        val tokens = ChatInputTokens(scope, targets, System::nanoTime)
+        var writes = 0
+        val surface =
+            ChatDialogueSurface(
+                scope,
+                targets,
+                tokens,
+                {
+                    writes++
+                    CompletableFuture.completedFuture(null)
+                },
+                UiLabelSource.defaults(),
+                DialoguePresenter.Controls.defaults(),
+                "/testinput",
+            )
+        val context =
+            DialogueSurface.SurfaceContext(
+                RenderFixtures.SESSION,
+                player.uuid.toString(),
+                1,
+                "chat",
+                "semantic",
+                CancellationToken(),
+                19,
+                Long.MAX_VALUE,
+            )
+        val handle = surface.open(context).toCompletableFuture().join()
+        val valid = RenderFixtures.view("valid", 5)
+        handle
+            .replace(WidgetFrame(valid, emptyList(), "semantic", "semantic"))
+            .toCompletableFuture()
+            .join()
+        val accepted = targets.current()
+        val capability = tokens.issue("ask", accepted!!)
+        val foreign =
+            DialogueView(
+                java.util.UUID.randomUUID(),
+                valid.contentPin(),
+                valid.nodeId(),
+                valid.nodeVisitId(),
+                valid.state(),
+                valid.stateRevision(),
+                valid.renderRevision(),
+                valid.localeTag(),
+                valid.speaker(),
+                "foreign",
+                valid.choices(),
+                valid.selectedChoiceId(),
+                valid.totalGraphemes(),
+                valid.revealedGraphemes(),
+                valid.hint(),
+                valid.notice(),
+                valid.pendingAction(),
+            )
+        val rejected = handle.replace(WidgetFrame(foreign, emptyList(), "semantic", "semantic"))
+        assertTrue(rejected.toCompletableFuture().isCompletedExceptionally)
+        assertEquals(1, writes)
+        org.junit.jupiter.api.Assertions.assertSame(accepted, targets.current())
+        assertTrue(tokens.resolve(player, 1, capability).isPresent)
+        handle.closeAsync().toCompletableFuture().join()
+        assertFalse(tokens.resolve(player, 1, capability).isPresent)
+    }
+
+    @Test
     fun chatRendersOncePerSemanticSection(env: Env) {
         val player = env.createConnection().connect(env.createFlatInstance(), Pos(0.0, 42.0, 0.0))
         val messages = ArrayList<Component>()
         val targets = SurfaceInputTargets()
-        val tokens = ChatInputTokens(player, 1, targets, System::nanoTime)
+        val scope = MinestomConnectionScope(player, 1, player.instance)
+        val tokens = ChatInputTokens(scope, targets, System::nanoTime)
         val surface =
             ChatDialogueSurface(
-                ConnectionGuard(player, 1, player.instance),
+                scope,
                 targets,
                 tokens,
                 {
@@ -83,10 +240,11 @@ class ChatDialogueSurfaceTest {
         val player = env.createConnection().connect(env.createFlatInstance(), Pos(0.0, 42.0, 0.0))
         val targets = SurfaceInputTargets()
         val gate = CompletableFuture<Void>()
-        val tokens = ChatInputTokens(player, 1, targets, System::nanoTime)
+        val scope = MinestomConnectionScope(player, 1, player.instance)
+        val tokens = ChatInputTokens(scope, targets, System::nanoTime)
         val surface =
             ChatDialogueSurface(
-                ConnectionGuard(player, 1, player.instance),
+                scope,
                 targets,
                 tokens,
                 { gate },
@@ -136,7 +294,8 @@ class ChatDialogueSurfaceTest {
         val targets = SurfaceInputTargets()
         val frame = RenderFixtures.frame("hud", "Hello", 5)
         targets.publish(frame, 1, mapOf("ask" to WidgetFrame.Rect(0.0, 0.0, 1.0, 1.0)))
-        val tokens = ChatInputTokens(first, 1, targets, now::get)
+        val tokens =
+            ChatInputTokens(MinestomConnectionScope(first, 1, first.instance), targets, now::get)
         val token = tokens.issue("ask", checkNotNull(targets.current()))
         assertTrue(token.matches(Regex("[A-Za-z0-9_-]{22}")))
         assertTrue(tokens.resolve(second, 1, token).isEmpty)
@@ -162,11 +321,12 @@ class ChatDialogueSurfaceTest {
     private fun assertChoicesReachable(env: Env, count: Int) {
         val player = env.createConnection().connect(env.createFlatInstance(), Pos(0.0, 42.0, 0.0))
         val targets = SurfaceInputTargets()
-        val tokens = ChatInputTokens(player, 1, targets, System::nanoTime)
+        val scope = MinestomConnectionScope(player, 1, player.instance)
+        val tokens = ChatInputTokens(scope, targets, System::nanoTime)
         val output = ArrayList<Component>()
         val surface =
             ChatDialogueSurface(
-                ConnectionGuard(player, 1, player.instance),
+                scope,
                 targets,
                 tokens,
                 {

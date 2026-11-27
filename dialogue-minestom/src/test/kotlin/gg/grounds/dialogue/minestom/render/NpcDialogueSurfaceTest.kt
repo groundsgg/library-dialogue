@@ -8,6 +8,7 @@ import gg.grounds.dialogue.core.runtime.DialogueEndReason
 import gg.grounds.dialogue.core.runtime.DialogueView
 import gg.grounds.dialogue.core.runtime.PresentationPreferences
 import gg.grounds.dialogue.core.validation.ContentFingerprint
+import gg.grounds.dialogue.minestom.MinestomConnectionScope
 import gg.grounds.dialogue.minestom.MinestomSpeakerBinding
 import gg.grounds.dialogue.minestom.asset.AssetBundle
 import gg.grounds.dialogue.minestom.asset.MinecraftPackProfile
@@ -15,7 +16,6 @@ import gg.grounds.dialogue.minestom.asset.PackStateTracker
 import gg.grounds.dialogue.minestom.channel.LocalOutputChannels
 import gg.grounds.dialogue.minestom.geometry.NpcHitTest
 import gg.grounds.dialogue.minestom.input.SurfaceInputTargets
-import gg.grounds.dialogue.minestom.internal.ConnectionGuard
 import gg.grounds.dialogue.minestom.internal.MinestomDialogueScheduler
 import gg.grounds.dialogue.presentation.DialoguePresenter
 import gg.grounds.dialogue.presentation.DialogueSurface
@@ -129,16 +129,17 @@ class NpcDialogueSurfaceTest {
                     writeGate
                 },
             )
-        val guard: ConnectionGuard
+        val guard: MinestomConnectionScope
         val feet = AtomicReference(Vec(0.0, 42.0, 0.0))
         var anchorUnavailable = false
+        var overriddenBinding: MinestomSpeakerBinding? = null
         val surface: NpcDialogueSurface
 
         init {
             val instance = env.createFlatInstance()
             first = env.createConnection().connect(instance, Pos(0.0, 42.0, 4.0, 180f, 0f))
             second = env.createConnection().connect(instance, Pos(0.0, 42.0, 4.0))
-            guard = ConnectionGuard(first, 1, instance)
+            guard = MinestomConnectionScope(first, 1, instance)
             val id = UUID.randomUUID()
             packs.expect(first, 1, id, assets.pin())
             packs.observe(
@@ -161,8 +162,6 @@ class NpcDialogueSurfaceTest {
             val scheduler = MinestomDialogueScheduler(instance)
             surface =
                 NpcDialogueSurface(
-                    first,
-                    1,
                     guard,
                     packs,
                     assets,
@@ -171,7 +170,7 @@ class NpcDialogueSurfaceTest {
                     object : DialogueScheduler by scheduler {
                         override fun nanoTime(): Long = time?.get() ?: scheduler.nanoTime()
                     },
-                    { binding },
+                    { overriddenBinding ?: binding },
                     {},
                     { entity, world, position ->
                         entity.setInstance(world, position).thenCompose { gate }
@@ -228,6 +227,83 @@ class NpcDialogueSurfaceTest {
 
         fun displays(): List<Entity> =
             first.instance.entities.filter { it.entityType == EntityType.TEXT_DISPLAY }
+    }
+
+    @Test
+    fun wrongContextIsRejectedBeforeNativeAcquisition(env: Env) {
+        val fixture = Fixture(env, CompletableFuture.completedFuture(null))
+        var snapshots = 0
+        fixture.overriddenBinding =
+            MinestomSpeakerBinding("unused", fixture.first.instance) {
+                snapshots++
+                throw AssertionError("Invalid context must not inspect anchors")
+            }
+        for ((audience, generation) in
+            listOf("foreign" to 1L, fixture.first.uuid.toString() to 2L)) {
+            val invalid =
+                fixture.surface.open(
+                    DialogueSurface.SurfaceContext(
+                        RenderFixtures.SESSION,
+                        audience,
+                        generation,
+                        "npc",
+                        "profile",
+                        fixture.token,
+                        91,
+                        Long.MAX_VALUE,
+                    )
+                )
+            assertThrows(CompletionException::class.java) { invalid.toCompletableFuture().join() }
+                .also {
+                    org.junit.jupiter.api.Assertions.assertInstanceOf(
+                        IllegalArgumentException::class.java,
+                        it.cause,
+                    )
+                }
+        }
+        assertEquals(0, snapshots)
+        assertTrue(fixture.displays().isEmpty())
+        assertNull(fixture.targets.current())
+    }
+
+    @Test
+    fun foreignBindingAndFramePreserveAcceptedAnchorAndCleanup(env: Env) {
+        val fixture = Fixture(env, CompletableFuture.completedFuture(null))
+        val handle = fixture.open(env, surfaceGeneration = 19)
+        done(env, handle.replace(fixture.frame()))
+        val accepted = fixture.targets.current()
+        val geometry = fixture.surface.geometry()
+        val displays = fixture.displays().toSet()
+        var snapshots = 0
+        fixture.overriddenBinding =
+            MinestomSpeakerBinding("foreign", env.createFlatInstance()) {
+                snapshots++
+                throw AssertionError("Foreign snapshot must not be read")
+            }
+        val invalid = handle.replace(fixture.frame("foreign"))
+        assertThrows(CompletionException::class.java) { done(env, invalid) }
+        assertEquals(0, snapshots)
+        org.junit.jupiter.api.Assertions.assertSame(accepted, fixture.targets.current())
+        org.junit.jupiter.api.Assertions.assertSame(geometry, fixture.surface.geometry())
+        assertEquals(displays, fixture.displays().toSet())
+        assertFalse(fixture.token.isCancelled())
+        val frame = fixture.frame()
+        val foreignFrame =
+            WidgetFrame(
+                RenderFixtures.view("foreign", 7, UUID.randomUUID()),
+                frame.widgets(),
+                frame.fontPin(),
+                frame.theme(),
+                frame.chrome(),
+                frame.scrollbar(),
+            )
+        assertTrue(handle.replace(foreignFrame).toCompletableFuture().isCompletedExceptionally)
+        assertEquals(0, snapshots)
+        done(env, handle.closeAsync())
+        assertEquals(0, snapshots)
+        assertTrue(fixture.displays().isEmpty())
+        assertNull(fixture.targets.current())
+        assertNull(fixture.surface.geometry())
     }
 
     @Test
@@ -529,7 +605,7 @@ class NpcDialogueSurfaceTest {
     }
 
     @Test
-    fun nativeGraceEndsWhenPackOrConnectionGuardIsLost(env: Env) {
+    fun nativeGraceEndsWhenPackOrMinestomConnectionScopeIsLost(env: Env) {
         for (loseGuard in listOf(false, true)) {
             val fixture = nativeFixture(env, AtomicLong())
             val enter = Key.key("dialogue:vignette_250_enter_a")

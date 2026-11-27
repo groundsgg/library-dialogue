@@ -5,6 +5,37 @@ presenter. HUD, NPC panels and chat share graph/reveal/conditions/choices/action
 layout, UI labels, native encoder and ownership contracts. The native host has no
 Scene, NPC, Grounds-module, JSON-loader or pack-builder dependency.
 
+## Custom native pipelines
+
+For custom construction, use one supported `MinestomConnectionScope(player,
+hostGeneration, instance)` per dialogue session. Share its exact reference and a
+fresh `SurfaceInputTargets` across chat/HUD/NPC, `ChatInputTokens`,
+`MinestomDialogueRenderer` and `MinestomInputAdapter`. Constructors derive the
+borrowed player and instance from the scope. Use public
+`input.DialogueInputSource` to connect rendered targets and capabilities to Core.
+Renderer profile maps are copied; directly known native surfaces and explicit
+chat issuer stores must have the same owner and registry. Opaque wrappers and
+custom callbacks remain the application's wiring responsibility.
+
+Prepare/open with the player UUID string, matching host generation and session.
+A surface's retirement generation is independent. Rejecting a foreign request,
+frame or NPC binding preserves valid output; bindings from another instance are
+rejected before snapshot callbacks. Publish input only after acknowledged output,
+and use its exact revisions/visit/surface generation when submitting to Core.
+The short renderer overload and explicit null tokens preserve output, but require
+external resolution through the surface's issuing token store.
+
+Invalidate at the native lifetime boundary, retain resources for late cleanup,
+and keep the scheduler available until close completes. `isCurrent` fences work;
+`hasCurrentConnection` permits guarded restoration after invalidation. Core handle
+stops, ticket cancellation and natural completion retain their own ordering; scope
+invalidation alone cannot prove Core completion or resource release. Borrowed
+NPCs, players and shared services are never closed by the pipeline.
+
+See the [candidate migration](migration-2.0-candidate.md#native-connection-scope-and-input-source)
+for exact Java/Kotlin signatures and the executable [external Maven example](../fixtures/minestom-consumer/src/test/java/example/NativePipeline.java)
+for output ACK, capability input, owner rejection and close.
+
 ## Exact profiles
 
 | Profile        | Explicit server runtime                                    | Protocol | Resource pack | Native vignette                        |

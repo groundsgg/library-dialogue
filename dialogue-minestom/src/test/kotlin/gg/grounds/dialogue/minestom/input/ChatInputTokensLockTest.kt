@@ -1,5 +1,6 @@
 package gg.grounds.dialogue.minestom.input
 
+import gg.grounds.dialogue.minestom.MinestomConnectionScope
 import gg.grounds.dialogue.minestom.render.RenderFixtures
 import gg.grounds.dialogue.presentation.WidgetFrame
 import java.util.concurrent.CompletableFuture
@@ -25,7 +26,10 @@ class ChatInputTokensLockTest {
         val owner = AtomicReference<ChatInputTokens>()
         val enabled = AtomicBoolean(issue)
         val tokens =
-            ChatInputTokens(player, 1, targets) {
+            ChatInputTokens(
+                gg.grounds.dialogue.minestom.MinestomConnectionScope(player, 1, player.instance),
+                targets,
+            ) {
                 if (enabled.get()) {
                     try {
                         CompletableFuture.runAsync { owner.get().clear() }
