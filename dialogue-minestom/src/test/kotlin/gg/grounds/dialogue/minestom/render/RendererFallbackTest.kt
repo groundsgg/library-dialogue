@@ -18,6 +18,7 @@ import gg.grounds.dialogue.core.text.TextResolver
 import gg.grounds.dialogue.core.validation.DialogueValidator
 import gg.grounds.dialogue.core.validation.HostCatalog
 import gg.grounds.dialogue.core.validation.ValidationLimits
+import gg.grounds.dialogue.minestom.MinestomConnectionScope
 import gg.grounds.dialogue.minestom.input.SurfaceInputTargets
 import gg.grounds.dialogue.minestom.internal.MinestomDialogueScheduler
 import gg.grounds.dialogue.presentation.DialoguePresenter
@@ -44,6 +45,8 @@ import org.junit.jupiter.api.Test
 class RendererFallbackTest {
     private class Surface : DialogueSurface {
         var writes = 0
+        val frames = ArrayList<WidgetFrame>()
+        var draw: ((WidgetFrame) -> CompletionStage<Void>)? = null
         var closes = 0
         var fail = false
         var openError: Throwable? = null
@@ -61,6 +64,10 @@ class RendererFallbackTest {
                 object : DialogueSurface.SurfaceHandle {
                     override fun replace(frame: WidgetFrame): CompletionStage<Void> {
                         writes++
+                        frames.add(frame)
+                        draw?.let {
+                            return it(frame)
+                        }
                         drawError?.let {
                             return CompletableFuture.failedFuture(it)
                         }
@@ -83,8 +90,18 @@ class RendererFallbackTest {
     private fun <T> done(env: Env, stage: CompletionStage<T>): T =
         HudDialogueSurfaceTest.done(env, stage)
 
-    private inner class Fixture(env: Env) {
-        val clock = MinestomDialogueScheduler(env.createFlatInstance())
+    private inner class Fixture(
+        env: Env,
+        scheduler: gg.grounds.dialogue.core.port.DialogueScheduler? = null,
+    ) {
+        val player =
+            env.createConnection()
+                .connect(
+                    env.createFlatInstance(),
+                    net.minestom.server.coordinate.Pos(0.0, 42.0, 0.0),
+                )
+        val scope = gg.grounds.dialogue.minestom.MinestomConnectionScope(player, 1, player.instance)
+        val clock = scheduler ?: MinestomDialogueScheduler(player.instance)
         val hud = Surface()
         val chat = Surface()
         val npc = Surface()
@@ -93,6 +110,7 @@ class RendererFallbackTest {
         val core = DialogueRuntime.create(RuntimeOptions(clock, budgets(), 65_536, 256))
         val renderer =
             MinestomDialogueRenderer(
+                scope,
                 mapOf(
                     "hud" to
                         DialoguePresenter.SurfaceProfile(
@@ -146,7 +164,7 @@ class RendererFallbackTest {
             return core.start(
                 DialogueStart(
                     "test",
-                    "player",
+                    player.uuid.toString(),
                     1,
                     content,
                     HostBindings(
@@ -177,6 +195,439 @@ class RendererFallbackTest {
             Duration.ofSeconds(30),
         )
 
+    private fun request(fixture: Fixture, session: java.util.UUID = RenderFixtures.SESSION) =
+        DialogueRenderer.PresentationRequest(
+            session,
+            fixture.player.uuid.toString(),
+            1,
+            PresentationPreferences("chat", Duration.ZERO, false, emptyMap()),
+            CancellationToken(),
+            System.nanoTime() + 5_000_000_000L,
+            budgets(),
+        )
+
+    internal class Clock : gg.grounds.dialogue.core.port.DialogueScheduler {
+        var now = 0L
+        private val ready = java.util.ArrayDeque<Runnable>()
+
+        private class Task(val at: Long, val action: Runnable) {
+            var cancelled = false
+        }
+
+        private val timers = java.util.PriorityQueue<Task>(compareBy { it.at })
+
+        override fun execute(command: Runnable) {
+            ready.add(command)
+        }
+
+        override fun nanoTime(): Long = now
+
+        override fun schedule(
+            delay: Duration,
+            command: Runnable,
+        ): gg.grounds.dialogue.core.port.DialogueScheduler.ScheduledTask {
+            val task = Task(now + delay.toNanos(), command)
+            timers.add(task)
+            return gg.grounds.dialogue.core.port.DialogueScheduler.ScheduledTask {
+                task.cancelled = true
+            }
+        }
+
+        fun drain() {
+            var remaining = 10000
+            while (ready.isNotEmpty()) {
+                check(remaining-- > 0)
+                ready.remove().run()
+            }
+        }
+
+        fun advance(duration: Duration) {
+            val end = now + duration.toNanos()
+            drain()
+            while (timers.isNotEmpty() && timers.peek().at <= end) {
+                val task = timers.remove()
+                now = task.at
+                if (!task.cancelled) task.action.run()
+                drain()
+            }
+            now = end
+            drain()
+        }
+    }
+
+    private fun direct(fixture: Fixture, clock: Clock): DialogueRenderer.PresentationHandle {
+        val pending =
+            fixture.renderer.prepare(
+                DialogueRenderer.PresentationRequest(
+                    RenderFixtures.SESSION,
+                    fixture.player.uuid.toString(),
+                    1,
+                    PresentationPreferences("chat", Duration.ZERO, false, emptyMap()),
+                    CancellationToken(),
+                    Duration.ofSeconds(5).toNanos(),
+                    budgets(),
+                )
+            )
+        clock.drain()
+        return pending.toCompletableFuture().join()
+    }
+
+    @Test
+    fun rejectedWritePreservesQueuedWorkAndItsOriginalDeadline(env: Env) {
+        val clock = Clock()
+        val fixture = Fixture(env, clock)
+        val handle = direct(fixture, clock)
+        handle.replace(RenderFixtures.view("accepted", 8))
+        clock.drain()
+        val bad = CompletableFuture<Void>()
+        val good = CompletableFuture<Void>()
+        fixture.chat.draw = { if (it.semantic().text() == "bad") bad else good }
+        val rejected = handle.replace(RenderFixtures.view("bad", 3))
+        clock.drain()
+        val queued = handle.replace(RenderFixtures.view("good", 4))
+        clock.drain()
+        clock.advance(Duration.ofSeconds(4))
+        bad.completeExceptionally(
+            java.util.concurrent.CompletionException(
+                java.util.concurrent.ExecutionException(DialogueSurface.FrameRejected("owner"))
+            )
+        )
+        clock.drain()
+        assertTrue(rejected.toCompletableFuture().isCompletedExceptionally)
+        assertFalse(queued.toCompletableFuture().isDone)
+        assertEquals("good", fixture.chat.frames.last().semantic().text())
+        clock.advance(Duration.ofSeconds(1))
+        assertTrue(
+            queued.toCompletableFuture().isCompletedExceptionally,
+            "Rejection cannot extend already pending work",
+        )
+        assertEquals("", fixture.renderer.effectiveSurface())
+        good.complete(null)
+        clock.drain()
+        handle.closeAsync()
+        fixture.core.closeAsync()
+        clock.drain()
+    }
+
+    @Test
+    fun intermediatePhysicalAckSurvivesLaterRejectionAndExpiredOldTimer(env: Env) {
+        val clock = Clock()
+        val fixture = Fixture(env, clock)
+        val handle = direct(fixture, clock)
+        val first = CompletableFuture<Void>()
+        val bad = CompletableFuture<Void>()
+        fixture.chat.draw = { if (it.semantic().text() == "first") first else bad }
+        val accepted = handle.replace(RenderFixtures.view("first", 5))
+        clock.drain()
+        val rejected = handle.replace(RenderFixtures.view("bad", 3))
+        clock.drain()
+        first.complete(null)
+        clock.drain()
+        assertFalse(
+            accepted.toCompletableFuture().isDone,
+            "Retain existing coalesced observer timing",
+        )
+        bad.completeExceptionally(DialogueSurface.FrameRejected("owner"))
+        clock.drain()
+        assertTrue(rejected.toCompletableFuture().isCompletedExceptionally)
+        accepted.toCompletableFuture().join()
+        assertEquals("chat", fixture.renderer.effectiveSurface())
+        clock.advance(Duration.ofSeconds(6))
+        assertEquals(
+            "chat",
+            fixture.renderer.effectiveSurface(),
+            "Retired batch timer cannot tear down accepted output",
+        )
+        fixture.chat.draw = { CompletableFuture.completedFuture(null) }
+        fixture.renderer.refreshOutput()
+        clock.drain()
+        assertEquals("first", fixture.chat.frames.last().semantic().text())
+        handle.closeAsync()
+        fixture.core.closeAsync()
+        clock.drain()
+    }
+
+    @Test
+    fun firstFrameRetryKeepsOriginalRequestDeadline(env: Env) {
+        val clock = Clock()
+        val fixture = Fixture(env, clock)
+        val handle = direct(fixture, clock)
+        val first = CompletableFuture<Void>()
+        val retry = CompletableFuture<Void>()
+        fixture.chat.draw = { if (it.semantic().text() == "bad") first else retry }
+        val rejected = handle.replace(RenderFixtures.view("bad", 3))
+        clock.drain()
+        clock.advance(Duration.ofSeconds(4))
+        first.completeExceptionally(DialogueSurface.FrameRejected("owner"))
+        clock.drain()
+        assertTrue(rejected.toCompletableFuture().isCompletedExceptionally)
+        val pending = handle.replace(RenderFixtures.view("retry", 5))
+        clock.drain()
+        assertFalse(pending.toCompletableFuture().isDone)
+        clock.advance(Duration.ofSeconds(1))
+        assertTrue(pending.toCompletableFuture().isCompletedExceptionally)
+        retry.complete(null)
+        clock.drain()
+        handle.closeAsync()
+        fixture.core.closeAsync()
+        clock.drain()
+    }
+
+    @Test
+    fun ordinaryFailureWrappingMarkerRemainsFatal(env: Env) {
+        val clock = Clock()
+        val fixture = Fixture(env, clock)
+        val handle = direct(fixture, clock)
+        handle.replace(RenderFixtures.view("accepted", 8))
+        clock.drain()
+        fixture.chat.drawError =
+            IllegalStateException("partial write", DialogueSurface.FrameRejected("nested"))
+        val failed = handle.replace(RenderFixtures.view("bad", 3))
+        clock.drain()
+        assertTrue(failed.toCompletableFuture().isCompletedExceptionally)
+        assertEquals(1, fixture.chat.closes)
+        assertEquals("", fixture.renderer.effectiveSurface())
+        val retry = handle.replace(RenderFixtures.view("retry", 5))
+        clock.drain()
+        assertTrue(retry.toCompletableFuture().isCompletedExceptionally)
+        fixture.core.closeAsync()
+        clock.drain()
+    }
+
+    @Test
+    fun nativeConstructorsRequireExactScopeRegistryAndIssuer(env: Env) {
+        val fixture = Fixture(env)
+        val scope = fixture.scope
+        val sameIdentity = MinestomConnectionScope(scope.player, scope.generation, scope.instance)
+        val targets = fixture.targets
+        val tokens =
+            gg.grounds.dialogue.minestom.input.ChatInputTokens(scope, targets, System::nanoTime)
+        val secondIssuer =
+            gg.grounds.dialogue.minestom.input.ChatInputTokens(scope, targets, System::nanoTime)
+        fun chat(
+            owner: MinestomConnectionScope,
+            registry: SurfaceInputTargets,
+            issuer: gg.grounds.dialogue.minestom.input.ChatInputTokens,
+        ) =
+            ChatDialogueSurface(
+                owner,
+                registry,
+                issuer,
+                { CompletableFuture.completedFuture(null) },
+                UiLabelSource.defaults(),
+                DialoguePresenter.Controls.defaults(),
+                "/native",
+            )
+        assertThrows(IllegalArgumentException::class.java) { chat(sameIdentity, targets, tokens) }
+        assertThrows(IllegalArgumentException::class.java) {
+            chat(scope, SurfaceInputTargets(), tokens)
+        }
+        val surface = chat(scope, targets, tokens)
+        fun renderer(
+            owner: MinestomConnectionScope,
+            registry: SurfaceInputTargets,
+            issuer: gg.grounds.dialogue.minestom.input.ChatInputTokens?,
+        ) =
+            MinestomDialogueRenderer(
+                owner,
+                mapOf("chat" to DialoguePresenter.SurfaceProfile.semantic(surface)),
+                fixture.clock,
+                DialoguePresenter.Controls.defaults(),
+                UiLabelSource.defaults(),
+                registry,
+                {},
+                issuer,
+                { null },
+            )
+        assertThrows(IllegalArgumentException::class.java) {
+            renderer(sameIdentity, targets, tokens)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            renderer(scope, SurfaceInputTargets(), tokens)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            renderer(scope, targets, secondIssuer)
+        }
+        val assets = RenderFixtures.ASSETS
+        val packs = gg.grounds.dialogue.minestom.asset.PackStateTracker()
+        val channels =
+            gg.grounds.dialogue.minestom.channel.LocalOutputChannels(
+                { _, _ -> CompletableFuture.completedFuture(null) },
+                false,
+                { _, _ -> CompletableFuture.completedFuture(null) },
+            )
+        val known =
+            listOf(
+                HudDialogueSurface(scope, packs, assets, channels, targets, fixture.clock, {}),
+                NpcDialogueSurface(
+                    scope,
+                    packs,
+                    assets,
+                    channels,
+                    targets,
+                    fixture.clock,
+                    { null },
+                    {},
+                ),
+            )
+        known.forEach { native ->
+            val profiles =
+                mapOf(
+                    "chat" to DialoguePresenter.SurfaceProfile.semantic(fixture.chat),
+                    "custom-key" to DialoguePresenter.SurfaceProfile.semantic(native),
+                )
+            assertThrows(IllegalArgumentException::class.java) {
+                MinestomDialogueRenderer(
+                    sameIdentity,
+                    profiles,
+                    fixture.clock,
+                    DialoguePresenter.Controls.defaults(),
+                    UiLabelSource.defaults(),
+                    targets,
+                    {},
+                )
+            }
+            assertThrows(IllegalArgumentException::class.java) {
+                MinestomDialogueRenderer(
+                    scope,
+                    profiles,
+                    fixture.clock,
+                    DialoguePresenter.Controls.defaults(),
+                    UiLabelSource.defaults(),
+                    SurfaceInputTargets(),
+                    {},
+                )
+            }
+        }
+        val hidden =
+            mapOf(
+                "chat" to DialoguePresenter.SurfaceProfile.semantic(fixture.chat),
+                "custom-key" to DialoguePresenter.SurfaceProfile.semantic(surface),
+            )
+        assertThrows(IllegalArgumentException::class.java) {
+            MinestomDialogueRenderer(
+                sameIdentity,
+                hidden,
+                fixture.clock,
+                DialoguePresenter.Controls.defaults(),
+                UiLabelSource.defaults(),
+                targets,
+                {},
+            )
+        }
+        done(env, fixture.core.closeAsync())
+    }
+
+    @Test
+    fun copiedProfilesAndNullIssuerPreserveOutputAndExternalResolution(env: Env) {
+        for (full in listOf(false, true)) {
+            val fixture = Fixture(env)
+            val scope = fixture.scope
+            val tokens =
+                gg.grounds.dialogue.minestom.input.ChatInputTokens(
+                    scope,
+                    fixture.targets,
+                    System::nanoTime,
+                )
+            var sends = 0
+            val surface =
+                ChatDialogueSurface(
+                    scope,
+                    fixture.targets,
+                    tokens,
+                    {
+                        sends++
+                        CompletableFuture.completedFuture(null)
+                    },
+                    UiLabelSource.defaults(),
+                    DialoguePresenter.Controls.defaults(),
+                    "/native",
+                )
+            val profiles =
+                mutableMapOf("chat" to DialoguePresenter.SurfaceProfile.semantic(surface))
+            val renderer =
+                if (full)
+                    MinestomDialogueRenderer(
+                        scope,
+                        profiles,
+                        fixture.clock,
+                        DialoguePresenter.Controls.defaults(),
+                        UiLabelSource.defaults(),
+                        fixture.targets,
+                        {},
+                        null,
+                        { null },
+                    )
+                else
+                    MinestomDialogueRenderer(
+                        scope,
+                        profiles,
+                        fixture.clock,
+                        DialoguePresenter.Controls.defaults(),
+                        UiLabelSource.defaults(),
+                        fixture.targets,
+                        {},
+                    )
+            profiles["chat"] = DialoguePresenter.SurfaceProfile.semantic(fixture.chat)
+            val handle = done(env, renderer.prepare(request(fixture)))
+            done(env, handle.replace(RenderFixtures.view("accepted", 8)))
+            assertEquals(1, sends)
+            assertEquals(0, fixture.chat.writes)
+            val snapshot = fixture.targets.current()!!
+            val token = tokens.issue("ask", snapshot)
+            assertTrue(renderer.resolveChat(scope.player, 1, token).isEmpty)
+            assertTrue(tokens.resolve(scope.player, 1, token).isPresent)
+            done(env, handle.closeAsync())
+            assertTrue(tokens.resolve(scope.player, 1, token).isEmpty)
+            done(env, fixture.core.closeAsync())
+        }
+    }
+
+    @Test
+    fun wrongPrepareAndForeignFramePreserveActivePresentation(env: Env) {
+        val fixture = Fixture(env)
+        val handle = done(env, fixture.renderer.prepare(request(fixture)))
+        done(env, handle.replace(RenderFixtures.view("accepted", 8)))
+        val writes = fixture.chat.writes
+        val wrongAudience =
+            DialogueRenderer.PresentationRequest(
+                RenderFixtures.SESSION,
+                "foreign",
+                1,
+                PresentationPreferences("chat", Duration.ZERO, false, emptyMap()),
+                CancellationToken(),
+                Long.MAX_VALUE,
+                budgets(),
+            )
+        assertTrue(
+            fixture.renderer.prepare(wrongAudience).toCompletableFuture().isCompletedExceptionally
+        )
+        val wrongGeneration =
+            DialogueRenderer.PresentationRequest(
+                RenderFixtures.SESSION,
+                fixture.player.uuid.toString(),
+                2,
+                wrongAudience.preferences,
+                CancellationToken(),
+                Long.MAX_VALUE,
+                budgets(),
+            )
+        assertTrue(
+            fixture.renderer.prepare(wrongGeneration).toCompletableFuture().isCompletedExceptionally
+        )
+        assertTrue(
+            handle
+                .replace(RenderFixtures.view("foreign", 7, java.util.UUID.randomUUID()))
+                .toCompletableFuture()
+                .isCompletedExceptionally
+        )
+        assertEquals(writes, fixture.chat.writes)
+        done(env, handle.replace(RenderFixtures.view("accepted again", 14)))
+        assertEquals(writes + 1, fixture.chat.writes)
+        done(env, handle.closeAsync())
+        done(env, fixture.core.closeAsync())
+    }
+
     @Test
     fun sameSemanticViewStillWaitsForTheNewPresentationWrite(env: Env) {
         val fixture = Fixture(env)
@@ -186,7 +637,7 @@ class RendererFallbackTest {
                 fixture.renderer.prepare(
                     DialogueRenderer.PresentationRequest(
                         RenderFixtures.SESSION,
-                        "player",
+                        fixture.player.uuid.toString(),
                         1,
                         PresentationPreferences("hud", Duration.ZERO, false, emptyMap()),
                         CancellationToken(),
@@ -228,7 +679,7 @@ class RendererFallbackTest {
                 fixture.renderer.prepare(
                     DialogueRenderer.PresentationRequest(
                         RenderFixtures.SESSION,
-                        "player",
+                        fixture.player.uuid.toString(),
                         1,
                         PresentationPreferences("hud", Duration.ZERO, false, emptyMap()),
                         CancellationToken(),

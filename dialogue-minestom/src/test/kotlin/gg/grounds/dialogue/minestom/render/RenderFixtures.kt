@@ -22,9 +22,9 @@ class RenderFixtures private constructor() {
         val ASSETS: AssetBundle = AssetBundle.loadDefault(MinecraftPackProfile.public262())
 
         @JvmStatic
-        fun view(text: String, revealed: Int): DialogueView =
+        fun view(text: String, revealed: Int, session: UUID = SESSION): DialogueView =
             DialogueView(
-                SESSION,
+                session,
                 ContentPin("0".repeat(64)),
                 "start",
                 1,

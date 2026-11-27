@@ -5,6 +5,52 @@ presenter. HUD, NPC panels and chat share graph/reveal/conditions/choices/action
 layout, UI labels, native encoder and ownership contracts. The native host has no
 Scene, NPC, Grounds-module, JSON-loader or pack-builder dependency.
 
+## Custom native pipelines
+
+For custom construction, use one supported `MinestomConnectionScope(player,
+hostGeneration, instance)` per dialogue session. Share its exact reference and a
+fresh `SurfaceInputTargets` across chat/HUD/NPC, `ChatInputTokens`,
+`MinestomDialogueRenderer` and `MinestomInputAdapter`. Constructors derive the
+borrowed player and instance from the scope. Use public
+`input.DialogueInputSource` to connect rendered targets and capabilities to Core.
+Renderer profile maps are copied; directly known native surfaces and explicit
+chat issuer stores must have the same owner and registry. Opaque wrappers and
+custom callbacks remain the application's wiring responsibility.
+
+Prepare/open with the player UUID string, matching host generation and session.
+A surface's retirement generation is independent. Rejecting a foreign request,
+frame or NPC binding preserves valid output; bindings from another instance are
+rejected before snapshot callbacks. Publish input only after acknowledged output,
+and use its exact revisions/visit/surface generation when submitting to Core.
+A proven `DialogueSurface.FrameRejected` preserves the last physically
+acknowledged view and viewport and fails only observers associated with that
+attempt. Newer queued work keeps its original deadline; unknown/partial writes
+retain normal failure handling. The marker is recognized only through standard
+completion/execution wrappers, never an arbitrary cause chain. Core's own
+response to a failed render remains Core-owned. A nested callback's marker
+certifies only its own operation; built-in native writes downgrade it to ordinary
+failure unless their own early validation proves the enclosing frame is unchanged.
+Browse correlation includes page-intent identity, and staging/drawing are one
+serialized attempt. Superseded unattempted pages on the same acknowledged view
+may share the selected attempt's outcome; every superseded page need not be drawn.
+A layout resolver failure while staging a browse fails that selected browse group
+before replacement begins. Prior acknowledged output and targets remain usable,
+and newer queued work keeps its existing deadline. Actual replacement failures
+retain their normal failure handling.
+The short renderer overload and explicit null tokens preserve output, but require
+external resolution through the surface's issuing token store.
+
+Invalidate at the native lifetime boundary, retain resources for late cleanup,
+and keep the scheduler available until close completes. `isCurrent` fences work;
+`hasCurrentConnection` permits guarded restoration after invalidation. Core handle
+stops, ticket cancellation and natural completion retain their own ordering; scope
+invalidation alone cannot prove Core completion or resource release. Borrowed
+NPCs, players and shared services are never closed by the pipeline.
+
+See the [candidate migration](migration-2.0-candidate.md#native-connection-scope-and-input-source)
+for exact Java/Kotlin signatures and the executable [external Maven example](../fixtures/minestom-consumer/src/test/java/example/NativePipeline.java)
+for output ACK, capability input, owner rejection and close.
+
 ## Exact profiles
 
 | Profile        | Explicit server runtime                                    | Protocol | Resource pack | Native vignette                        |

@@ -6,11 +6,12 @@ import gg.grounds.dialogue.core.port.DialogueScheduler
 import gg.grounds.dialogue.core.port.OwnedResource
 import gg.grounds.dialogue.core.runtime.DialogueEndReason
 import gg.grounds.dialogue.core.runtime.PresentationPreferences
+import gg.grounds.dialogue.minestom.MinestomConnectionScope
 import gg.grounds.dialogue.minestom.asset.AssetBundle
 import gg.grounds.dialogue.minestom.asset.PackStateTracker
 import gg.grounds.dialogue.minestom.channel.OutputChannels
 import gg.grounds.dialogue.minestom.input.SurfaceInputTargets
-import gg.grounds.dialogue.minestom.internal.ConnectionGuard
+import gg.grounds.dialogue.minestom.internal.nativeFrameWrite
 import gg.grounds.dialogue.presentation.DialoguePresenter
 import gg.grounds.dialogue.presentation.DialogueSurface
 import gg.grounds.dialogue.presentation.WidgetFrame
@@ -23,13 +24,14 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.function.Consumer
 import net.kyori.adventure.key.Key
 import net.kyori.adventure.text.Component
-import net.minestom.server.entity.Player
 
-/** Native action-bar projection using the same encoded widgets as the NPC surface. */
+/**
+ * Native action-bar projection borrowing the player and instance from [scope]. The open
+ * audience/host generation and frame session must match before fallback or acquisition. Owns its
+ * HUD/effect leases; close retires input and asynchronously releases those leases.
+ */
 class HudDialogueSurface(
-    private val player: Player,
-    private val generation: Long,
-    private val guard: ConnectionGuard,
+    private val scope: MinestomConnectionScope,
     private val packs: PackStateTracker,
     private val assets: AssetBundle,
     private val channels: OutputChannels,
@@ -37,14 +39,31 @@ class HudDialogueSurface(
     private val clock: DialogueScheduler,
     private val diagnostic: Consumer<String>,
 ) : DialogueSurface {
+    private val player = scope.player
+    private val generation = scope.generation
+
+    internal fun requireOwner(scope: MinestomConnectionScope, targets: SurfaceInputTargets) {
+        require(this.scope === scope && this.targets === targets) {
+            "Native surface owner mismatch"
+        }
+    }
+
     private val encoder = MinecraftWidgetEncoder()
 
     private fun available(): Boolean =
-        guard.isCurrent() && packs.isReady(player, generation, assets.pin())
+        scope.isCurrent() && packs.isReady(player, generation, assets.pin())
 
     override fun open(
         context: DialogueSurface.SurfaceContext
     ): CompletionStage<DialogueSurface.SurfaceHandle> {
+        if (
+            context.audienceId != scope.player.uuid.toString() ||
+                context.hostGeneration != scope.generation
+        ) {
+            return CompletableFuture.failedFuture(
+                IllegalArgumentException("Native context owner mismatch")
+            )
+        }
         if (!available()) {
             return CompletableFuture.failedFuture(
                 DialoguePresenter.FallbackRequired("MISSING_PACK")
@@ -62,7 +81,7 @@ class HudDialogueSurface(
                 context.cancellation.cancel(DialogueEndReason.FAILED)
                 closeAsync()
             }
-        val scope = OwnedScope(queue, clock, context.cleanupBudget)
+        val resources = OwnedScope(queue, clock, context.cleanupBudget)
         val closed = AtomicBoolean()
         val ready = CompletableFuture<DialogueSurface.SurfaceHandle>()
         val cleanup = CompletableFuture<Void>()
@@ -75,7 +94,7 @@ class HudDialogueSurface(
 
         fun begin() {
             queue.execute {
-                scope
+                resources
                     .prepare {
                         CompletableFuture.completedFuture(
                             channels.acquireHud(player, generation, 50)
@@ -89,7 +108,7 @@ class HudDialogueSurface(
                             }
                             hud = lease
                             if (channels.supportedEffects()) {
-                                scope
+                                resources
                                     .prepare {
                                         CompletableFuture.completedFuture(
                                             channels.acquireEffects(player, generation)
@@ -135,6 +154,15 @@ class HudDialogueSurface(
         }
 
         override fun replace(frame: WidgetFrame): CompletionStage<Void> {
+            if (frame.semantic().sessionId() != context.sessionId) {
+                return CompletableFuture.failedFuture(
+                    DialogueSurface.FrameRejected("Native frame session mismatch")
+                )
+            }
+            return nativeFrameWrite { replaceOwned(frame) }
+        }
+
+        private fun replaceOwned(frame: WidgetFrame): CompletionStage<Void> {
             val result = CompletableFuture<Void>()
             queue.execute {
                 if (closed.get() || context.cancellation.isCancelled()) {
@@ -174,7 +202,7 @@ class HudDialogueSurface(
                                 }
                                 if (
                                     closed.get() ||
-                                        !guard.isCurrent() ||
+                                        !scope.isCurrent() ||
                                         context.cancellation.isCancelled()
                                 ) {
                                     result.completeExceptionally(CancellationException())
@@ -227,7 +255,7 @@ class HudDialogueSurface(
                 clock.schedule(Duration.ofSeconds(1)) {
                     queue.execute {
                         if (
-                            closed.get() || context.cancellation.isCancelled() || !guard.isCurrent()
+                            closed.get() || context.cancellation.isCancelled() || !scope.isCurrent()
                         ) {
                             return@execute
                         }
@@ -250,7 +278,7 @@ class HudDialogueSurface(
                     refresh?.cancel()
                     last = null
                     targets.clear(context.generation)
-                    scope.closeAsync().whenComplete { _, error ->
+                    resources.closeAsync().whenComplete { _, error ->
                         ready.completeExceptionally(CancellationException())
                         if (error == null) cleanup.complete(null)
                         else cleanup.completeExceptionally(error)

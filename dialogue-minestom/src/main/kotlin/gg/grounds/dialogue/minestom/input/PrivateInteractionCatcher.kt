@@ -1,7 +1,7 @@
 package gg.grounds.dialogue.minestom.input
 
 import gg.grounds.dialogue.core.port.OwnedResource
-import gg.grounds.dialogue.minestom.internal.ConnectionGuard
+import gg.grounds.dialogue.minestom.MinestomConnectionScope
 import java.util.concurrent.CancellationException
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionStage
@@ -9,15 +9,17 @@ import java.util.concurrent.atomic.AtomicBoolean
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.entity.Entity
 import net.minestom.server.entity.EntityType
-import net.minestom.server.entity.Player
 import net.minestom.server.entity.metadata.other.InteractionMeta
 
-/** One invisible viewer-only interaction volume. Does not replace either hand's item. */
-class PrivateInteractionCatcher
-private constructor(
-    private val player: Player,
-    private val guard: ConnectionGuard,
-) : OwnedResource {
+/**
+ * One owned, viewer-only interaction volume in the connection scope's exact instance. Opening
+ * retains ownership of a late spawn; invalidation before acknowledgement removes it. Close is
+ * idempotent. The caller keeps the instance scheduler alive until acquisition/close settles.
+ * Neither hand's item nor the borrowed player/instance is owned by this resource.
+ */
+class PrivateInteractionCatcher private constructor(private val scope: MinestomConnectionScope) :
+    OwnedResource {
+    private val player = scope.player
     private val entity = Entity(EntityType.INTERACTION)
     private val closed = AtomicBoolean()
 
@@ -34,11 +36,11 @@ private constructor(
     private fun position(): Pos = player.position.sub(0.0, .5, 0.0).withView(0.0f, 0.0f)
 
     fun publish() {
-        if (!closed.get() && guard.isCurrent()) entity.addViewer(player)
+        if (!closed.get() && scope.isCurrent()) entity.addViewer(player)
     }
 
     fun follow() {
-        if (!closed.get() && guard.isCurrent()) {
+        if (!closed.get() && scope.isCurrent()) {
             val position = position()
             if (position != entity.position) entity.teleport(position)
         }
@@ -56,18 +58,15 @@ private constructor(
 
     companion object {
         @JvmStatic
-        fun open(
-            player: Player,
-            guard: ConnectionGuard,
-        ): CompletionStage<PrivateInteractionCatcher> {
-            val catcher = PrivateInteractionCatcher(player, guard)
+        fun open(scope: MinestomConnectionScope): CompletionStage<PrivateInteractionCatcher> {
+            val catcher = PrivateInteractionCatcher(scope)
             val ready = CompletableFuture<PrivateInteractionCatcher>()
             try {
-                catcher.entity.setInstance(player.instance, catcher.position()).whenComplete {
+                catcher.entity.setInstance(scope.instance, catcher.position()).whenComplete {
                     _,
                     error ->
                     if (error == null) {
-                        if (guard.isCurrent()) ready.complete(catcher)
+                        if (scope.isCurrent()) ready.complete(catcher)
                         else {
                             catcher.closeAsync().whenComplete { _, _ ->
                                 ready.completeExceptionally(CancellationException())

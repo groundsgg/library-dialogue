@@ -6,10 +6,10 @@ import gg.grounds.dialogue.core.runtime.DialogueInput
 import gg.grounds.dialogue.core.runtime.DialogueView
 import gg.grounds.dialogue.core.runtime.InputResult
 import gg.grounds.dialogue.core.runtime.RuntimeOptions
+import gg.grounds.dialogue.minestom.MinestomConnectionScope
 import gg.grounds.dialogue.minestom.MinestomSpeakerBinding.AnchorSnapshot
 import gg.grounds.dialogue.minestom.geometry.NpcHitTest
 import gg.grounds.dialogue.minestom.geometry.NpcPanelTransform
-import gg.grounds.dialogue.minestom.internal.ConnectionGuard
 import gg.grounds.dialogue.minestom.internal.MinestomDialogueScheduler
 import gg.grounds.dialogue.minestom.render.NpcDialogueSurface
 import gg.grounds.dialogue.minestom.render.RenderFixtures
@@ -99,9 +99,7 @@ class InputSafetyTest {
                 )
             adapter =
                 MinestomInputAdapter(
-                    player,
-                    1,
-                    ConnectionGuard(player, 1, player.instance),
+                    MinestomConnectionScope(player, 1, player.instance),
                     profile,
                     clock,
                     CancellationToken(),
@@ -296,7 +294,7 @@ class InputSafetyTest {
     fun inputPreparationHasDeadlineAndOwnsLateCatcher(env: Env) {
         val fixture = Fixture(env)
         val clock = MinestomDialogueScheduler(fixture.player.instance)
-        val guard = ConnectionGuard(fixture.player, 1, fixture.player.instance)
+        val guard = MinestomConnectionScope(fixture.player, 1, fixture.player.instance)
         val gate = CompletableFuture<Void>()
         val budget =
             RuntimeOptions.Budgets(
@@ -307,8 +305,6 @@ class InputSafetyTest {
             )
         val adapter =
             MinestomInputAdapter(
-                fixture.player,
-                1,
                 guard,
                 InputProfile.defaults(),
                 clock,
@@ -317,7 +313,7 @@ class InputSafetyTest {
                 NpcHitTest.OcclusionTest { _, _ -> true },
                 budget,
             ) {
-                PrivateInteractionCatcher.open(fixture.player, guard).thenCompose { catcher ->
+                PrivateInteractionCatcher.open(guard).thenCompose { catcher ->
                     gate.thenApply { catcher }
                 }
             }

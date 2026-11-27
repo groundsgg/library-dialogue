@@ -36,11 +36,21 @@ not authorize accepting a new API or schema baseline.
 ## Explicit development major candidate
 
 `python3 tools/check_dialogue_major_candidate.py --check --repository .evidence/maven --version 0.1.0-SNAPSHOT`
-adds a separate, explicitly invoked target-major-2 audit. CI runs it alongside the
-existing strict checker. The initially empty reviewed break manifest does not
-relax any current binary, source, schema, artifact or consumer gate. Activating a
-future incompatible major mode requires an explicit reviewed CI change; no file
-or branch name activates it automatically.
+is CI's explicit target-major-2 API comparator for the native constructor/SPI
+migration. It checks the exact reviewed breaks against both the pinned 1.8
+inventory and the older floors. Schema pins, six-artifact checks, frozen binary
+consumers and current Java/Kotlin Maven consumers remain active.
+
+The original strict command remains available:
+
+```sh
+python3 tools/check_dialogue_compatibility.py --check --repository .evidence/maven --version 0.1.0-SNAPSHOT
+```
+
+It is expected to fail on the listed native constructor and renderer-superinterface
+breaks. This reviewed CI switch selects the major comparator explicitly; no file
+or branch name activates a relaxed mode automatically. It accepts no release
+baseline and exempts no schema changes.
 
 `major-candidate/reference-1.8/manifest.json` is pinned by SHA-256 in the checker.
 It binds all six source-derived reference inventories, original JAR hashes,

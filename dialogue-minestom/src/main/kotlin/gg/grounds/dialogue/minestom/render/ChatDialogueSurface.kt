@@ -1,10 +1,11 @@
 package gg.grounds.dialogue.minestom.render
 
 import gg.grounds.dialogue.core.runtime.DialogueView
+import gg.grounds.dialogue.minestom.MinestomConnectionScope
 import gg.grounds.dialogue.minestom.input.ChatInputTokens
 import gg.grounds.dialogue.minestom.input.SurfaceInputTargets
 import gg.grounds.dialogue.minestom.input.TargetSnapshot
-import gg.grounds.dialogue.minestom.internal.ConnectionGuard
+import gg.grounds.dialogue.minestom.internal.nativeFrameWrite
 import gg.grounds.dialogue.presentation.DialoguePresenter
 import gg.grounds.dialogue.presentation.DialogueSurface
 import gg.grounds.dialogue.presentation.UiLabelSource
@@ -19,9 +20,14 @@ import net.kyori.adventure.text.event.ClickEvent
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer
 
-/** Semantic, complete sections with plain text and server-issued click capabilities. */
+/**
+ * Semantic sections with click capabilities issued by [tokens] for the exact [scope] and [targets].
+ * Open requires the owner's UUID string and host generation; surface retirement generation is
+ * independent. Each frame must match its open session before sinks, tokens or targets change. Close
+ * retires targets and tokens and waits for outstanding transport acknowledgements.
+ */
 class ChatDialogueSurface(
-    private val guard: ConnectionGuard,
+    private val scope: MinestomConnectionScope,
     private val targets: SurfaceInputTargets,
     private val tokens: ChatInputTokens,
     private val sink: Function<Component, CompletionStage<Void>>,
@@ -29,14 +35,33 @@ class ChatDialogueSurface(
     private val controls: DialoguePresenter.Controls,
     private val route: String,
 ) : DialogueSurface {
+    internal fun requireOwner(
+        scope: MinestomConnectionScope,
+        targets: SurfaceInputTargets,
+        issuer: ChatInputTokens?,
+    ) {
+        require(this.scope === scope && this.targets === targets) { "Chat surface owner mismatch" }
+        if (issuer != null) require(tokens === issuer) { "Chat issuer mismatch" }
+    }
+
     init {
+        tokens.requireOwner(scope, targets)
         require(route.matches(Regex("/[a-z0-9_]+"))) { "Invalid route" }
     }
 
     override fun open(
         context: DialogueSurface.SurfaceContext
-    ): CompletionStage<DialogueSurface.SurfaceHandle> =
-        CompletableFuture.completedFuture(Handle(context))
+    ): CompletionStage<DialogueSurface.SurfaceHandle> {
+        if (
+            context.audienceId != scope.player.uuid.toString() ||
+                context.hostGeneration != scope.generation
+        ) {
+            return CompletableFuture.failedFuture(
+                IllegalArgumentException("Native context owner mismatch")
+            )
+        }
+        return CompletableFuture.completedFuture(Handle(context))
+    }
 
     private inner class Handle(private val context: DialogueSurface.SurfaceContext) :
         DialogueSurface.SurfaceHandle {
@@ -47,7 +72,16 @@ class ChatDialogueSurface(
         @Volatile private var epoch = 0L
 
         override fun replace(frame: WidgetFrame): CompletionStage<Void> {
-            if (closed || !guard.isCurrent() || context.cancellation.isCancelled()) {
+            if (frame.semantic().sessionId() != context.sessionId) {
+                return CompletableFuture.failedFuture(
+                    DialogueSurface.FrameRejected("Native frame session mismatch")
+                )
+            }
+            return nativeFrameWrite { replaceOwned(frame) }
+        }
+
+        private fun replaceOwned(frame: WidgetFrame): CompletionStage<Void> {
+            if (closed || !scope.isCurrent() || context.cancellation.isCancelled()) {
                 return CompletableFuture.failedFuture(CancellationException())
             }
             val view = frame.semantic()
@@ -155,7 +189,7 @@ class ChatDialogueSurface(
                         error != null -> promise.completeExceptionally(error)
                         closed ||
                             epoch != operation ||
-                            !guard.isCurrent() ||
+                            !scope.isCurrent() ||
                             context.cancellation.isCancelled() ->
                             promise.completeExceptionally(CancellationException())
                         else -> {

@@ -3,15 +3,16 @@ package gg.grounds.dialogue.minestom.render
 import gg.grounds.dialogue.core.runtime.CancellationToken
 import gg.grounds.dialogue.core.runtime.DialogueView
 import gg.grounds.dialogue.core.runtime.PresentationPreferences
+import gg.grounds.dialogue.minestom.MinestomConnectionScope
 import gg.grounds.dialogue.minestom.asset.PackStateTracker
 import gg.grounds.dialogue.minestom.channel.LocalOutputChannels
 import gg.grounds.dialogue.minestom.input.SurfaceInputTargets
-import gg.grounds.dialogue.minestom.internal.ConnectionGuard
 import gg.grounds.dialogue.minestom.internal.MinestomDialogueScheduler
 import gg.grounds.dialogue.presentation.DialoguePresenter
 import gg.grounds.dialogue.presentation.DialogueSurface
 import gg.grounds.dialogue.presentation.DialogueTheme
 import gg.grounds.dialogue.presentation.LayoutProfile
+import gg.grounds.dialogue.presentation.WidgetFrame
 import java.time.Duration
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
@@ -81,9 +82,7 @@ class HudDialogueSurfaceTest {
             )
             surface =
                 HudDialogueSurface(
-                    player,
-                    1,
-                    ConnectionGuard(player, 1, player.instance),
+                    MinestomConnectionScope(player, 1, player.instance),
                     packs,
                     RenderFixtures.ASSETS,
                     channels,
@@ -110,6 +109,61 @@ class HudDialogueSurfaceTest {
                     )
                 ),
             )
+    }
+
+    @Test
+    fun contextAndFrameRejectionPreserveOwnedOutput(env: Env) {
+        val fixture = Fixture(env, true)
+        for ((audience, generation) in
+            listOf("foreign" to 1L, fixture.player.uuid.toString() to 2L)) {
+            val invalid =
+                fixture.surface.open(
+                    DialogueSurface.SurfaceContext(
+                        RenderFixtures.SESSION,
+                        audience,
+                        generation,
+                        "hud",
+                        "profile",
+                        CancellationToken(),
+                        91,
+                        Long.MAX_VALUE,
+                    )
+                )
+            assertTrue(invalid.toCompletableFuture().isCompletedExceptionally)
+            org.junit.jupiter.api.Assertions.assertThrows(
+                    java.util.concurrent.CompletionException::class.java
+                ) {
+                    invalid.toCompletableFuture().join()
+                }
+                .also {
+                    org.junit.jupiter.api.Assertions.assertInstanceOf(
+                        IllegalArgumentException::class.java,
+                        it.cause,
+                    )
+                }
+        }
+        assertTrue(fixture.hud.isEmpty())
+        assertTrue(fixture.effects.isEmpty())
+        val handle = fixture.open(env, emptyMap())
+        val frame = RenderFixtures.frame("hud", "accepted", 8)
+        done(env, handle.replace(frame))
+        val accepted = fixture.targets.current()
+        val count = fixture.hud.size
+        val foreign =
+            WidgetFrame(
+                RenderFixtures.view("foreign", 7, UUID.randomUUID()),
+                frame.widgets(),
+                frame.fontPin(),
+                frame.theme(),
+                frame.chrome(),
+                frame.scrollbar(),
+            )
+        assertTrue(handle.replace(foreign).toCompletableFuture().isCompletedExceptionally)
+        assertEquals(count, fixture.hud.size)
+        org.junit.jupiter.api.Assertions.assertSame(accepted, fixture.targets.current())
+        done(env, handle.replace(frame))
+        done(env, handle.closeAsync())
+        org.junit.jupiter.api.Assertions.assertNull(fixture.targets.current())
     }
 
     @Test
