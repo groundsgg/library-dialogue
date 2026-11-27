@@ -1,0 +1,638 @@
+{
+  "api": {
+    "gg.grounds.dialogue.testkit.ManualDialogueScheduler": "public final class gg.grounds.dialogue.testkit.ManualDialogueScheduler implements gg.grounds.dialogue.core.port.DialogueScheduler {\n  public gg.grounds.dialogue.testkit.ManualDialogueScheduler();\n    descriptor: ()V\n\n  public void execute(java.lang.Runnable);\n    descriptor: (Ljava/lang/Runnable;)V\n\n  public gg.grounds.dialogue.core.port.DialogueScheduler$ScheduledTask schedule(java.time.Duration, java.lang.Runnable);\n    descriptor: (Ljava/time/Duration;Ljava/lang/Runnable;)Lgg/grounds/dialogue/core/port/DialogueScheduler$ScheduledTask;\n\n  public long nanoTime();\n    descriptor: ()J\n\n  public final void runUntilIdle();\n    descriptor: ()V\n\n  public final void advanceBy(java.time.Duration);\n    descriptor: (Ljava/time/Duration;)V\n}\n",
+    "gg.grounds.dialogue.testkit.RecordingDialogueRenderer": "public final class gg.grounds.dialogue.testkit.RecordingDialogueRenderer implements gg.grounds.dialogue.core.port.DialogueRenderer {\n  public gg.grounds.dialogue.testkit.RecordingDialogueRenderer();\n    descriptor: ()V\n\n  public synchronized java.util.concurrent.CompletionStage<gg.grounds.dialogue.core.port.DialogueRenderer$PresentationHandle> prepare(gg.grounds.dialogue.core.port.DialogueRenderer$PresentationRequest);\n    descriptor: (Lgg/grounds/dialogue/core/port/DialogueRenderer$PresentationRequest;)Ljava/util/concurrent/CompletionStage;\n\n  public final synchronized java.util.List<gg.grounds.dialogue.testkit.RecordingDialogueRenderer$PresentationSnapshot> snapshots();\n    descriptor: ()Ljava/util/List;\n}\n",
+    "gg.grounds.dialogue.testkit.RecordingDialogueRenderer$PresentationSnapshot": "public final class gg.grounds.dialogue.testkit.RecordingDialogueRenderer$PresentationSnapshot {\n  public gg.grounds.dialogue.testkit.RecordingDialogueRenderer$PresentationSnapshot(java.util.UUID, java.lang.String, long, java.util.List<gg.grounds.dialogue.core.runtime.DialogueView>, java.util.List<gg.grounds.dialogue.core.runtime.PresentationPreferences>, boolean, int, int);\n    descriptor: (Ljava/util/UUID;Ljava/lang/String;JLjava/util/List;Ljava/util/List;ZII)V\n\n  public final java.util.UUID sessionId();\n    descriptor: ()Ljava/util/UUID;\n\n  public final java.lang.String audienceId();\n    descriptor: ()Ljava/lang/String;\n\n  public final long hostGeneration();\n    descriptor: ()J\n\n  public final java.util.List<gg.grounds.dialogue.core.runtime.DialogueView> views();\n    descriptor: ()Ljava/util/List;\n\n  public final java.util.List<gg.grounds.dialogue.core.runtime.PresentationPreferences> configurations();\n    descriptor: ()Ljava/util/List;\n\n  public final boolean closed();\n    descriptor: ()Z\n\n  public final int closeCalls();\n    descriptor: ()I\n\n  public final int rejectedWrites();\n    descriptor: ()I\n\n  public boolean equals(java.lang.Object);\n    descriptor: (Ljava/lang/Object;)Z\n\n  public int hashCode();\n    descriptor: ()I\n\n  public java.lang.String toString();\n    descriptor: ()Ljava/lang/String;\n}\n",
+    "gg.grounds.dialogue.testkit.RecordingDialogueRenderer$prepare$1": "public final class gg.grounds.dialogue.testkit.RecordingDialogueRenderer$prepare$1 implements gg.grounds.dialogue.core.port.DialogueRenderer$PresentationHandle {\n  public java.util.concurrent.CompletionStage<java.lang.Void> replace(gg.grounds.dialogue.core.runtime.DialogueView);\n    descriptor: (Lgg/grounds/dialogue/core/runtime/DialogueView;)Ljava/util/concurrent/CompletionStage;\n\n  public java.util.concurrent.CompletionStage<java.lang.Void> reconfigure(gg.grounds.dialogue.core.runtime.PresentationPreferences);\n    descriptor: (Lgg/grounds/dialogue/core/runtime/PresentationPreferences;)Ljava/util/concurrent/CompletionStage;\n\n  public java.util.concurrent.CompletionStage<java.lang.Void> closeAsync();\n    descriptor: ()Ljava/util/concurrent/CompletionStage;\n\n  public java.util.concurrent.CompletionStage<java.lang.Void> replace(gg.grounds.dialogue.core.runtime.DialogueView, java.util.Optional<gg.grounds.dialogue.core.runtime.TypingTiming>);\n    descriptor: (Lgg/grounds/dialogue/core/runtime/DialogueView;Ljava/util/Optional;)Ljava/util/concurrent/CompletionStage;\n\n  public void invalidateTyping();\n    descriptor: ()V\n}\n",
+    "gg.grounds.dialogue.testkit.RecordingDialogueSurface": "public final class gg.grounds.dialogue.testkit.RecordingDialogueSurface implements gg.grounds.dialogue.presentation.DialogueSurface {\n  public gg.grounds.dialogue.testkit.RecordingDialogueSurface();\n    descriptor: ()V\n\n  public synchronized java.util.concurrent.CompletionStage<gg.grounds.dialogue.presentation.DialogueSurface$SurfaceHandle> open(gg.grounds.dialogue.presentation.DialogueSurface$SurfaceContext);\n    descriptor: (Lgg/grounds/dialogue/presentation/DialogueSurface$SurfaceContext;)Ljava/util/concurrent/CompletionStage;\n\n  public final synchronized java.util.List<gg.grounds.dialogue.testkit.RecordingDialogueSurface$SurfaceSnapshot> snapshots();\n    descriptor: ()Ljava/util/List;\n}\n",
+    "gg.grounds.dialogue.testkit.RecordingDialogueSurface$SurfaceSnapshot": "public final class gg.grounds.dialogue.testkit.RecordingDialogueSurface$SurfaceSnapshot {\n  public gg.grounds.dialogue.testkit.RecordingDialogueSurface$SurfaceSnapshot(java.util.UUID, java.lang.String, long, java.lang.String, long, java.util.List<gg.grounds.dialogue.presentation.WidgetFrame>, java.util.List<gg.grounds.dialogue.core.runtime.PresentationPreferences>, boolean, int, int);\n    descriptor: (Ljava/util/UUID;Ljava/lang/String;JLjava/lang/String;JLjava/util/List;Ljava/util/List;ZII)V\n\n  public final java.util.UUID sessionId();\n    descriptor: ()Ljava/util/UUID;\n\n  public final java.lang.String audienceId();\n    descriptor: ()Ljava/lang/String;\n\n  public final long hostGeneration();\n    descriptor: ()J\n\n  public final java.lang.String surfaceKey();\n    descriptor: ()Ljava/lang/String;\n\n  public final long generation();\n    descriptor: ()J\n\n  public final java.util.List<gg.grounds.dialogue.presentation.WidgetFrame> frames();\n    descriptor: ()Ljava/util/List;\n\n  public final java.util.List<gg.grounds.dialogue.core.runtime.PresentationPreferences> configurations();\n    descriptor: ()Ljava/util/List;\n\n  public final boolean closed();\n    descriptor: ()Z\n\n  public final int closeCalls();\n    descriptor: ()I\n\n  public final int rejectedWrites();\n    descriptor: ()I\n\n  public boolean equals(java.lang.Object);\n    descriptor: (Ljava/lang/Object;)Z\n\n  public int hashCode();\n    descriptor: ()I\n\n  public java.lang.String toString();\n    descriptor: ()Ljava/lang/String;\n}\n",
+    "gg.grounds.dialogue.testkit.RecordingDialogueSurface$open$1": "public final class gg.grounds.dialogue.testkit.RecordingDialogueSurface$open$1 implements gg.grounds.dialogue.presentation.DialogueSurface$SurfaceHandle {\n  public java.util.concurrent.CompletionStage<java.lang.Void> replace(gg.grounds.dialogue.presentation.WidgetFrame);\n    descriptor: (Lgg/grounds/dialogue/presentation/WidgetFrame;)Ljava/util/concurrent/CompletionStage;\n\n  public java.util.concurrent.CompletionStage<java.lang.Void> configure(gg.grounds.dialogue.core.runtime.PresentationPreferences);\n    descriptor: (Lgg/grounds/dialogue/core/runtime/PresentationPreferences;)Ljava/util/concurrent/CompletionStage;\n\n  public java.util.concurrent.CompletionStage<java.lang.Void> closeAsync();\n    descriptor: ()Ljava/util/concurrent/CompletionStage;\n}\n",
+    "gg.grounds.dialogue.testkit.RecordingOutcomeSink": "public final class gg.grounds.dialogue.testkit.RecordingOutcomeSink implements gg.grounds.dialogue.core.port.OutcomeSink {\n  public gg.grounds.dialogue.testkit.RecordingOutcomeSink();\n    descriptor: ()V\n\n  public synchronized java.util.concurrent.CompletionStage<gg.grounds.dialogue.core.port.OutcomeSink$OutcomeResult> deliver(gg.grounds.dialogue.core.port.OutcomeSink$OutcomeEvent);\n    descriptor: (Lgg/grounds/dialogue/core/port/OutcomeSink$OutcomeEvent;)Ljava/util/concurrent/CompletionStage;\n\n  public final synchronized java.util.List<gg.grounds.dialogue.core.port.OutcomeSink$OutcomeEvent> events();\n    descriptor: ()Ljava/util/List;\n}\n",
+    "gg.grounds.dialogue.testkit.RecordingState": "public final class gg.grounds.dialogue.testkit.RecordingState<T> {\n  public gg.grounds.dialogue.testkit.RecordingState();\n    descriptor: ()V\n\n  public final java.util.ArrayList<T> getFrames();\n    descriptor: ()Ljava/util/ArrayList;\n\n  public final java.util.ArrayList<gg.grounds.dialogue.core.runtime.PresentationPreferences> getConfigurations();\n    descriptor: ()Ljava/util/ArrayList;\n\n  public final boolean getClosed();\n    descriptor: ()Z\n\n  public final int getCloseCalls();\n    descriptor: ()I\n\n  public final int getRejectedWrites();\n    descriptor: ()I\n\n  public final java.util.concurrent.CompletionStage<java.lang.Void> write(T);\n    descriptor: (Ljava/lang/Object;)Ljava/util/concurrent/CompletionStage;\n\n  public final java.util.concurrent.CompletionStage<java.lang.Void> configure(gg.grounds.dialogue.core.runtime.PresentationPreferences);\n    descriptor: (Lgg/grounds/dialogue/core/runtime/PresentationPreferences;)Ljava/util/concurrent/CompletionStage;\n\n  public final java.util.concurrent.CompletionStage<java.lang.Void> close();\n    descriptor: ()Ljava/util/concurrent/CompletionStage;\n}\n"
+  },
+  "classes": {
+    "gg.grounds.dialogue.testkit.ManualDialogueScheduler": {
+      "flags": 49,
+      "members": {
+        "field:controlling:Z": {
+          "flags": 2,
+          "offset": 5431
+        },
+        "field:lock:Ljava/lang/Object;": {
+          "flags": 18,
+          "offset": 5367
+        },
+        "field:now:J": {
+          "flags": 2,
+          "offset": 5415
+        },
+        "field:queue:Ljava/util/PriorityQueue;": {
+          "flags": 18,
+          "offset": 5387
+        },
+        "field:sequence:J": {
+          "flags": 2,
+          "offset": 5423
+        },
+        "method:<init>:()V": {
+          "flags": 1,
+          "offset": 5441
+        },
+        "method:advanceBy:(Ljava/time/Duration;)V": {
+          "flags": 17,
+          "offset": 6344
+        },
+        "method:control:(Ljava/time/Duration;)V": {
+          "flags": 18,
+          "offset": 6674
+        },
+        "method:execute:(Ljava/lang/Runnable;)V": {
+          "flags": 1,
+          "offset": 5561
+        },
+        "method:nanoTime:()J": {
+          "flags": 1,
+          "offset": 6104
+        },
+        "method:queue$lambda$0:(Lgg/grounds/dialogue/testkit/ManualDialogueScheduler$Job;)Ljava/lang/Comparable;": {
+          "flags": 26,
+          "offset": 7807
+        },
+        "method:queue$lambda$1:(Lgg/grounds/dialogue/testkit/ManualDialogueScheduler$Job;)Ljava/lang/Comparable;": {
+          "flags": 26,
+          "offset": 7891
+        },
+        "method:runUntilIdle:()V": {
+          "flags": 17,
+          "offset": 6270
+        },
+        "method:schedule$lambda$0$1:(Lgg/grounds/dialogue/testkit/ManualDialogueScheduler;Lgg/grounds/dialogue/testkit/ManualDialogueScheduler$Job;)V": {
+          "flags": 26,
+          "offset": 7975
+        },
+        "method:schedule:(Ljava/time/Duration;Ljava/lang/Runnable;)Lgg/grounds/dialogue/core/port/DialogueScheduler$ScheduledTask;": {
+          "flags": 1,
+          "offset": 5677
+        },
+        "method:target:(Ljava/time/Duration;)J": {
+          "flags": 18,
+          "offset": 6450
+        }
+      }
+    },
+    "gg.grounds.dialogue.testkit.ManualDialogueScheduler$Job": {
+      "flags": 48,
+      "members": {
+        "field:at:J": {
+          "flags": 18,
+          "offset": 1173
+        },
+        "field:callback:Ljava/lang/Runnable;": {
+          "flags": 18,
+          "offset": 1189
+        },
+        "field:cancelled:Z": {
+          "flags": 2,
+          "offset": 1209
+        },
+        "field:sequence:J": {
+          "flags": 18,
+          "offset": 1181
+        },
+        "method:<init>:(JJLjava/lang/Runnable;)V": {
+          "flags": 1,
+          "offset": 1219
+        },
+        "method:getAt:()J": {
+          "flags": 17,
+          "offset": 1369
+        },
+        "method:getCallback:()Ljava/lang/Runnable;": {
+          "flags": 17,
+          "offset": 1491
+        },
+        "method:getCancelled:()Z": {
+          "flags": 17,
+          "offset": 1564
+        },
+        "method:getSequence:()J": {
+          "flags": 17,
+          "offset": 1430
+        },
+        "method:setCancelled:(Z)V": {
+          "flags": 17,
+          "offset": 1625
+        }
+      }
+    },
+    "gg.grounds.dialogue.testkit.RecordingDialogueRenderer": {
+      "flags": 49,
+      "members": {
+        "field:entries:Ljava/util/ArrayList;": {
+          "flags": 18,
+          "offset": 4934
+        },
+        "method:<init>:()V": {
+          "flags": 1,
+          "offset": 4964
+        },
+        "method:prepare:(Lgg/grounds/dialogue/core/port/DialogueRenderer$PresentationRequest;)Ljava/util/concurrent/CompletionStage;": {
+          "flags": 33,
+          "offset": 5044
+        },
+        "method:snapshots$lambda$0:(Lgg/grounds/dialogue/testkit/RecordingDialogueRenderer$Entry;)Lgg/grounds/dialogue/testkit/RecordingDialogueRenderer$PresentationSnapshot;": {
+          "flags": 26,
+          "offset": 5413
+        },
+        "method:snapshots$lambda$1:(Lkotlin/jvm/functions/Function1;Ljava/lang/Object;)Lgg/grounds/dialogue/testkit/RecordingDialogueRenderer$PresentationSnapshot;": {
+          "flags": 26,
+          "offset": 5581
+        },
+        "method:snapshots:()Ljava/util/List;": {
+          "flags": 49,
+          "offset": 5281
+        }
+      }
+    },
+    "gg.grounds.dialogue.testkit.RecordingDialogueRenderer$Entry": {
+      "flags": 48,
+      "members": {
+        "field:audienceId:Ljava/lang/String;": {
+          "flags": 18,
+          "offset": 1832
+        },
+        "field:hostGeneration:J": {
+          "flags": 18,
+          "offset": 1852
+        },
+        "field:sessionId:Ljava/util/UUID;": {
+          "flags": 18,
+          "offset": 1812
+        },
+        "field:state:Lgg/grounds/dialogue/testkit/RecordingState;": {
+          "flags": 18,
+          "offset": 1860
+        },
+        "method:<init>:(Ljava/util/UUID;Ljava/lang/String;JLgg/grounds/dialogue/testkit/RecordingState;)V": {
+          "flags": 1,
+          "offset": 1890
+        },
+        "method:getAudienceId:()Ljava/lang/String;": {
+          "flags": 17,
+          "offset": 2170
+        },
+        "method:getHostGeneration:()J": {
+          "flags": 17,
+          "offset": 2243
+        },
+        "method:getSessionId:()Ljava/util/UUID;": {
+          "flags": 17,
+          "offset": 2097
+        },
+        "method:getState:()Lgg/grounds/dialogue/testkit/RecordingState;": {
+          "flags": 17,
+          "offset": 2304
+        }
+      }
+    },
+    "gg.grounds.dialogue.testkit.RecordingDialogueRenderer$PresentationSnapshot": {
+      "flags": 49,
+      "members": {
+        "field:audienceId:Ljava/lang/String;": {
+          "flags": 18,
+          "offset": 3438
+        },
+        "field:closeCalls:I": {
+          "flags": 18,
+          "offset": 3474
+        },
+        "field:closed:Z": {
+          "flags": 18,
+          "offset": 3466
+        },
+        "field:configurations:Ljava/util/List;": {
+          "flags": 18,
+          "offset": 3506
+        },
+        "field:hostGeneration:J": {
+          "flags": 18,
+          "offset": 3458
+        },
+        "field:rejectedWrites:I": {
+          "flags": 18,
+          "offset": 3482
+        },
+        "field:sessionId:Ljava/util/UUID;": {
+          "flags": 18,
+          "offset": 3418
+        },
+        "field:views:Ljava/util/List;": {
+          "flags": 18,
+          "offset": 3490
+        },
+        "method:<init>:(Ljava/util/UUID;Ljava/lang/String;JLjava/util/List;Ljava/util/List;ZII)V": {
+          "flags": 1,
+          "offset": 3524
+        },
+        "method:audienceId:()Ljava/lang/String;": {
+          "flags": 17,
+          "offset": 3931
+        },
+        "method:closeCalls:()I": {
+          "flags": 17,
+          "offset": 4300
+        },
+        "method:closed:()Z": {
+          "flags": 17,
+          "offset": 4239
+        },
+        "method:configurations:()Ljava/util/List;": {
+          "flags": 17,
+          "offset": 4152
+        },
+        "method:equals:(Ljava/lang/Object;)Z": {
+          "flags": 1,
+          "offset": 4422
+        },
+        "method:hashCode:()I": {
+          "flags": 1,
+          "offset": 4695
+        },
+        "method:hostGeneration:()J": {
+          "flags": 17,
+          "offset": 4004
+        },
+        "method:rejectedWrites:()I": {
+          "flags": 17,
+          "offset": 4361
+        },
+        "method:sessionId:()Ljava/util/UUID;": {
+          "flags": 17,
+          "offset": 3858
+        },
+        "method:toString:()Ljava/lang/String;": {
+          "flags": 1,
+          "offset": 4954
+        },
+        "method:views:()Ljava/util/List;": {
+          "flags": 17,
+          "offset": 4065
+        }
+      }
+    },
+    "gg.grounds.dialogue.testkit.RecordingDialogueRenderer$prepare$1": {
+      "flags": 49,
+      "members": {
+        "field:$state:Lgg/grounds/dialogue/testkit/RecordingState;": {
+          "flags": 4112,
+          "offset": 3762
+        },
+        "field:this$0:Lgg/grounds/dialogue/testkit/RecordingDialogueRenderer;": {
+          "flags": 4112,
+          "offset": 3754
+        },
+        "method:<init>:(Lgg/grounds/dialogue/testkit/RecordingDialogueRenderer;Lgg/grounds/dialogue/testkit/RecordingState;)V": {
+          "flags": 0,
+          "offset": 3780
+        },
+        "method:closeAsync:()Ljava/util/concurrent/CompletionStage;": {
+          "flags": 1,
+          "offset": 4370
+        },
+        "method:invalidateTyping:()V": {
+          "flags": 65,
+          "offset": 4676
+        },
+        "method:reconfigure:(Lgg/grounds/dialogue/core/runtime/PresentationPreferences;)Ljava/util/concurrent/CompletionStage;": {
+          "flags": 1,
+          "offset": 4132
+        },
+        "method:replace:(Lgg/grounds/dialogue/core/runtime/DialogueView;)Ljava/util/concurrent/CompletionStage;": {
+          "flags": 1,
+          "offset": 3894
+        },
+        "method:replace:(Lgg/grounds/dialogue/core/runtime/DialogueView;Ljava/util/Optional;)Ljava/util/concurrent/CompletionStage;": {
+          "flags": 65,
+          "offset": 4570
+        }
+      }
+    },
+    "gg.grounds.dialogue.testkit.RecordingDialogueSurface": {
+      "flags": 49,
+      "members": {
+        "field:entries:Ljava/util/ArrayList;": {
+          "flags": 18,
+          "offset": 4987
+        },
+        "method:<init>:()V": {
+          "flags": 1,
+          "offset": 5017
+        },
+        "method:open:(Lgg/grounds/dialogue/presentation/DialogueSurface$SurfaceContext;)Ljava/util/concurrent/CompletionStage;": {
+          "flags": 33,
+          "offset": 5097
+        },
+        "method:snapshots$lambda$0:(Lgg/grounds/dialogue/testkit/RecordingDialogueSurface$Entry;)Lgg/grounds/dialogue/testkit/RecordingDialogueSurface$SurfaceSnapshot;": {
+          "flags": 26,
+          "offset": 5482
+        },
+        "method:snapshots$lambda$1:(Lkotlin/jvm/functions/Function1;Ljava/lang/Object;)Lgg/grounds/dialogue/testkit/RecordingDialogueSurface$SurfaceSnapshot;": {
+          "flags": 26,
+          "offset": 5666
+        },
+        "method:snapshots:()Ljava/util/List;": {
+          "flags": 49,
+          "offset": 5350
+        }
+      }
+    },
+    "gg.grounds.dialogue.testkit.RecordingDialogueSurface$Entry": {
+      "flags": 48,
+      "members": {
+        "field:audienceId:Ljava/lang/String;": {
+          "flags": 18,
+          "offset": 2003
+        },
+        "field:generation:J": {
+          "flags": 18,
+          "offset": 2051
+        },
+        "field:hostGeneration:J": {
+          "flags": 18,
+          "offset": 2023
+        },
+        "field:sessionId:Ljava/util/UUID;": {
+          "flags": 18,
+          "offset": 1983
+        },
+        "field:state:Lgg/grounds/dialogue/testkit/RecordingState;": {
+          "flags": 18,
+          "offset": 2059
+        },
+        "field:surfaceKey:Ljava/lang/String;": {
+          "flags": 18,
+          "offset": 2031
+        },
+        "method:<init>:(Ljava/util/UUID;Ljava/lang/String;JLjava/lang/String;JLgg/grounds/dialogue/testkit/RecordingState;)V": {
+          "flags": 1,
+          "offset": 2089
+        },
+        "method:getAudienceId:()Ljava/lang/String;": {
+          "flags": 17,
+          "offset": 2425
+        },
+        "method:getGeneration:()J": {
+          "flags": 17,
+          "offset": 2632
+        },
+        "method:getHostGeneration:()J": {
+          "flags": 17,
+          "offset": 2498
+        },
+        "method:getSessionId:()Ljava/util/UUID;": {
+          "flags": 17,
+          "offset": 2352
+        },
+        "method:getState:()Lgg/grounds/dialogue/testkit/RecordingState;": {
+          "flags": 17,
+          "offset": 2693
+        },
+        "method:getSurfaceKey:()Ljava/lang/String;": {
+          "flags": 17,
+          "offset": 2559
+        }
+      }
+    },
+    "gg.grounds.dialogue.testkit.RecordingDialogueSurface$SurfaceSnapshot": {
+      "flags": 49,
+      "members": {
+        "field:audienceId:Ljava/lang/String;": {
+          "flags": 18,
+          "offset": 3620
+        },
+        "field:closeCalls:I": {
+          "flags": 18,
+          "offset": 3684
+        },
+        "field:closed:Z": {
+          "flags": 18,
+          "offset": 3676
+        },
+        "field:configurations:Ljava/util/List;": {
+          "flags": 18,
+          "offset": 3716
+        },
+        "field:frames:Ljava/util/List;": {
+          "flags": 18,
+          "offset": 3700
+        },
+        "field:generation:J": {
+          "flags": 18,
+          "offset": 3668
+        },
+        "field:hostGeneration:J": {
+          "flags": 18,
+          "offset": 3640
+        },
+        "field:rejectedWrites:I": {
+          "flags": 18,
+          "offset": 3692
+        },
+        "field:sessionId:Ljava/util/UUID;": {
+          "flags": 18,
+          "offset": 3600
+        },
+        "field:surfaceKey:Ljava/lang/String;": {
+          "flags": 18,
+          "offset": 3648
+        },
+        "method:<init>:(Ljava/util/UUID;Ljava/lang/String;JLjava/lang/String;JLjava/util/List;Ljava/util/List;ZII)V": {
+          "flags": 1,
+          "offset": 3734
+        },
+        "method:audienceId:()Ljava/lang/String;": {
+          "flags": 17,
+          "offset": 4197
+        },
+        "method:closeCalls:()I": {
+          "flags": 17,
+          "offset": 4700
+        },
+        "method:closed:()Z": {
+          "flags": 17,
+          "offset": 4639
+        },
+        "method:configurations:()Ljava/util/List;": {
+          "flags": 17,
+          "offset": 4552
+        },
+        "method:equals:(Ljava/lang/Object;)Z": {
+          "flags": 1,
+          "offset": 4822
+        },
+        "method:frames:()Ljava/util/List;": {
+          "flags": 17,
+          "offset": 4465
+        },
+        "method:generation:()J": {
+          "flags": 17,
+          "offset": 4404
+        },
+        "method:hashCode:()I": {
+          "flags": 1,
+          "offset": 5135
+        },
+        "method:hostGeneration:()J": {
+          "flags": 17,
+          "offset": 4270
+        },
+        "method:rejectedWrites:()I": {
+          "flags": 17,
+          "offset": 4761
+        },
+        "method:sessionId:()Ljava/util/UUID;": {
+          "flags": 17,
+          "offset": 4124
+        },
+        "method:surfaceKey:()Ljava/lang/String;": {
+          "flags": 17,
+          "offset": 4331
+        },
+        "method:toString:()Ljava/lang/String;": {
+          "flags": 1,
+          "offset": 5465
+        }
+      }
+    },
+    "gg.grounds.dialogue.testkit.RecordingDialogueSurface$open$1": {
+      "flags": 49,
+      "members": {
+        "field:$state:Lgg/grounds/dialogue/testkit/RecordingState;": {
+          "flags": 4112,
+          "offset": 3321
+        },
+        "field:this$0:Lgg/grounds/dialogue/testkit/RecordingDialogueSurface;": {
+          "flags": 4112,
+          "offset": 3313
+        },
+        "method:<init>:(Lgg/grounds/dialogue/testkit/RecordingDialogueSurface;Lgg/grounds/dialogue/testkit/RecordingState;)V": {
+          "flags": 0,
+          "offset": 3339
+        },
+        "method:closeAsync:()Ljava/util/concurrent/CompletionStage;": {
+          "flags": 1,
+          "offset": 3929
+        },
+        "method:configure:(Lgg/grounds/dialogue/core/runtime/PresentationPreferences;)Ljava/util/concurrent/CompletionStage;": {
+          "flags": 1,
+          "offset": 3691
+        },
+        "method:replace:(Lgg/grounds/dialogue/presentation/WidgetFrame;)Ljava/util/concurrent/CompletionStage;": {
+          "flags": 1,
+          "offset": 3453
+        }
+      }
+    },
+    "gg.grounds.dialogue.testkit.RecordingOutcomeSink": {
+      "flags": 49,
+      "members": {
+        "field:events:Ljava/util/ArrayList;": {
+          "flags": 18,
+          "offset": 2212
+        },
+        "method:<init>:()V": {
+          "flags": 1,
+          "offset": 2242
+        },
+        "method:deliver:(Lgg/grounds/dialogue/core/port/OutcomeSink$OutcomeEvent;)Ljava/util/concurrent/CompletionStage;": {
+          "flags": 33,
+          "offset": 2322
+        },
+        "method:events:()Ljava/util/List;": {
+          "flags": 49,
+          "offset": 2467
+        }
+      }
+    },
+    "gg.grounds.dialogue.testkit.RecordingState": {
+      "flags": 49,
+      "members": {
+        "field:cleanup:Ljava/util/concurrent/CompletionStage;": {
+          "flags": 18,
+          "offset": 3071
+        },
+        "field:closeCalls:I": {
+          "flags": 2,
+          "offset": 3095
+        },
+        "field:closed:Z": {
+          "flags": 2,
+          "offset": 3087
+        },
+        "field:configurations:Ljava/util/ArrayList;": {
+          "flags": 18,
+          "offset": 3043
+        },
+        "field:frames:Ljava/util/ArrayList;": {
+          "flags": 18,
+          "offset": 3015
+        },
+        "field:rejectedWrites:I": {
+          "flags": 2,
+          "offset": 3103
+        },
+        "method:<init>:()V": {
+          "flags": 1,
+          "offset": 3113
+        },
+        "method:close:()Ljava/util/concurrent/CompletionStage;": {
+          "flags": 17,
+          "offset": 4009
+        },
+        "method:configure:(Lgg/grounds/dialogue/core/runtime/PresentationPreferences;)Ljava/util/concurrent/CompletionStage;": {
+          "flags": 17,
+          "offset": 3736
+        },
+        "method:getCloseCalls:()I": {
+          "flags": 17,
+          "offset": 3446
+        },
+        "method:getClosed:()Z": {
+          "flags": 17,
+          "offset": 3385
+        },
+        "method:getConfigurations:()Ljava/util/ArrayList;": {
+          "flags": 17,
+          "offset": 3304
+        },
+        "method:getFrames:()Ljava/util/ArrayList;": {
+          "flags": 17,
+          "offset": 3223
+        },
+        "method:getRejectedWrites:()I": {
+          "flags": 17,
+          "offset": 3507
+        },
+        "method:rejected:()Ljava/util/concurrent/CompletionStage;": {
+          "flags": 18,
+          "offset": 3904
+        },
+        "method:write:(Ljava/lang/Object;)Ljava/util/concurrent/CompletionStage;": {
+          "flags": 17,
+          "offset": 3568
+        }
+      }
+    }
+  },
+  "raw": {
+    "gg.grounds.dialogue.testkit.ManualDialogueScheduler": "public final class gg.grounds.dialogue.testkit.ManualDialogueScheduler implements gg.grounds.dialogue.core.port.DialogueScheduler {\n  public gg.grounds.dialogue.testkit.ManualDialogueScheduler();\n    descriptor: ()V\n\n  public void execute(java.lang.Runnable);\n    descriptor: (Ljava/lang/Runnable;)V\n\n  public gg.grounds.dialogue.core.port.DialogueScheduler$ScheduledTask schedule(java.time.Duration, java.lang.Runnable);\n    descriptor: (Ljava/time/Duration;Ljava/lang/Runnable;)Lgg/grounds/dialogue/core/port/DialogueScheduler$ScheduledTask;\n\n  public long nanoTime();\n    descriptor: ()J\n\n  public final void runUntilIdle();\n    descriptor: ()V\n\n  public final void advanceBy(java.time.Duration);\n    descriptor: (Ljava/time/Duration;)V\n}\n",
+    "gg.grounds.dialogue.testkit.RecordingDialogueRenderer": "public final class gg.grounds.dialogue.testkit.RecordingDialogueRenderer implements gg.grounds.dialogue.core.port.DialogueRenderer {\n  public gg.grounds.dialogue.testkit.RecordingDialogueRenderer();\n    descriptor: ()V\n\n  public synchronized java.util.concurrent.CompletionStage<gg.grounds.dialogue.core.port.DialogueRenderer$PresentationHandle> prepare(gg.grounds.dialogue.core.port.DialogueRenderer$PresentationRequest);\n    descriptor: (Lgg/grounds/dialogue/core/port/DialogueRenderer$PresentationRequest;)Ljava/util/concurrent/CompletionStage;\n\n  public final synchronized java.util.List<gg.grounds.dialogue.testkit.RecordingDialogueRenderer$PresentationSnapshot> snapshots();\n    descriptor: ()Ljava/util/List;\n}\n",
+    "gg.grounds.dialogue.testkit.RecordingDialogueRenderer$PresentationSnapshot": "public final class gg.grounds.dialogue.testkit.RecordingDialogueRenderer$PresentationSnapshot {\n  public gg.grounds.dialogue.testkit.RecordingDialogueRenderer$PresentationSnapshot(java.util.UUID, java.lang.String, long, java.util.List<gg.grounds.dialogue.core.runtime.DialogueView>, java.util.List<gg.grounds.dialogue.core.runtime.PresentationPreferences>, boolean, int, int);\n    descriptor: (Ljava/util/UUID;Ljava/lang/String;JLjava/util/List;Ljava/util/List;ZII)V\n\n  public final java.util.UUID sessionId();\n    descriptor: ()Ljava/util/UUID;\n\n  public final java.lang.String audienceId();\n    descriptor: ()Ljava/lang/String;\n\n  public final long hostGeneration();\n    descriptor: ()J\n\n  public final java.util.List<gg.grounds.dialogue.core.runtime.DialogueView> views();\n    descriptor: ()Ljava/util/List;\n\n  public final java.util.List<gg.grounds.dialogue.core.runtime.PresentationPreferences> configurations();\n    descriptor: ()Ljava/util/List;\n\n  public final boolean closed();\n    descriptor: ()Z\n\n  public final int closeCalls();\n    descriptor: ()I\n\n  public final int rejectedWrites();\n    descriptor: ()I\n\n  public boolean equals(java.lang.Object);\n    descriptor: (Ljava/lang/Object;)Z\n\n  public int hashCode();\n    descriptor: ()I\n\n  public java.lang.String toString();\n    descriptor: ()Ljava/lang/String;\n}\n",
+    "gg.grounds.dialogue.testkit.RecordingDialogueRenderer$prepare$1": "public final class gg.grounds.dialogue.testkit.RecordingDialogueRenderer$prepare$1 implements gg.grounds.dialogue.core.port.DialogueRenderer$PresentationHandle {\n  public java.util.concurrent.CompletionStage<java.lang.Void> replace(gg.grounds.dialogue.core.runtime.DialogueView);\n    descriptor: (Lgg/grounds/dialogue/core/runtime/DialogueView;)Ljava/util/concurrent/CompletionStage;\n\n  public java.util.concurrent.CompletionStage<java.lang.Void> reconfigure(gg.grounds.dialogue.core.runtime.PresentationPreferences);\n    descriptor: (Lgg/grounds/dialogue/core/runtime/PresentationPreferences;)Ljava/util/concurrent/CompletionStage;\n\n  public java.util.concurrent.CompletionStage<java.lang.Void> closeAsync();\n    descriptor: ()Ljava/util/concurrent/CompletionStage;\n\n  public java.util.concurrent.CompletionStage<java.lang.Void> replace(gg.grounds.dialogue.core.runtime.DialogueView, java.util.Optional<gg.grounds.dialogue.core.runtime.TypingTiming>);\n    descriptor: (Lgg/grounds/dialogue/core/runtime/DialogueView;Ljava/util/Optional;)Ljava/util/concurrent/CompletionStage;\n\n  public void invalidateTyping();\n    descriptor: ()V\n}\n",
+    "gg.grounds.dialogue.testkit.RecordingDialogueSurface": "public final class gg.grounds.dialogue.testkit.RecordingDialogueSurface implements gg.grounds.dialogue.presentation.DialogueSurface {\n  public gg.grounds.dialogue.testkit.RecordingDialogueSurface();\n    descriptor: ()V\n\n  public synchronized java.util.concurrent.CompletionStage<gg.grounds.dialogue.presentation.DialogueSurface$SurfaceHandle> open(gg.grounds.dialogue.presentation.DialogueSurface$SurfaceContext);\n    descriptor: (Lgg/grounds/dialogue/presentation/DialogueSurface$SurfaceContext;)Ljava/util/concurrent/CompletionStage;\n\n  public final synchronized java.util.List<gg.grounds.dialogue.testkit.RecordingDialogueSurface$SurfaceSnapshot> snapshots();\n    descriptor: ()Ljava/util/List;\n}\n",
+    "gg.grounds.dialogue.testkit.RecordingDialogueSurface$SurfaceSnapshot": "public final class gg.grounds.dialogue.testkit.RecordingDialogueSurface$SurfaceSnapshot {\n  public gg.grounds.dialogue.testkit.RecordingDialogueSurface$SurfaceSnapshot(java.util.UUID, java.lang.String, long, java.lang.String, long, java.util.List<gg.grounds.dialogue.presentation.WidgetFrame>, java.util.List<gg.grounds.dialogue.core.runtime.PresentationPreferences>, boolean, int, int);\n    descriptor: (Ljava/util/UUID;Ljava/lang/String;JLjava/lang/String;JLjava/util/List;Ljava/util/List;ZII)V\n\n  public final java.util.UUID sessionId();\n    descriptor: ()Ljava/util/UUID;\n\n  public final java.lang.String audienceId();\n    descriptor: ()Ljava/lang/String;\n\n  public final long hostGeneration();\n    descriptor: ()J\n\n  public final java.lang.String surfaceKey();\n    descriptor: ()Ljava/lang/String;\n\n  public final long generation();\n    descriptor: ()J\n\n  public final java.util.List<gg.grounds.dialogue.presentation.WidgetFrame> frames();\n    descriptor: ()Ljava/util/List;\n\n  public final java.util.List<gg.grounds.dialogue.core.runtime.PresentationPreferences> configurations();\n    descriptor: ()Ljava/util/List;\n\n  public final boolean closed();\n    descriptor: ()Z\n\n  public final int closeCalls();\n    descriptor: ()I\n\n  public final int rejectedWrites();\n    descriptor: ()I\n\n  public boolean equals(java.lang.Object);\n    descriptor: (Ljava/lang/Object;)Z\n\n  public int hashCode();\n    descriptor: ()I\n\n  public java.lang.String toString();\n    descriptor: ()Ljava/lang/String;\n}\n",
+    "gg.grounds.dialogue.testkit.RecordingDialogueSurface$open$1": "public final class gg.grounds.dialogue.testkit.RecordingDialogueSurface$open$1 implements gg.grounds.dialogue.presentation.DialogueSurface$SurfaceHandle {\n  public java.util.concurrent.CompletionStage<java.lang.Void> replace(gg.grounds.dialogue.presentation.WidgetFrame);\n    descriptor: (Lgg/grounds/dialogue/presentation/WidgetFrame;)Ljava/util/concurrent/CompletionStage;\n\n  public java.util.concurrent.CompletionStage<java.lang.Void> configure(gg.grounds.dialogue.core.runtime.PresentationPreferences);\n    descriptor: (Lgg/grounds/dialogue/core/runtime/PresentationPreferences;)Ljava/util/concurrent/CompletionStage;\n\n  public java.util.concurrent.CompletionStage<java.lang.Void> closeAsync();\n    descriptor: ()Ljava/util/concurrent/CompletionStage;\n}\n",
+    "gg.grounds.dialogue.testkit.RecordingOutcomeSink": "public final class gg.grounds.dialogue.testkit.RecordingOutcomeSink implements gg.grounds.dialogue.core.port.OutcomeSink {\n  public gg.grounds.dialogue.testkit.RecordingOutcomeSink();\n    descriptor: ()V\n\n  public synchronized java.util.concurrent.CompletionStage<gg.grounds.dialogue.core.port.OutcomeSink$OutcomeResult> deliver(gg.grounds.dialogue.core.port.OutcomeSink$OutcomeEvent);\n    descriptor: (Lgg/grounds/dialogue/core/port/OutcomeSink$OutcomeEvent;)Ljava/util/concurrent/CompletionStage;\n\n  public final synchronized java.util.List<gg.grounds.dialogue.core.port.OutcomeSink$OutcomeEvent> events();\n    descriptor: ()Ljava/util/List;\n}\n",
+    "gg.grounds.dialogue.testkit.RecordingState": "public final class gg.grounds.dialogue.testkit.RecordingState<T> {\n  public gg.grounds.dialogue.testkit.RecordingState();\n    descriptor: ()V\n\n  public final java.util.ArrayList<T> getFrames();\n    descriptor: ()Ljava/util/ArrayList;\n\n  public final java.util.ArrayList<gg.grounds.dialogue.core.runtime.PresentationPreferences> getConfigurations();\n    descriptor: ()Ljava/util/ArrayList;\n\n  public final boolean getClosed();\n    descriptor: ()Z\n\n  public final int getCloseCalls();\n    descriptor: ()I\n\n  public final int getRejectedWrites();\n    descriptor: ()I\n\n  public final java.util.concurrent.CompletionStage<java.lang.Void> write(T);\n    descriptor: (Ljava/lang/Object;)Ljava/util/concurrent/CompletionStage;\n\n  public final java.util.concurrent.CompletionStage<java.lang.Void> configure(gg.grounds.dialogue.core.runtime.PresentationPreferences);\n    descriptor: (Lgg/grounds/dialogue/core/runtime/PresentationPreferences;)Ljava/util/concurrent/CompletionStage;\n\n  public final java.util.concurrent.CompletionStage<java.lang.Void> close();\n    descriptor: ()Ljava/util/concurrent/CompletionStage;\n}\n"
+  }
+}

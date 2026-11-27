@@ -1,0 +1,812 @@
+{
+  "api": {
+    "gg.grounds.dialogue.cli.CliArguments": "public final class gg.grounds.dialogue.cli.CliArguments extends java.lang.Record {\n  public static final gg.grounds.dialogue.cli.CliArguments$Companion Companion;\n    descriptor: Lgg/grounds/dialogue/cli/CliArguments$Companion;\n  public gg.grounds.dialogue.cli.CliArguments(gg.grounds.dialogue.cli.CliArguments$Command, java.nio.file.Path, gg.grounds.dialogue.cli.CliArguments$Format);\n    descriptor: (Lgg/grounds/dialogue/cli/CliArguments$Command;Ljava/nio/file/Path;Lgg/grounds/dialogue/cli/CliArguments$Format;)V\n\n  public final gg.grounds.dialogue.cli.CliArguments$Command command();\n    descriptor: ()Lgg/grounds/dialogue/cli/CliArguments$Command;\n\n  public final java.nio.file.Path root();\n    descriptor: ()Ljava/nio/file/Path;\n\n  public final gg.grounds.dialogue.cli.CliArguments$Format format();\n    descriptor: ()Lgg/grounds/dialogue/cli/CliArguments$Format;\n\n  public final gg.grounds.dialogue.cli.CliArguments$Command component1();\n    descriptor: ()Lgg/grounds/dialogue/cli/CliArguments$Command;\n\n  public final java.nio.file.Path component2();\n    descriptor: ()Ljava/nio/file/Path;\n\n  public final gg.grounds.dialogue.cli.CliArguments$Format component3();\n    descriptor: ()Lgg/grounds/dialogue/cli/CliArguments$Format;\n\n  public final gg.grounds.dialogue.cli.CliArguments copy(gg.grounds.dialogue.cli.CliArguments$Command, java.nio.file.Path, gg.grounds.dialogue.cli.CliArguments$Format);\n    descriptor: (Lgg/grounds/dialogue/cli/CliArguments$Command;Ljava/nio/file/Path;Lgg/grounds/dialogue/cli/CliArguments$Format;)Lgg/grounds/dialogue/cli/CliArguments;\n\n  public static gg.grounds.dialogue.cli.CliArguments copy$default(gg.grounds.dialogue.cli.CliArguments, gg.grounds.dialogue.cli.CliArguments$Command, java.nio.file.Path, gg.grounds.dialogue.cli.CliArguments$Format, int, java.lang.Object);\n    descriptor: (Lgg/grounds/dialogue/cli/CliArguments;Lgg/grounds/dialogue/cli/CliArguments$Command;Ljava/nio/file/Path;Lgg/grounds/dialogue/cli/CliArguments$Format;ILjava/lang/Object;)Lgg/grounds/dialogue/cli/CliArguments;\n\n  public java.lang.String toString();\n    descriptor: ()Ljava/lang/String;\n\n  public int hashCode();\n    descriptor: ()I\n\n  public boolean equals(java.lang.Object);\n    descriptor: (Ljava/lang/Object;)Z\n\n  public static final gg.grounds.dialogue.cli.CliArguments$ParseResult parse(java.lang.String[]);\n    descriptor: ([Ljava/lang/String;)Lgg/grounds/dialogue/cli/CliArguments$ParseResult;\n}\n",
+    "gg.grounds.dialogue.cli.CliArguments$Command": "public final class gg.grounds.dialogue.cli.CliArguments$Command extends java.lang.Enum<gg.grounds.dialogue.cli.CliArguments$Command> {\n  public static final gg.grounds.dialogue.cli.CliArguments$Command VALIDATE;\n    descriptor: Lgg/grounds/dialogue/cli/CliArguments$Command;\n  public static final gg.grounds.dialogue.cli.CliArguments$Command HELP;\n    descriptor: Lgg/grounds/dialogue/cli/CliArguments$Command;\n  public static final gg.grounds.dialogue.cli.CliArguments$Command VERSION;\n    descriptor: Lgg/grounds/dialogue/cli/CliArguments$Command;\n  public static gg.grounds.dialogue.cli.CliArguments$Command[] values();\n    descriptor: ()[Lgg/grounds/dialogue/cli/CliArguments$Command;\n\n  public static gg.grounds.dialogue.cli.CliArguments$Command valueOf(java.lang.String);\n    descriptor: (Ljava/lang/String;)Lgg/grounds/dialogue/cli/CliArguments$Command;\n\n  public static kotlin.enums.EnumEntries<gg.grounds.dialogue.cli.CliArguments$Command> getEntries();\n    descriptor: ()Lkotlin/enums/EnumEntries;\n}\n",
+    "gg.grounds.dialogue.cli.CliArguments$Companion": "public final class gg.grounds.dialogue.cli.CliArguments$Companion {\n  public final gg.grounds.dialogue.cli.CliArguments$ParseResult parse(java.lang.String[]);\n    descriptor: ([Ljava/lang/String;)Lgg/grounds/dialogue/cli/CliArguments$ParseResult;\n\n  public gg.grounds.dialogue.cli.CliArguments$Companion(kotlin.jvm.internal.DefaultConstructorMarker);\n    descriptor: (Lkotlin/jvm/internal/DefaultConstructorMarker;)V\n}\n",
+    "gg.grounds.dialogue.cli.CliArguments$Format": "public final class gg.grounds.dialogue.cli.CliArguments$Format extends java.lang.Enum<gg.grounds.dialogue.cli.CliArguments$Format> {\n  public static final gg.grounds.dialogue.cli.CliArguments$Format TEXT;\n    descriptor: Lgg/grounds/dialogue/cli/CliArguments$Format;\n  public static final gg.grounds.dialogue.cli.CliArguments$Format JSON;\n    descriptor: Lgg/grounds/dialogue/cli/CliArguments$Format;\n  public static gg.grounds.dialogue.cli.CliArguments$Format[] values();\n    descriptor: ()[Lgg/grounds/dialogue/cli/CliArguments$Format;\n\n  public static gg.grounds.dialogue.cli.CliArguments$Format valueOf(java.lang.String);\n    descriptor: (Ljava/lang/String;)Lgg/grounds/dialogue/cli/CliArguments$Format;\n\n  public static kotlin.enums.EnumEntries<gg.grounds.dialogue.cli.CliArguments$Format> getEntries();\n    descriptor: ()Lkotlin/enums/EnumEntries;\n}\n",
+    "gg.grounds.dialogue.cli.CliArguments$ParseResult": "public final class gg.grounds.dialogue.cli.CliArguments$ParseResult {\n  public gg.grounds.dialogue.cli.CliArguments$ParseResult(gg.grounds.dialogue.cli.CliArguments, gg.grounds.dialogue.cli.CliArguments$Format, java.util.List<gg.grounds.dialogue.core.validation.ValidationReport$Problem>);\n    descriptor: (Lgg/grounds/dialogue/cli/CliArguments;Lgg/grounds/dialogue/cli/CliArguments$Format;Ljava/util/List;)V\n\n  public final gg.grounds.dialogue.cli.CliArguments arguments();\n    descriptor: ()Lgg/grounds/dialogue/cli/CliArguments;\n\n  public final gg.grounds.dialogue.cli.CliArguments$Format outputFormat();\n    descriptor: ()Lgg/grounds/dialogue/cli/CliArguments$Format;\n\n  public final java.util.List<gg.grounds.dialogue.core.validation.ValidationReport$Problem> problems();\n    descriptor: ()Ljava/util/List;\n}\n",
+    "gg.grounds.dialogue.cli.CliReport": "public final class gg.grounds.dialogue.cli.CliReport {\n  public static final gg.grounds.dialogue.cli.CliReport$Companion Companion;\n    descriptor: Lgg/grounds/dialogue/cli/CliReport$Companion;\n  public gg.grounds.dialogue.cli.CliReport(int, java.lang.String, java.lang.String, int, gg.grounds.dialogue.cli.CliReport$Status, java.lang.String, java.util.List<gg.grounds.dialogue.core.validation.ValidationReport$Problem>);\n    descriptor: (ILjava/lang/String;Ljava/lang/String;ILgg/grounds/dialogue/cli/CliReport$Status;Ljava/lang/String;Ljava/util/List;)V\n\n  public final int getReportVersion();\n    descriptor: ()I\n\n  public final java.lang.String getToolVersion();\n    descriptor: ()Ljava/lang/String;\n\n  public final java.lang.String getValidatorVersion();\n    descriptor: ()Ljava/lang/String;\n\n  public final int getFormatVersion();\n    descriptor: ()I\n\n  public final java.lang.String getContentPin();\n    descriptor: ()Ljava/lang/String;\n\n  public final gg.grounds.dialogue.cli.CliReport$Status status();\n    descriptor: ()Lgg/grounds/dialogue/cli/CliReport$Status;\n\n  public final java.lang.String contentPin();\n    descriptor: ()Ljava/lang/String;\n\n  public final java.util.List<gg.grounds.dialogue.core.validation.ValidationReport$Problem> problems();\n    descriptor: ()Ljava/util/List;\n\n  public final int exitCode();\n    descriptor: ()I\n}\n",
+    "gg.grounds.dialogue.cli.CliReport$Companion": "public final class gg.grounds.dialogue.cli.CliReport$Companion {\n  public final gg.grounds.dialogue.cli.CliReport error(gg.grounds.dialogue.cli.VersionInfo, java.util.List<gg.grounds.dialogue.core.validation.ValidationReport$Problem>);\n    descriptor: (Lgg/grounds/dialogue/cli/VersionInfo;Ljava/util/List;)Lgg/grounds/dialogue/cli/CliReport;\n\n  public gg.grounds.dialogue.cli.CliReport$Companion(kotlin.jvm.internal.DefaultConstructorMarker);\n    descriptor: (Lkotlin/jvm/internal/DefaultConstructorMarker;)V\n}\n",
+    "gg.grounds.dialogue.cli.CliReport$Status": "public final class gg.grounds.dialogue.cli.CliReport$Status extends java.lang.Enum<gg.grounds.dialogue.cli.CliReport$Status> {\n  public static final gg.grounds.dialogue.cli.CliReport$Status VALID;\n    descriptor: Lgg/grounds/dialogue/cli/CliReport$Status;\n  public static final gg.grounds.dialogue.cli.CliReport$Status INVALID;\n    descriptor: Lgg/grounds/dialogue/cli/CliReport$Status;\n  public static final gg.grounds.dialogue.cli.CliReport$Status ERROR;\n    descriptor: Lgg/grounds/dialogue/cli/CliReport$Status;\n  public static gg.grounds.dialogue.cli.CliReport$Status[] values();\n    descriptor: ()[Lgg/grounds/dialogue/cli/CliReport$Status;\n\n  public static gg.grounds.dialogue.cli.CliReport$Status valueOf(java.lang.String);\n    descriptor: (Ljava/lang/String;)Lgg/grounds/dialogue/cli/CliReport$Status;\n\n  public static kotlin.enums.EnumEntries<gg.grounds.dialogue.cli.CliReport$Status> getEntries();\n    descriptor: ()Lkotlin/enums/EnumEntries;\n}\n",
+    "gg.grounds.dialogue.cli.CliValidation": "public final class gg.grounds.dialogue.cli.CliValidation {\n  public static final gg.grounds.dialogue.cli.CliValidation INSTANCE;\n    descriptor: Lgg/grounds/dialogue/cli/CliValidation;\n  public static final gg.grounds.dialogue.cli.CliReport validate(gg.grounds.dialogue.json.DialogueCatalogLoader$ContentSources, gg.grounds.dialogue.cli.VersionInfo);\n    descriptor: (Lgg/grounds/dialogue/json/DialogueCatalogLoader$ContentSources;Lgg/grounds/dialogue/cli/VersionInfo;)Lgg/grounds/dialogue/cli/CliReport;\n}\n",
+    "gg.grounds.dialogue.cli.DialogueCli": "public final class gg.grounds.dialogue.cli.DialogueCli {\n  public static final gg.grounds.dialogue.cli.DialogueCli$Companion Companion;\n    descriptor: Lgg/grounds/dialogue/cli/DialogueCli$Companion;\n  public static final void main(java.lang.String[]);\n    descriptor: ([Ljava/lang/String;)V\n}\n",
+    "gg.grounds.dialogue.cli.DialogueCli$Companion": "public final class gg.grounds.dialogue.cli.DialogueCli$Companion {\n  public final void main(java.lang.String[]);\n    descriptor: ([Ljava/lang/String;)V\n\n  public final int run$gg_grounds_dialogue_cli(java.lang.String[], java.io.OutputStream, java.io.OutputStream);\n    descriptor: ([Ljava/lang/String;Ljava/io/OutputStream;Ljava/io/OutputStream;)I\n\n  public gg.grounds.dialogue.cli.DialogueCli$Companion(kotlin.jvm.internal.DefaultConstructorMarker);\n    descriptor: (Lkotlin/jvm/internal/DefaultConstructorMarker;)V\n}\n",
+    "gg.grounds.dialogue.cli.ProjectInputs": "public final class gg.grounds.dialogue.cli.ProjectInputs {\n  public static final gg.grounds.dialogue.cli.ProjectInputs$Companion Companion;\n    descriptor: Lgg/grounds/dialogue/cli/ProjectInputs$Companion;\n  public static final gg.grounds.dialogue.cli.ProjectInputs$Result read(java.nio.file.Path);\n    descriptor: (Ljava/nio/file/Path;)Lgg/grounds/dialogue/cli/ProjectInputs$Result;\n\n  public static final gg.grounds.dialogue.cli.ProjectInputs$Result read(java.nio.file.Path, gg.grounds.dialogue.cli.ProjectInputs$BeforeRead);\n    descriptor: (Ljava/nio/file/Path;Lgg/grounds/dialogue/cli/ProjectInputs$BeforeRead;)Lgg/grounds/dialogue/cli/ProjectInputs$Result;\n\n\n\n  public gg.grounds.dialogue.cli.ProjectInputs(java.nio.file.Path, gg.grounds.dialogue.cli.ProjectInputs$BeforeRead, kotlin.jvm.internal.DefaultConstructorMarker);\n    descriptor: (Ljava/nio/file/Path;Lgg/grounds/dialogue/cli/ProjectInputs$BeforeRead;Lkotlin/jvm/internal/DefaultConstructorMarker;)V\n}\n",
+    "gg.grounds.dialogue.cli.ProjectInputs$BeforeRead": "public interface gg.grounds.dialogue.cli.ProjectInputs$BeforeRead {\n  public abstract void accept(java.nio.file.Path) throws java.io.IOException;\n    descriptor: (Ljava/nio/file/Path;)V\n}\n",
+    "gg.grounds.dialogue.cli.ProjectInputs$Companion": "public final class gg.grounds.dialogue.cli.ProjectInputs$Companion {\n  public final gg.grounds.dialogue.cli.ProjectInputs$Result read(java.nio.file.Path);\n    descriptor: (Ljava/nio/file/Path;)Lgg/grounds/dialogue/cli/ProjectInputs$Result;\n\n  public final gg.grounds.dialogue.cli.ProjectInputs$Result read(java.nio.file.Path, gg.grounds.dialogue.cli.ProjectInputs$BeforeRead);\n    descriptor: (Ljava/nio/file/Path;Lgg/grounds/dialogue/cli/ProjectInputs$BeforeRead;)Lgg/grounds/dialogue/cli/ProjectInputs$Result;\n\n  public gg.grounds.dialogue.cli.ProjectInputs$Companion(kotlin.jvm.internal.DefaultConstructorMarker);\n    descriptor: (Lkotlin/jvm/internal/DefaultConstructorMarker;)V\n}\n",
+    "gg.grounds.dialogue.cli.ProjectInputs$Result": "public final class gg.grounds.dialogue.cli.ProjectInputs$Result {\n  public gg.grounds.dialogue.cli.ProjectInputs$Result(gg.grounds.dialogue.json.DialogueCatalogLoader$ContentSources, java.util.List<gg.grounds.dialogue.core.validation.ValidationReport$Problem>);\n    descriptor: (Lgg/grounds/dialogue/json/DialogueCatalogLoader$ContentSources;Ljava/util/List;)V\n\n  public final gg.grounds.dialogue.json.DialogueCatalogLoader$ContentSources sources();\n    descriptor: ()Lgg/grounds/dialogue/json/DialogueCatalogLoader$ContentSources;\n\n  public final java.util.List<gg.grounds.dialogue.core.validation.ValidationReport$Problem> problems();\n    descriptor: ()Ljava/util/List;\n}\n",
+    "gg.grounds.dialogue.cli.ProjectInputs$discover$$inlined$sortBy$1": "public final class gg.grounds.dialogue.cli.ProjectInputs$discover$$inlined$sortBy$1<T> implements java.util.Comparator {\n  public gg.grounds.dialogue.cli.ProjectInputs$discover$$inlined$sortBy$1(gg.grounds.dialogue.cli.ProjectInputs);\n    descriptor: (Lgg/grounds/dialogue/cli/ProjectInputs;)V\n\n  public final int compare(T, T);\n    descriptor: (Ljava/lang/Object;Ljava/lang/Object;)I\n}\n",
+    "gg.grounds.dialogue.cli.ReportWriter": "public final class gg.grounds.dialogue.cli.ReportWriter {\n  public static final gg.grounds.dialogue.cli.ReportWriter INSTANCE;\n    descriptor: Lgg/grounds/dialogue/cli/ReportWriter;\n  public static final void write(gg.grounds.dialogue.cli.CliReport, gg.grounds.dialogue.cli.CliArguments$Format, java.io.OutputStream);\n    descriptor: (Lgg/grounds/dialogue/cli/CliReport;Lgg/grounds/dialogue/cli/CliArguments$Format;Ljava/io/OutputStream;)V\n}\n",
+    "gg.grounds.dialogue.cli.VersionInfo": "public final class gg.grounds.dialogue.cli.VersionInfo extends java.lang.Record {\n  public static final gg.grounds.dialogue.cli.VersionInfo$Companion Companion;\n    descriptor: Lgg/grounds/dialogue/cli/VersionInfo$Companion;\n  public gg.grounds.dialogue.cli.VersionInfo(java.lang.String, java.lang.String);\n    descriptor: (Ljava/lang/String;Ljava/lang/String;)V\n\n  public final java.lang.String toolVersion();\n    descriptor: ()Ljava/lang/String;\n\n  public final java.lang.String validatorVersion();\n    descriptor: ()Ljava/lang/String;\n\n  public final java.lang.String component1();\n    descriptor: ()Ljava/lang/String;\n\n  public final java.lang.String component2();\n    descriptor: ()Ljava/lang/String;\n\n  public final gg.grounds.dialogue.cli.VersionInfo copy(java.lang.String, java.lang.String);\n    descriptor: (Ljava/lang/String;Ljava/lang/String;)Lgg/grounds/dialogue/cli/VersionInfo;\n\n  public static gg.grounds.dialogue.cli.VersionInfo copy$default(gg.grounds.dialogue.cli.VersionInfo, java.lang.String, java.lang.String, int, java.lang.Object);\n    descriptor: (Lgg/grounds/dialogue/cli/VersionInfo;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lgg/grounds/dialogue/cli/VersionInfo;\n\n  public java.lang.String toString();\n    descriptor: ()Ljava/lang/String;\n\n  public int hashCode();\n    descriptor: ()I\n\n  public boolean equals(java.lang.Object);\n    descriptor: (Ljava/lang/Object;)Z\n\n  public static final gg.grounds.dialogue.cli.VersionInfo current();\n    descriptor: ()Lgg/grounds/dialogue/cli/VersionInfo;\n}\n",
+    "gg.grounds.dialogue.cli.VersionInfo$Companion": "public final class gg.grounds.dialogue.cli.VersionInfo$Companion {\n  public final gg.grounds.dialogue.cli.VersionInfo current();\n    descriptor: ()Lgg/grounds/dialogue/cli/VersionInfo;\n\n  public gg.grounds.dialogue.cli.VersionInfo$Companion(kotlin.jvm.internal.DefaultConstructorMarker);\n    descriptor: (Lkotlin/jvm/internal/DefaultConstructorMarker;)V\n}\n"
+  },
+  "classes": {
+    "gg.grounds.dialogue.cli.CliArguments": {
+      "flags": 49,
+      "members": {
+        "field:Companion:Lgg/grounds/dialogue/cli/CliArguments$Companion;": {
+          "flags": 25,
+          "offset": 3105
+        },
+        "field:command:Lgg/grounds/dialogue/cli/CliArguments$Command;": {
+          "flags": 18,
+          "offset": 3125
+        },
+        "field:format:Lgg/grounds/dialogue/cli/CliArguments$Format;": {
+          "flags": 18,
+          "offset": 3165
+        },
+        "field:root:Ljava/nio/file/Path;": {
+          "flags": 18,
+          "offset": 3145
+        },
+        "method:<clinit>:()V": {
+          "flags": 8,
+          "offset": 4470
+        },
+        "method:<init>:(Lgg/grounds/dialogue/cli/CliArguments$Command;Ljava/nio/file/Path;Lgg/grounds/dialogue/cli/CliArguments$Format;)V": {
+          "flags": 1,
+          "offset": 3187
+        },
+        "method:command:()Lgg/grounds/dialogue/cli/CliArguments$Command;": {
+          "flags": 17,
+          "offset": 3353
+        },
+        "method:component1:()Lgg/grounds/dialogue/cli/CliArguments$Command;": {
+          "flags": 17,
+          "offset": 3572
+        },
+        "method:component2:()Ljava/nio/file/Path;": {
+          "flags": 17,
+          "offset": 3633
+        },
+        "method:component3:()Lgg/grounds/dialogue/cli/CliArguments$Format;": {
+          "flags": 17,
+          "offset": 3694
+        },
+        "method:copy$default:(Lgg/grounds/dialogue/cli/CliArguments;Lgg/grounds/dialogue/cli/CliArguments$Command;Ljava/nio/file/Path;Lgg/grounds/dialogue/cli/CliArguments$Format;ILjava/lang/Object;)Lgg/grounds/dialogue/cli/CliArguments;": {
+          "flags": 4105,
+          "offset": 3908
+        },
+        "method:copy:(Lgg/grounds/dialogue/cli/CliArguments$Command;Ljava/nio/file/Path;Lgg/grounds/dialogue/cli/CliArguments$Format;)Lgg/grounds/dialogue/cli/CliArguments;": {
+          "flags": 17,
+          "offset": 3755
+        },
+        "method:equals:(Ljava/lang/Object;)Z": {
+          "flags": 1,
+          "offset": 4197
+        },
+        "method:format:()Lgg/grounds/dialogue/cli/CliArguments$Format;": {
+          "flags": 17,
+          "offset": 3499
+        },
+        "method:hashCode:()I": {
+          "flags": 1,
+          "offset": 4063
+        },
+        "method:parse:([Ljava/lang/String;)Lgg/grounds/dialogue/cli/CliArguments$ParseResult;": {
+          "flags": 25,
+          "offset": 4358
+        },
+        "method:root:()Ljava/nio/file/Path;": {
+          "flags": 17,
+          "offset": 3426
+        },
+        "method:toString:()Ljava/lang/String;": {
+          "flags": 1,
+          "offset": 3989
+        }
+      }
+    },
+    "gg.grounds.dialogue.cli.CliArguments$Command": {
+      "flags": 16433,
+      "members": {
+        "field:$ENTRIES:Lkotlin/enums/EnumEntries;": {
+          "flags": 4122,
+          "offset": 1537
+        },
+        "field:$VALUES:[Lgg/grounds/dialogue/cli/CliArguments$Command;": {
+          "flags": 4122,
+          "offset": 1529
+        },
+        "field:HELP:Lgg/grounds/dialogue/cli/CliArguments$Command;": {
+          "flags": 16409,
+          "offset": 1513
+        },
+        "field:VALIDATE:Lgg/grounds/dialogue/cli/CliArguments$Command;": {
+          "flags": 16409,
+          "offset": 1505
+        },
+        "field:VERSION:Lgg/grounds/dialogue/cli/CliArguments$Command;": {
+          "flags": 16409,
+          "offset": 1521
+        },
+        "method:$values:()[Lgg/grounds/dialogue/cli/CliArguments$Command;": {
+          "flags": 4122,
+          "offset": 1804
+        },
+        "method:<clinit>:()V": {
+          "flags": 8,
+          "offset": 1855
+        },
+        "method:<init>:(Ljava/lang/String;I)V": {
+          "flags": 2,
+          "offset": 1547
+        },
+        "method:getEntries:()Lkotlin/enums/EnumEntries;": {
+          "flags": 9,
+          "offset": 1754
+        },
+        "method:valueOf:(Ljava/lang/String;)Lgg/grounds/dialogue/cli/CliArguments$Command;": {
+          "flags": 9,
+          "offset": 1689
+        },
+        "method:values:()[Lgg/grounds/dialogue/cli/CliArguments$Command;": {
+          "flags": 9,
+          "offset": 1653
+        }
+      }
+    },
+    "gg.grounds.dialogue.cli.CliArguments$Companion": {
+      "flags": 49,
+      "members": {
+        "method:<init>:()V": {
+          "flags": 2,
+          "offset": 4470
+        },
+        "method:<init>:(Lkotlin/jvm/internal/DefaultConstructorMarker;)V": {
+          "flags": 4097,
+          "offset": 5943
+        },
+        "method:error:(Lgg/grounds/dialogue/cli/CliArguments$Format;)Lgg/grounds/dialogue/cli/CliArguments$ParseResult;": {
+          "flags": 18,
+          "offset": 5784
+        },
+        "method:parse:([Ljava/lang/String;)Lgg/grounds/dialogue/cli/CliArguments$ParseResult;": {
+          "flags": 17,
+          "offset": 4531
+        }
+      }
+    },
+    "gg.grounds.dialogue.cli.CliArguments$Format": {
+      "flags": 16433,
+      "members": {
+        "field:$ENTRIES:Lkotlin/enums/EnumEntries;": {
+          "flags": 4122,
+          "offset": 1490
+        },
+        "field:$VALUES:[Lgg/grounds/dialogue/cli/CliArguments$Format;": {
+          "flags": 4122,
+          "offset": 1482
+        },
+        "field:JSON:Lgg/grounds/dialogue/cli/CliArguments$Format;": {
+          "flags": 16409,
+          "offset": 1474
+        },
+        "field:TEXT:Lgg/grounds/dialogue/cli/CliArguments$Format;": {
+          "flags": 16409,
+          "offset": 1466
+        },
+        "method:$values:()[Lgg/grounds/dialogue/cli/CliArguments$Format;": {
+          "flags": 4122,
+          "offset": 1757
+        },
+        "method:<clinit>:()V": {
+          "flags": 8,
+          "offset": 1802
+        },
+        "method:<init>:(Ljava/lang/String;I)V": {
+          "flags": 2,
+          "offset": 1500
+        },
+        "method:getEntries:()Lkotlin/enums/EnumEntries;": {
+          "flags": 9,
+          "offset": 1707
+        },
+        "method:valueOf:(Ljava/lang/String;)Lgg/grounds/dialogue/cli/CliArguments$Format;": {
+          "flags": 9,
+          "offset": 1642
+        },
+        "method:values:()[Lgg/grounds/dialogue/cli/CliArguments$Format;": {
+          "flags": 9,
+          "offset": 1606
+        }
+      }
+    },
+    "gg.grounds.dialogue.cli.CliArguments$ParseResult": {
+      "flags": 49,
+      "members": {
+        "field:arguments:Lgg/grounds/dialogue/cli/CliArguments;": {
+          "flags": 18,
+          "offset": 2145
+        },
+        "field:outputFormat:Lgg/grounds/dialogue/cli/CliArguments$Format;": {
+          "flags": 18,
+          "offset": 2165
+        },
+        "field:problems:Ljava/util/List;": {
+          "flags": 18,
+          "offset": 2185
+        },
+        "method:<init>:(Lgg/grounds/dialogue/cli/CliArguments;Lgg/grounds/dialogue/cli/CliArguments$Format;Ljava/util/List;)V": {
+          "flags": 1,
+          "offset": 2203
+        },
+        "method:arguments:()Lgg/grounds/dialogue/cli/CliArguments;": {
+          "flags": 17,
+          "offset": 2395
+        },
+        "method:outputFormat:()Lgg/grounds/dialogue/cli/CliArguments$Format;": {
+          "flags": 17,
+          "offset": 2468
+        },
+        "method:problems:()Ljava/util/List;": {
+          "flags": 17,
+          "offset": 2541
+        }
+      }
+    },
+    "gg.grounds.dialogue.cli.CliReport": {
+      "flags": 49,
+      "members": {
+        "field:Companion:Lgg/grounds/dialogue/cli/CliReport$Companion;": {
+          "flags": 25,
+          "offset": 4414
+        },
+        "field:contentPin:Ljava/lang/String;": {
+          "flags": 18,
+          "offset": 4510
+        },
+        "field:formatVersion:I": {
+          "flags": 18,
+          "offset": 4482
+        },
+        "field:problems:Ljava/util/List;": {
+          "flags": 18,
+          "offset": 4530
+        },
+        "field:reportVersion:I": {
+          "flags": 18,
+          "offset": 4434
+        },
+        "field:status:Lgg/grounds/dialogue/cli/CliReport$Status;": {
+          "flags": 18,
+          "offset": 4490
+        },
+        "field:toolVersion:Ljava/lang/String;": {
+          "flags": 18,
+          "offset": 4442
+        },
+        "field:validatorVersion:Ljava/lang/String;": {
+          "flags": 18,
+          "offset": 4462
+        },
+        "method:<clinit>:()V": {
+          "flags": 8,
+          "offset": 6429
+        },
+        "method:<init>:(ILjava/lang/String;Ljava/lang/String;ILgg/grounds/dialogue/cli/CliReport$Status;Ljava/lang/String;Ljava/util/List;)V": {
+          "flags": 1,
+          "offset": 4548
+        },
+        "method:contentPin:()Ljava/lang/String;": {
+          "flags": 17,
+          "offset": 5629
+        },
+        "method:exitCode:()I": {
+          "flags": 17,
+          "offset": 5789
+        },
+        "method:getContentPin:()Ljava/lang/String;": {
+          "flags": 17,
+          "offset": 5483
+        },
+        "method:getFormatVersion:()I": {
+          "flags": 17,
+          "offset": 5422
+        },
+        "method:getReportVersion:()I": {
+          "flags": 17,
+          "offset": 5215
+        },
+        "method:getToolVersion:()Ljava/lang/String;": {
+          "flags": 17,
+          "offset": 5276
+        },
+        "method:getValidatorVersion:()Ljava/lang/String;": {
+          "flags": 17,
+          "offset": 5349
+        },
+        "method:problems$lambda$0:(Lgg/grounds/dialogue/core/validation/ValidationReport$Problem;)Ljava/lang/Comparable;": {
+          "flags": 26,
+          "offset": 5940
+        },
+        "method:problems$lambda$1:(Lgg/grounds/dialogue/core/validation/ValidationReport$Problem;)Ljava/lang/Comparable;": {
+          "flags": 26,
+          "offset": 6021
+        },
+        "method:problems$lambda$2:(Lgg/grounds/dialogue/core/validation/ValidationReport$Problem;)Ljava/lang/Comparable;": {
+          "flags": 26,
+          "offset": 6102
+        },
+        "method:problems$lambda$3:(Lgg/grounds/dialogue/core/validation/ValidationReport$Problem;)Ljava/lang/Comparable;": {
+          "flags": 26,
+          "offset": 6183
+        },
+        "method:problems$lambda$4:(Lgg/grounds/dialogue/core/validation/ValidationReport$Problem;)Ljava/lang/Comparable;": {
+          "flags": 26,
+          "offset": 6267
+        },
+        "method:problems$lambda$5:(Lgg/grounds/dialogue/core/validation/ValidationReport$Problem;)Ljava/lang/Comparable;": {
+          "flags": 26,
+          "offset": 6348
+        },
+        "method:problems:()Ljava/util/List;": {
+          "flags": 17,
+          "offset": 5702
+        },
+        "method:status:()Lgg/grounds/dialogue/cli/CliReport$Status;": {
+          "flags": 17,
+          "offset": 5556
+        }
+      }
+    },
+    "gg.grounds.dialogue.cli.CliReport$Companion": {
+      "flags": 49,
+      "members": {
+        "method:<init>:()V": {
+          "flags": 2,
+          "offset": 1864
+        },
+        "method:<init>:(Lkotlin/jvm/internal/DefaultConstructorMarker;)V": {
+          "flags": 4097,
+          "offset": 2126
+        },
+        "method:error:(Lgg/grounds/dialogue/cli/VersionInfo;Ljava/util/List;)Lgg/grounds/dialogue/cli/CliReport;": {
+          "flags": 17,
+          "offset": 1925
+        }
+      }
+    },
+    "gg.grounds.dialogue.cli.CliReport$Status": {
+      "flags": 16433,
+      "members": {
+        "field:$ENTRIES:Lkotlin/enums/EnumEntries;": {
+          "flags": 4122,
+          "offset": 1500
+        },
+        "field:$VALUES:[Lgg/grounds/dialogue/cli/CliReport$Status;": {
+          "flags": 4122,
+          "offset": 1492
+        },
+        "field:ERROR:Lgg/grounds/dialogue/cli/CliReport$Status;": {
+          "flags": 16409,
+          "offset": 1484
+        },
+        "field:INVALID:Lgg/grounds/dialogue/cli/CliReport$Status;": {
+          "flags": 16409,
+          "offset": 1476
+        },
+        "field:VALID:Lgg/grounds/dialogue/cli/CliReport$Status;": {
+          "flags": 16409,
+          "offset": 1468
+        },
+        "method:$values:()[Lgg/grounds/dialogue/cli/CliReport$Status;": {
+          "flags": 4122,
+          "offset": 1767
+        },
+        "method:<clinit>:()V": {
+          "flags": 8,
+          "offset": 1818
+        },
+        "method:<init>:(Ljava/lang/String;I)V": {
+          "flags": 2,
+          "offset": 1510
+        },
+        "method:getEntries:()Lkotlin/enums/EnumEntries;": {
+          "flags": 9,
+          "offset": 1717
+        },
+        "method:valueOf:(Ljava/lang/String;)Lgg/grounds/dialogue/cli/CliReport$Status;": {
+          "flags": 9,
+          "offset": 1652
+        },
+        "method:values:()[Lgg/grounds/dialogue/cli/CliReport$Status;": {
+          "flags": 9,
+          "offset": 1616
+        }
+      }
+    },
+    "gg.grounds.dialogue.cli.CliReport$WhenMappings": {
+      "flags": 4145,
+      "members": {
+        "field:$EnumSwitchMapping$0:[I": {
+          "flags": 4121,
+          "offset": 640
+        },
+        "method:<clinit>:()V": {
+          "flags": 8,
+          "offset": 650
+        }
+      }
+    },
+    "gg.grounds.dialogue.cli.CliValidation": {
+      "flags": 49,
+      "members": {
+        "field:INSTANCE:Lgg/grounds/dialogue/cli/CliValidation;": {
+          "flags": 25,
+          "offset": 2539
+        },
+        "method:<clinit>:()V": {
+          "flags": 8,
+          "offset": 3095
+        },
+        "method:<init>:()V": {
+          "flags": 2,
+          "offset": 2561
+        },
+        "method:validate:(Lgg/grounds/dialogue/json/DialogueCatalogLoader$ContentSources;Lgg/grounds/dialogue/cli/VersionInfo;)Lgg/grounds/dialogue/cli/CliReport;": {
+          "flags": 25,
+          "offset": 2622
+        }
+      }
+    },
+    "gg.grounds.dialogue.cli.DialogueCli": {
+      "flags": 49,
+      "members": {
+        "field:Companion:Lgg/grounds/dialogue/cli/DialogueCli$Companion;": {
+          "flags": 25,
+          "offset": 837
+        },
+        "method:<clinit>:()V": {
+          "flags": 8,
+          "offset": 1020
+        },
+        "method:<init>:()V": {
+          "flags": 2,
+          "offset": 859
+        },
+        "method:main:([Ljava/lang/String;)V": {
+          "flags": 25,
+          "offset": 920
+        }
+      }
+    },
+    "gg.grounds.dialogue.cli.DialogueCli$Companion": {
+      "flags": 49,
+      "members": {
+        "method:<init>:()V": {
+          "flags": 2,
+          "offset": 6010
+        },
+        "method:<init>:(Lkotlin/jvm/internal/DefaultConstructorMarker;)V": {
+          "flags": 4097,
+          "offset": 7374
+        },
+        "method:main:([Ljava/lang/String;)V": {
+          "flags": 17,
+          "offset": 6071
+        },
+        "method:run$gg_grounds_dialogue_cli:([Ljava/lang/String;Ljava/io/OutputStream;Ljava/io/OutputStream;)I": {
+          "flags": 17,
+          "offset": 6244
+        }
+      }
+    },
+    "gg.grounds.dialogue.cli.ProjectInputs": {
+      "flags": 49,
+      "members": {
+        "field:Companion:Lgg/grounds/dialogue/cli/ProjectInputs$Companion;": {
+          "flags": 25,
+          "offset": 9693
+        },
+        "field:TOTAL:I": {
+          "flags": 26,
+          "offset": 9757
+        },
+        "field:beforeRead:Lgg/grounds/dialogue/cli/ProjectInputs$BeforeRead;": {
+          "flags": 18,
+          "offset": 9713
+        },
+        "field:bytes:I": {
+          "flags": 2,
+          "offset": 9749
+        },
+        "field:root:Ljava/nio/file/Path;": {
+          "flags": 18,
+          "offset": 9733
+        },
+        "field:visited:I": {
+          "flags": 2,
+          "offset": 9741
+        },
+        "method:<clinit>:()V": {
+          "flags": 8,
+          "offset": 14489
+        },
+        "method:<init>:(Ljava/nio/file/Path;Lgg/grounds/dialogue/cli/ProjectInputs$BeforeRead;)V": {
+          "flags": 2,
+          "offset": 9775
+        },
+        "method:<init>:(Ljava/nio/file/Path;Lgg/grounds/dialogue/cli/ProjectInputs$BeforeRead;Lkotlin/jvm/internal/DefaultConstructorMarker;)V": {
+          "flags": 4097,
+          "offset": 14408
+        },
+        "method:access$load:(Lgg/grounds/dialogue/cli/ProjectInputs;)Lgg/grounds/dialogue/json/DialogueCatalogLoader$ContentSources;": {
+          "flags": 4121,
+          "offset": 14347
+        },
+        "method:access$relative:(Lgg/grounds/dialogue/cli/ProjectInputs;Ljava/nio/file/Path;)Ljava/lang/String;": {
+          "flags": 4121,
+          "offset": 14275
+        },
+        "method:attributes:(Ljava/nio/file/Path;)Ljava/nio/file/attribute/BasicFileAttributes;": {
+          "flags": 18,
+          "offset": 10307
+        },
+        "method:directory:(Ljava/nio/file/Path;)V": {
+          "flags": 18,
+          "offset": 10770
+        },
+        "method:discover:(Ljava/nio/file/Path;)Ljava/util/List;": {
+          "flags": 18,
+          "offset": 12037
+        },
+        "method:failure:(Ljava/lang/String;Ljava/nio/file/Path;Ljava/lang/String;)Lgg/grounds/dialogue/cli/ProjectInputs$InputFailure;": {
+          "flags": 18,
+          "offset": 9899
+        },
+        "method:load:()Lgg/grounds/dialogue/json/DialogueCatalogLoader$ContentSources;": {
+          "flags": 18,
+          "offset": 10884
+        },
+        "method:read:(Ljava/nio/file/Path;)Lgg/grounds/dialogue/cli/ProjectInputs$Result;": {
+          "flags": 25,
+          "offset": 14030
+        },
+        "method:read:(Ljava/nio/file/Path;Lgg/grounds/dialogue/cli/ProjectInputs$BeforeRead;)Lgg/grounds/dialogue/cli/ProjectInputs$Result;": {
+          "flags": 25,
+          "offset": 14142
+        },
+        "method:readFile:(Ljava/nio/file/Path;I)[B": {
+          "flags": 18,
+          "offset": 12945
+        },
+        "method:relative:(Ljava/nio/file/Path;)Ljava/lang/String;": {
+          "flags": 18,
+          "offset": 10146
+        },
+        "method:walk:(Ljava/nio/file/Path;ILjava/util/List;)V": {
+          "flags": 18,
+          "offset": 12251
+        }
+      }
+    },
+    "gg.grounds.dialogue.cli.ProjectInputs$BeforeRead": {
+      "flags": 1537,
+      "members": {
+        "method:accept:(Ljava/nio/file/Path;)V": {
+          "flags": 1025,
+          "offset": 650
+        }
+      }
+    },
+    "gg.grounds.dialogue.cli.ProjectInputs$Companion": {
+      "flags": 49,
+      "members": {
+        "method:<init>:()V": {
+          "flags": 2,
+          "offset": 3428
+        },
+        "method:<init>:(Lkotlin/jvm/internal/DefaultConstructorMarker;)V": {
+          "flags": 4097,
+          "offset": 4089
+        },
+        "method:read$lambda$0:(Ljava/nio/file/Path;)V": {
+          "flags": 26,
+          "offset": 4015
+        },
+        "method:read:(Ljava/nio/file/Path;)Lgg/grounds/dialogue/cli/ProjectInputs$Result;": {
+          "flags": 17,
+          "offset": 3489
+        },
+        "method:read:(Ljava/nio/file/Path;Lgg/grounds/dialogue/cli/ProjectInputs$BeforeRead;)Lgg/grounds/dialogue/cli/ProjectInputs$Result;": {
+          "flags": 17,
+          "offset": 3620
+        }
+      }
+    },
+    "gg.grounds.dialogue.cli.ProjectInputs$InputFailure": {
+      "flags": 48,
+      "members": {
+        "field:code:Ljava/lang/String;": {
+          "flags": 18,
+          "offset": 1126
+        },
+        "field:file:Ljava/lang/String;": {
+          "flags": 18,
+          "offset": 1146
+        },
+        "method:<init>:(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V": {
+          "flags": 1,
+          "offset": 1168
+        },
+        "method:getCode:()Ljava/lang/String;": {
+          "flags": 17,
+          "offset": 1334
+        },
+        "method:getFile:()Ljava/lang/String;": {
+          "flags": 17,
+          "offset": 1407
+        }
+      }
+    },
+    "gg.grounds.dialogue.cli.ProjectInputs$Result": {
+      "flags": 49,
+      "members": {
+        "field:problems:Ljava/util/List;": {
+          "flags": 18,
+          "offset": 2072
+        },
+        "field:sources:Lgg/grounds/dialogue/json/DialogueCatalogLoader$ContentSources;": {
+          "flags": 18,
+          "offset": 2052
+        },
+        "method:<init>:(Lgg/grounds/dialogue/json/DialogueCatalogLoader$ContentSources;Ljava/util/List;)V": {
+          "flags": 1,
+          "offset": 2090
+        },
+        "method:problems:()Ljava/util/List;": {
+          "flags": 17,
+          "offset": 2316
+        },
+        "method:sources:()Lgg/grounds/dialogue/json/DialogueCatalogLoader$ContentSources;": {
+          "flags": 17,
+          "offset": 2243
+        }
+      }
+    },
+    "gg.grounds.dialogue.cli.ProjectInputs$discover$$inlined$sortBy$1": {
+      "flags": 49,
+      "members": {
+        "field:$receiver$inlined:Lgg/grounds/dialogue/cli/ProjectInputs;": {
+          "flags": 4112,
+          "offset": 1612
+        },
+        "method:<init>:(Lgg/grounds/dialogue/cli/ProjectInputs;)V": {
+          "flags": 1,
+          "offset": 1622
+        },
+        "method:compare:(Ljava/lang/Object;Ljava/lang/Object;)I": {
+          "flags": 17,
+          "offset": 1676
+        }
+      }
+    },
+    "gg.grounds.dialogue.cli.ReportWriter": {
+      "flags": 49,
+      "members": {
+        "field:INSTANCE:Lgg/grounds/dialogue/cli/ReportWriter;": {
+          "flags": 25,
+          "offset": 5250
+        },
+        "method:<clinit>:()V": {
+          "flags": 8,
+          "offset": 6941
+        },
+        "method:<init>:()V": {
+          "flags": 2,
+          "offset": 5272
+        },
+        "method:write:(Lgg/grounds/dialogue/cli/CliReport;Lgg/grounds/dialogue/cli/CliArguments$Format;Ljava/io/OutputStream;)V": {
+          "flags": 25,
+          "offset": 5333
+        }
+      }
+    },
+    "gg.grounds.dialogue.cli.VersionInfo": {
+      "flags": 49,
+      "members": {
+        "field:Companion:Lgg/grounds/dialogue/cli/VersionInfo$Companion;": {
+          "flags": 25,
+          "offset": 2223
+        },
+        "field:toolVersion:Ljava/lang/String;": {
+          "flags": 18,
+          "offset": 2243
+        },
+        "field:validatorVersion:Ljava/lang/String;": {
+          "flags": 18,
+          "offset": 2263
+        },
+        "method:<clinit>:()V": {
+          "flags": 8,
+          "offset": 3257
+        },
+        "method:<init>:(Ljava/lang/String;Ljava/lang/String;)V": {
+          "flags": 1,
+          "offset": 2285
+        },
+        "method:component1:()Ljava/lang/String;": {
+          "flags": 17,
+          "offset": 2572
+        },
+        "method:component2:()Ljava/lang/String;": {
+          "flags": 17,
+          "offset": 2633
+        },
+        "method:copy$default:(Lgg/grounds/dialogue/cli/VersionInfo;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lgg/grounds/dialogue/cli/VersionInfo;": {
+          "flags": 4105,
+          "offset": 2826
+        },
+        "method:copy:(Ljava/lang/String;Ljava/lang/String;)Lgg/grounds/dialogue/cli/VersionInfo;": {
+          "flags": 17,
+          "offset": 2694
+        },
+        "method:current:()Lgg/grounds/dialogue/cli/VersionInfo;": {
+          "flags": 25,
+          "offset": 3188
+        },
+        "method:equals:(Ljava/lang/Object;)Z": {
+          "flags": 1,
+          "offset": 3038
+        },
+        "method:hashCode:()I": {
+          "flags": 1,
+          "offset": 2961
+        },
+        "method:toString:()Ljava/lang/String;": {
+          "flags": 1,
+          "offset": 2891
+        },
+        "method:toolVersion:()Ljava/lang/String;": {
+          "flags": 17,
+          "offset": 2426
+        },
+        "method:validatorVersion:()Ljava/lang/String;": {
+          "flags": 17,
+          "offset": 2499
+        }
+      }
+    },
+    "gg.grounds.dialogue.cli.VersionInfo$Companion": {
+      "flags": 49,
+      "members": {
+        "method:<init>:()V": {
+          "flags": 2,
+          "offset": 2246
+        },
+        "method:<init>:(Lkotlin/jvm/internal/DefaultConstructorMarker;)V": {
+          "flags": 4097,
+          "offset": 2889
+        },
+        "method:current:()Lgg/grounds/dialogue/cli/VersionInfo;": {
+          "flags": 17,
+          "offset": 2307
+        }
+      }
+    }
+  },
+  "raw": {
+    "gg.grounds.dialogue.cli.CliArguments": "public final class gg.grounds.dialogue.cli.CliArguments extends java.lang.Record {\n  public static final gg.grounds.dialogue.cli.CliArguments$Companion Companion;\n    descriptor: Lgg/grounds/dialogue/cli/CliArguments$Companion;\n  public gg.grounds.dialogue.cli.CliArguments(gg.grounds.dialogue.cli.CliArguments$Command, java.nio.file.Path, gg.grounds.dialogue.cli.CliArguments$Format);\n    descriptor: (Lgg/grounds/dialogue/cli/CliArguments$Command;Ljava/nio/file/Path;Lgg/grounds/dialogue/cli/CliArguments$Format;)V\n\n  public final gg.grounds.dialogue.cli.CliArguments$Command command();\n    descriptor: ()Lgg/grounds/dialogue/cli/CliArguments$Command;\n\n  public final java.nio.file.Path root();\n    descriptor: ()Ljava/nio/file/Path;\n\n  public final gg.grounds.dialogue.cli.CliArguments$Format format();\n    descriptor: ()Lgg/grounds/dialogue/cli/CliArguments$Format;\n\n  public final gg.grounds.dialogue.cli.CliArguments$Command component1();\n    descriptor: ()Lgg/grounds/dialogue/cli/CliArguments$Command;\n\n  public final java.nio.file.Path component2();\n    descriptor: ()Ljava/nio/file/Path;\n\n  public final gg.grounds.dialogue.cli.CliArguments$Format component3();\n    descriptor: ()Lgg/grounds/dialogue/cli/CliArguments$Format;\n\n  public final gg.grounds.dialogue.cli.CliArguments copy(gg.grounds.dialogue.cli.CliArguments$Command, java.nio.file.Path, gg.grounds.dialogue.cli.CliArguments$Format);\n    descriptor: (Lgg/grounds/dialogue/cli/CliArguments$Command;Ljava/nio/file/Path;Lgg/grounds/dialogue/cli/CliArguments$Format;)Lgg/grounds/dialogue/cli/CliArguments;\n\n  public static gg.grounds.dialogue.cli.CliArguments copy$default(gg.grounds.dialogue.cli.CliArguments, gg.grounds.dialogue.cli.CliArguments$Command, java.nio.file.Path, gg.grounds.dialogue.cli.CliArguments$Format, int, java.lang.Object);\n    descriptor: (Lgg/grounds/dialogue/cli/CliArguments;Lgg/grounds/dialogue/cli/CliArguments$Command;Ljava/nio/file/Path;Lgg/grounds/dialogue/cli/CliArguments$Format;ILjava/lang/Object;)Lgg/grounds/dialogue/cli/CliArguments;\n\n  public java.lang.String toString();\n    descriptor: ()Ljava/lang/String;\n\n  public int hashCode();\n    descriptor: ()I\n\n  public boolean equals(java.lang.Object);\n    descriptor: (Ljava/lang/Object;)Z\n\n  public static final gg.grounds.dialogue.cli.CliArguments$ParseResult parse(java.lang.String[]);\n    descriptor: ([Ljava/lang/String;)Lgg/grounds/dialogue/cli/CliArguments$ParseResult;\n}\n",
+    "gg.grounds.dialogue.cli.CliArguments$Command": "public final class gg.grounds.dialogue.cli.CliArguments$Command extends java.lang.Enum<gg.grounds.dialogue.cli.CliArguments$Command> {\n  public static final gg.grounds.dialogue.cli.CliArguments$Command VALIDATE;\n    descriptor: Lgg/grounds/dialogue/cli/CliArguments$Command;\n  public static final gg.grounds.dialogue.cli.CliArguments$Command HELP;\n    descriptor: Lgg/grounds/dialogue/cli/CliArguments$Command;\n  public static final gg.grounds.dialogue.cli.CliArguments$Command VERSION;\n    descriptor: Lgg/grounds/dialogue/cli/CliArguments$Command;\n  public static gg.grounds.dialogue.cli.CliArguments$Command[] values();\n    descriptor: ()[Lgg/grounds/dialogue/cli/CliArguments$Command;\n\n  public static gg.grounds.dialogue.cli.CliArguments$Command valueOf(java.lang.String);\n    descriptor: (Ljava/lang/String;)Lgg/grounds/dialogue/cli/CliArguments$Command;\n\n  public static kotlin.enums.EnumEntries<gg.grounds.dialogue.cli.CliArguments$Command> getEntries();\n    descriptor: ()Lkotlin/enums/EnumEntries;\n}\n",
+    "gg.grounds.dialogue.cli.CliArguments$Companion": "public final class gg.grounds.dialogue.cli.CliArguments$Companion {\n  public final gg.grounds.dialogue.cli.CliArguments$ParseResult parse(java.lang.String[]);\n    descriptor: ([Ljava/lang/String;)Lgg/grounds/dialogue/cli/CliArguments$ParseResult;\n\n  public gg.grounds.dialogue.cli.CliArguments$Companion(kotlin.jvm.internal.DefaultConstructorMarker);\n    descriptor: (Lkotlin/jvm/internal/DefaultConstructorMarker;)V\n}\n",
+    "gg.grounds.dialogue.cli.CliArguments$Format": "public final class gg.grounds.dialogue.cli.CliArguments$Format extends java.lang.Enum<gg.grounds.dialogue.cli.CliArguments$Format> {\n  public static final gg.grounds.dialogue.cli.CliArguments$Format TEXT;\n    descriptor: Lgg/grounds/dialogue/cli/CliArguments$Format;\n  public static final gg.grounds.dialogue.cli.CliArguments$Format JSON;\n    descriptor: Lgg/grounds/dialogue/cli/CliArguments$Format;\n  public static gg.grounds.dialogue.cli.CliArguments$Format[] values();\n    descriptor: ()[Lgg/grounds/dialogue/cli/CliArguments$Format;\n\n  public static gg.grounds.dialogue.cli.CliArguments$Format valueOf(java.lang.String);\n    descriptor: (Ljava/lang/String;)Lgg/grounds/dialogue/cli/CliArguments$Format;\n\n  public static kotlin.enums.EnumEntries<gg.grounds.dialogue.cli.CliArguments$Format> getEntries();\n    descriptor: ()Lkotlin/enums/EnumEntries;\n}\n",
+    "gg.grounds.dialogue.cli.CliArguments$ParseResult": "public final class gg.grounds.dialogue.cli.CliArguments$ParseResult {\n  public gg.grounds.dialogue.cli.CliArguments$ParseResult(gg.grounds.dialogue.cli.CliArguments, gg.grounds.dialogue.cli.CliArguments$Format, java.util.List<gg.grounds.dialogue.core.validation.ValidationReport$Problem>);\n    descriptor: (Lgg/grounds/dialogue/cli/CliArguments;Lgg/grounds/dialogue/cli/CliArguments$Format;Ljava/util/List;)V\n\n  public final gg.grounds.dialogue.cli.CliArguments arguments();\n    descriptor: ()Lgg/grounds/dialogue/cli/CliArguments;\n\n  public final gg.grounds.dialogue.cli.CliArguments$Format outputFormat();\n    descriptor: ()Lgg/grounds/dialogue/cli/CliArguments$Format;\n\n  public final java.util.List<gg.grounds.dialogue.core.validation.ValidationReport$Problem> problems();\n    descriptor: ()Ljava/util/List;\n}\n",
+    "gg.grounds.dialogue.cli.CliReport": "public final class gg.grounds.dialogue.cli.CliReport {\n  public static final gg.grounds.dialogue.cli.CliReport$Companion Companion;\n    descriptor: Lgg/grounds/dialogue/cli/CliReport$Companion;\n  public gg.grounds.dialogue.cli.CliReport(int, java.lang.String, java.lang.String, int, gg.grounds.dialogue.cli.CliReport$Status, java.lang.String, java.util.List<gg.grounds.dialogue.core.validation.ValidationReport$Problem>);\n    descriptor: (ILjava/lang/String;Ljava/lang/String;ILgg/grounds/dialogue/cli/CliReport$Status;Ljava/lang/String;Ljava/util/List;)V\n\n  public final int getReportVersion();\n    descriptor: ()I\n\n  public final java.lang.String getToolVersion();\n    descriptor: ()Ljava/lang/String;\n\n  public final java.lang.String getValidatorVersion();\n    descriptor: ()Ljava/lang/String;\n\n  public final int getFormatVersion();\n    descriptor: ()I\n\n  public final java.lang.String getContentPin();\n    descriptor: ()Ljava/lang/String;\n\n  public final gg.grounds.dialogue.cli.CliReport$Status status();\n    descriptor: ()Lgg/grounds/dialogue/cli/CliReport$Status;\n\n  public final java.lang.String contentPin();\n    descriptor: ()Ljava/lang/String;\n\n  public final java.util.List<gg.grounds.dialogue.core.validation.ValidationReport$Problem> problems();\n    descriptor: ()Ljava/util/List;\n\n  public final int exitCode();\n    descriptor: ()I\n}\n",
+    "gg.grounds.dialogue.cli.CliReport$Companion": "public final class gg.grounds.dialogue.cli.CliReport$Companion {\n  public final gg.grounds.dialogue.cli.CliReport error(gg.grounds.dialogue.cli.VersionInfo, java.util.List<gg.grounds.dialogue.core.validation.ValidationReport$Problem>);\n    descriptor: (Lgg/grounds/dialogue/cli/VersionInfo;Ljava/util/List;)Lgg/grounds/dialogue/cli/CliReport;\n\n  public gg.grounds.dialogue.cli.CliReport$Companion(kotlin.jvm.internal.DefaultConstructorMarker);\n    descriptor: (Lkotlin/jvm/internal/DefaultConstructorMarker;)V\n}\n",
+    "gg.grounds.dialogue.cli.CliReport$Status": "public final class gg.grounds.dialogue.cli.CliReport$Status extends java.lang.Enum<gg.grounds.dialogue.cli.CliReport$Status> {\n  public static final gg.grounds.dialogue.cli.CliReport$Status VALID;\n    descriptor: Lgg/grounds/dialogue/cli/CliReport$Status;\n  public static final gg.grounds.dialogue.cli.CliReport$Status INVALID;\n    descriptor: Lgg/grounds/dialogue/cli/CliReport$Status;\n  public static final gg.grounds.dialogue.cli.CliReport$Status ERROR;\n    descriptor: Lgg/grounds/dialogue/cli/CliReport$Status;\n  public static gg.grounds.dialogue.cli.CliReport$Status[] values();\n    descriptor: ()[Lgg/grounds/dialogue/cli/CliReport$Status;\n\n  public static gg.grounds.dialogue.cli.CliReport$Status valueOf(java.lang.String);\n    descriptor: (Ljava/lang/String;)Lgg/grounds/dialogue/cli/CliReport$Status;\n\n  public static kotlin.enums.EnumEntries<gg.grounds.dialogue.cli.CliReport$Status> getEntries();\n    descriptor: ()Lkotlin/enums/EnumEntries;\n}\n",
+    "gg.grounds.dialogue.cli.CliReport$WhenMappings": "public final class gg.grounds.dialogue.cli.CliReport$WhenMappings {\n  public static final int[] $EnumSwitchMapping$0;\n    descriptor: [I\n}\n",
+    "gg.grounds.dialogue.cli.CliValidation": "public final class gg.grounds.dialogue.cli.CliValidation {\n  public static final gg.grounds.dialogue.cli.CliValidation INSTANCE;\n    descriptor: Lgg/grounds/dialogue/cli/CliValidation;\n  public static final gg.grounds.dialogue.cli.CliReport validate(gg.grounds.dialogue.json.DialogueCatalogLoader$ContentSources, gg.grounds.dialogue.cli.VersionInfo);\n    descriptor: (Lgg/grounds/dialogue/json/DialogueCatalogLoader$ContentSources;Lgg/grounds/dialogue/cli/VersionInfo;)Lgg/grounds/dialogue/cli/CliReport;\n}\n",
+    "gg.grounds.dialogue.cli.DialogueCli": "public final class gg.grounds.dialogue.cli.DialogueCli {\n  public static final gg.grounds.dialogue.cli.DialogueCli$Companion Companion;\n    descriptor: Lgg/grounds/dialogue/cli/DialogueCli$Companion;\n  public static final void main(java.lang.String[]);\n    descriptor: ([Ljava/lang/String;)V\n}\n",
+    "gg.grounds.dialogue.cli.DialogueCli$Companion": "public final class gg.grounds.dialogue.cli.DialogueCli$Companion {\n  public final void main(java.lang.String[]);\n    descriptor: ([Ljava/lang/String;)V\n\n  public final int run$gg_grounds_dialogue_cli(java.lang.String[], java.io.OutputStream, java.io.OutputStream);\n    descriptor: ([Ljava/lang/String;Ljava/io/OutputStream;Ljava/io/OutputStream;)I\n\n  public gg.grounds.dialogue.cli.DialogueCli$Companion(kotlin.jvm.internal.DefaultConstructorMarker);\n    descriptor: (Lkotlin/jvm/internal/DefaultConstructorMarker;)V\n}\n",
+    "gg.grounds.dialogue.cli.ProjectInputs": "public final class gg.grounds.dialogue.cli.ProjectInputs {\n  public static final gg.grounds.dialogue.cli.ProjectInputs$Companion Companion;\n    descriptor: Lgg/grounds/dialogue/cli/ProjectInputs$Companion;\n  public static final gg.grounds.dialogue.cli.ProjectInputs$Result read(java.nio.file.Path);\n    descriptor: (Ljava/nio/file/Path;)Lgg/grounds/dialogue/cli/ProjectInputs$Result;\n\n  public static final gg.grounds.dialogue.cli.ProjectInputs$Result read(java.nio.file.Path, gg.grounds.dialogue.cli.ProjectInputs$BeforeRead);\n    descriptor: (Ljava/nio/file/Path;Lgg/grounds/dialogue/cli/ProjectInputs$BeforeRead;)Lgg/grounds/dialogue/cli/ProjectInputs$Result;\n\n  public static final java.lang.String access$relative(gg.grounds.dialogue.cli.ProjectInputs, java.nio.file.Path);\n    descriptor: (Lgg/grounds/dialogue/cli/ProjectInputs;Ljava/nio/file/Path;)Ljava/lang/String;\n\n  public static final gg.grounds.dialogue.json.DialogueCatalogLoader$ContentSources access$load(gg.grounds.dialogue.cli.ProjectInputs);\n    descriptor: (Lgg/grounds/dialogue/cli/ProjectInputs;)Lgg/grounds/dialogue/json/DialogueCatalogLoader$ContentSources;\n\n  public gg.grounds.dialogue.cli.ProjectInputs(java.nio.file.Path, gg.grounds.dialogue.cli.ProjectInputs$BeforeRead, kotlin.jvm.internal.DefaultConstructorMarker);\n    descriptor: (Ljava/nio/file/Path;Lgg/grounds/dialogue/cli/ProjectInputs$BeforeRead;Lkotlin/jvm/internal/DefaultConstructorMarker;)V\n}\n",
+    "gg.grounds.dialogue.cli.ProjectInputs$BeforeRead": "public interface gg.grounds.dialogue.cli.ProjectInputs$BeforeRead {\n  public abstract void accept(java.nio.file.Path) throws java.io.IOException;\n    descriptor: (Ljava/nio/file/Path;)V\n}\n",
+    "gg.grounds.dialogue.cli.ProjectInputs$Companion": "public final class gg.grounds.dialogue.cli.ProjectInputs$Companion {\n  public final gg.grounds.dialogue.cli.ProjectInputs$Result read(java.nio.file.Path);\n    descriptor: (Ljava/nio/file/Path;)Lgg/grounds/dialogue/cli/ProjectInputs$Result;\n\n  public final gg.grounds.dialogue.cli.ProjectInputs$Result read(java.nio.file.Path, gg.grounds.dialogue.cli.ProjectInputs$BeforeRead);\n    descriptor: (Ljava/nio/file/Path;Lgg/grounds/dialogue/cli/ProjectInputs$BeforeRead;)Lgg/grounds/dialogue/cli/ProjectInputs$Result;\n\n  public gg.grounds.dialogue.cli.ProjectInputs$Companion(kotlin.jvm.internal.DefaultConstructorMarker);\n    descriptor: (Lkotlin/jvm/internal/DefaultConstructorMarker;)V\n}\n",
+    "gg.grounds.dialogue.cli.ProjectInputs$Result": "public final class gg.grounds.dialogue.cli.ProjectInputs$Result {\n  public gg.grounds.dialogue.cli.ProjectInputs$Result(gg.grounds.dialogue.json.DialogueCatalogLoader$ContentSources, java.util.List<gg.grounds.dialogue.core.validation.ValidationReport$Problem>);\n    descriptor: (Lgg/grounds/dialogue/json/DialogueCatalogLoader$ContentSources;Ljava/util/List;)V\n\n  public final gg.grounds.dialogue.json.DialogueCatalogLoader$ContentSources sources();\n    descriptor: ()Lgg/grounds/dialogue/json/DialogueCatalogLoader$ContentSources;\n\n  public final java.util.List<gg.grounds.dialogue.core.validation.ValidationReport$Problem> problems();\n    descriptor: ()Ljava/util/List;\n}\n",
+    "gg.grounds.dialogue.cli.ProjectInputs$discover$$inlined$sortBy$1": "public final class gg.grounds.dialogue.cli.ProjectInputs$discover$$inlined$sortBy$1<T> implements java.util.Comparator {\n  public gg.grounds.dialogue.cli.ProjectInputs$discover$$inlined$sortBy$1(gg.grounds.dialogue.cli.ProjectInputs);\n    descriptor: (Lgg/grounds/dialogue/cli/ProjectInputs;)V\n\n  public final int compare(T, T);\n    descriptor: (Ljava/lang/Object;Ljava/lang/Object;)I\n}\n",
+    "gg.grounds.dialogue.cli.ReportWriter": "public final class gg.grounds.dialogue.cli.ReportWriter {\n  public static final gg.grounds.dialogue.cli.ReportWriter INSTANCE;\n    descriptor: Lgg/grounds/dialogue/cli/ReportWriter;\n  public static final void write(gg.grounds.dialogue.cli.CliReport, gg.grounds.dialogue.cli.CliArguments$Format, java.io.OutputStream);\n    descriptor: (Lgg/grounds/dialogue/cli/CliReport;Lgg/grounds/dialogue/cli/CliArguments$Format;Ljava/io/OutputStream;)V\n}\n",
+    "gg.grounds.dialogue.cli.VersionInfo": "public final class gg.grounds.dialogue.cli.VersionInfo extends java.lang.Record {\n  public static final gg.grounds.dialogue.cli.VersionInfo$Companion Companion;\n    descriptor: Lgg/grounds/dialogue/cli/VersionInfo$Companion;\n  public gg.grounds.dialogue.cli.VersionInfo(java.lang.String, java.lang.String);\n    descriptor: (Ljava/lang/String;Ljava/lang/String;)V\n\n  public final java.lang.String toolVersion();\n    descriptor: ()Ljava/lang/String;\n\n  public final java.lang.String validatorVersion();\n    descriptor: ()Ljava/lang/String;\n\n  public final java.lang.String component1();\n    descriptor: ()Ljava/lang/String;\n\n  public final java.lang.String component2();\n    descriptor: ()Ljava/lang/String;\n\n  public final gg.grounds.dialogue.cli.VersionInfo copy(java.lang.String, java.lang.String);\n    descriptor: (Ljava/lang/String;Ljava/lang/String;)Lgg/grounds/dialogue/cli/VersionInfo;\n\n  public static gg.grounds.dialogue.cli.VersionInfo copy$default(gg.grounds.dialogue.cli.VersionInfo, java.lang.String, java.lang.String, int, java.lang.Object);\n    descriptor: (Lgg/grounds/dialogue/cli/VersionInfo;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lgg/grounds/dialogue/cli/VersionInfo;\n\n  public java.lang.String toString();\n    descriptor: ()Ljava/lang/String;\n\n  public int hashCode();\n    descriptor: ()I\n\n  public boolean equals(java.lang.Object);\n    descriptor: (Ljava/lang/Object;)Z\n\n  public static final gg.grounds.dialogue.cli.VersionInfo current();\n    descriptor: ()Lgg/grounds/dialogue/cli/VersionInfo;\n}\n",
+    "gg.grounds.dialogue.cli.VersionInfo$Companion": "public final class gg.grounds.dialogue.cli.VersionInfo$Companion {\n  public final gg.grounds.dialogue.cli.VersionInfo current();\n    descriptor: ()Lgg/grounds/dialogue/cli/VersionInfo;\n\n  public gg.grounds.dialogue.cli.VersionInfo$Companion(kotlin.jvm.internal.DefaultConstructorMarker);\n    descriptor: (Lkotlin/jvm/internal/DefaultConstructorMarker;)V\n}\n"
+  }
+}

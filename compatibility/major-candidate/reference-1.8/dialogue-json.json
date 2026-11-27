@@ -1,0 +1,554 @@
+{
+  "api": {
+    "gg.grounds.dialogue.json.ContentCanonicalizer": "public final class gg.grounds.dialogue.json.ContentCanonicalizer {\n  public gg.grounds.dialogue.json.ContentCanonicalizer();\n    descriptor: ()V\n\n  public final gg.grounds.dialogue.core.validation.ContentPin pin(gg.grounds.dialogue.core.definition.DialogueDefinition, gg.grounds.dialogue.core.text.TextCatalog);\n    descriptor: (Lgg/grounds/dialogue/core/definition/DialogueDefinition;Lgg/grounds/dialogue/core/text/TextCatalog;)Lgg/grounds/dialogue/core/validation/ContentPin;\n}\n",
+    "gg.grounds.dialogue.json.DialogueCatalogLoader": "public final class gg.grounds.dialogue.json.DialogueCatalogLoader {\n  public gg.grounds.dialogue.json.DialogueCatalogLoader();\n    descriptor: ()V\n\n  public final java.util.Optional<gg.grounds.dialogue.json.DialogueCatalogLoader$ValidatedCatalogue> current();\n    descriptor: ()Ljava/util/Optional;\n\n  public final gg.grounds.dialogue.json.DialogueCatalogLoader$ReloadResult reload(gg.grounds.dialogue.json.DialogueCatalogLoader$ContentSources);\n    descriptor: (Lgg/grounds/dialogue/json/DialogueCatalogLoader$ContentSources;)Lgg/grounds/dialogue/json/DialogueCatalogLoader$ReloadResult;\n}\n",
+    "gg.grounds.dialogue.json.DialogueCatalogLoader$ContentSources": "public final class gg.grounds.dialogue.json.DialogueCatalogLoader$ContentSources {\n  public gg.grounds.dialogue.json.DialogueCatalogLoader$ContentSources(java.util.Map<java.lang.String, byte[]>, java.util.Map<java.lang.String, byte[]>, byte[]);\n    descriptor: (Ljava/util/Map;Ljava/util/Map;[B)V\n\n  public final java.util.Map<java.lang.String, byte[]> dialogues();\n    descriptor: ()Ljava/util/Map;\n\n  public final java.util.Map<java.lang.String, byte[]> texts();\n    descriptor: ()Ljava/util/Map;\n\n  public final byte[] hostCatalog();\n    descriptor: ()[B\n\n  public boolean equals(java.lang.Object);\n    descriptor: (Ljava/lang/Object;)Z\n\n  public int hashCode();\n    descriptor: ()I\n\n  public java.lang.String toString();\n    descriptor: ()Ljava/lang/String;\n}\n",
+    "gg.grounds.dialogue.json.DialogueCatalogLoader$ReloadResult": "public final class gg.grounds.dialogue.json.DialogueCatalogLoader$ReloadResult {\n  public gg.grounds.dialogue.json.DialogueCatalogLoader$ReloadResult(java.util.List<gg.grounds.dialogue.core.validation.ValidationReport$Problem>, gg.grounds.dialogue.json.DialogueCatalogLoader$ValidatedCatalogue, boolean);\n    descriptor: (Ljava/util/List;Lgg/grounds/dialogue/json/DialogueCatalogLoader$ValidatedCatalogue;Z)V\n\n  public final java.util.List<gg.grounds.dialogue.core.validation.ValidationReport$Problem> problems();\n    descriptor: ()Ljava/util/List;\n\n  public final gg.grounds.dialogue.json.DialogueCatalogLoader$ValidatedCatalogue candidate();\n    descriptor: ()Lgg/grounds/dialogue/json/DialogueCatalogLoader$ValidatedCatalogue;\n\n  public final boolean activated();\n    descriptor: ()Z\n\n  public final boolean isValid();\n    descriptor: ()Z\n\n  public boolean equals(java.lang.Object);\n    descriptor: (Ljava/lang/Object;)Z\n\n  public int hashCode();\n    descriptor: ()I\n\n  public java.lang.String toString();\n    descriptor: ()Ljava/lang/String;\n}\n",
+    "gg.grounds.dialogue.json.DialogueCatalogLoader$ValidatedCatalogue": "public final class gg.grounds.dialogue.json.DialogueCatalogLoader$ValidatedCatalogue {\n  public gg.grounds.dialogue.json.DialogueCatalogLoader$ValidatedCatalogue(java.util.Map<java.lang.String, gg.grounds.dialogue.core.validation.ValidatedDialogue>, gg.grounds.dialogue.core.validation.ContentPin, long);\n    descriptor: (Ljava/util/Map;Lgg/grounds/dialogue/core/validation/ContentPin;J)V\n\n  public final java.util.Map<java.lang.String, gg.grounds.dialogue.core.validation.ValidatedDialogue> entries();\n    descriptor: ()Ljava/util/Map;\n\n  public final gg.grounds.dialogue.core.validation.ContentPin contentPin();\n    descriptor: ()Lgg/grounds/dialogue/core/validation/ContentPin;\n\n  public final long generation();\n    descriptor: ()J\n\n  public boolean equals(java.lang.Object);\n    descriptor: (Ljava/lang/Object;)Z\n\n  public int hashCode();\n    descriptor: ()I\n\n  public java.lang.String toString();\n    descriptor: ()Ljava/lang/String;\n}\n",
+    "gg.grounds.dialogue.json.DialogueJsonCodec": "public final class gg.grounds.dialogue.json.DialogueJsonCodec {\n  public gg.grounds.dialogue.json.DialogueJsonCodec(gg.grounds.dialogue.core.validation.ValidationLimits);\n    descriptor: (Lgg/grounds/dialogue/core/validation/ValidationLimits;)V\n\n  public gg.grounds.dialogue.json.DialogueJsonCodec(gg.grounds.dialogue.core.validation.ValidationLimits, int, kotlin.jvm.internal.DefaultConstructorMarker);\n    descriptor: (Lgg/grounds/dialogue/core/validation/ValidationLimits;ILkotlin/jvm/internal/DefaultConstructorMarker;)V\n\n  public final gg.grounds.dialogue.json.DialogueJsonCodec$ContextResult prepareContext(java.util.Map<java.lang.String, byte[]>, byte[]);\n    descriptor: (Ljava/util/Map;[B)Lgg/grounds/dialogue/json/DialogueJsonCodec$ContextResult;\n\n  public final gg.grounds.dialogue.json.DialogueJsonCodec$DecodeResult decode(byte[], java.util.Map<java.lang.String, byte[]>, byte[]);\n    descriptor: ([BLjava/util/Map;[B)Lgg/grounds/dialogue/json/DialogueJsonCodec$DecodeResult;\n\n  public final gg.grounds.dialogue.json.DialogueJsonCodec$DecodeResult decodeDefinition(byte[], gg.grounds.dialogue.json.DialogueJsonCodec$PreparedContext);\n    descriptor: ([BLgg/grounds/dialogue/json/DialogueJsonCodec$PreparedContext;)Lgg/grounds/dialogue/json/DialogueJsonCodec$DecodeResult;\n\n  public final byte[] encode(gg.grounds.dialogue.core.definition.DialogueDefinition);\n    descriptor: (Lgg/grounds/dialogue/core/definition/DialogueDefinition;)[B\n\n  public gg.grounds.dialogue.json.DialogueJsonCodec();\n    descriptor: ()V\n}\n",
+    "gg.grounds.dialogue.json.DialogueJsonCodec$ContextResult": "public final class gg.grounds.dialogue.json.DialogueJsonCodec$ContextResult {\n  public gg.grounds.dialogue.json.DialogueJsonCodec$ContextResult(java.util.List<gg.grounds.dialogue.core.validation.ValidationReport$Problem>, gg.grounds.dialogue.json.DialogueJsonCodec$PreparedContext);\n    descriptor: (Ljava/util/List;Lgg/grounds/dialogue/json/DialogueJsonCodec$PreparedContext;)V\n\n  public final java.util.List<gg.grounds.dialogue.core.validation.ValidationReport$Problem> problems();\n    descriptor: ()Ljava/util/List;\n\n  public final gg.grounds.dialogue.json.DialogueJsonCodec$PreparedContext context();\n    descriptor: ()Lgg/grounds/dialogue/json/DialogueJsonCodec$PreparedContext;\n\n  public final boolean isValid();\n    descriptor: ()Z\n\n  public boolean equals(java.lang.Object);\n    descriptor: (Ljava/lang/Object;)Z\n\n  public int hashCode();\n    descriptor: ()I\n\n  public java.lang.String toString();\n    descriptor: ()Ljava/lang/String;\n}\n",
+    "gg.grounds.dialogue.json.DialogueJsonCodec$DecodeResult": "public final class gg.grounds.dialogue.json.DialogueJsonCodec$DecodeResult {\n  public gg.grounds.dialogue.json.DialogueJsonCodec$DecodeResult(java.util.List<gg.grounds.dialogue.core.validation.ValidationReport$Problem>, gg.grounds.dialogue.core.validation.ValidatedDialogue);\n    descriptor: (Ljava/util/List;Lgg/grounds/dialogue/core/validation/ValidatedDialogue;)V\n\n  public final java.util.List<gg.grounds.dialogue.core.validation.ValidationReport$Problem> problems();\n    descriptor: ()Ljava/util/List;\n\n  public final gg.grounds.dialogue.core.validation.ValidatedDialogue validated();\n    descriptor: ()Lgg/grounds/dialogue/core/validation/ValidatedDialogue;\n\n  public final boolean isValid();\n    descriptor: ()Z\n\n  public boolean equals(java.lang.Object);\n    descriptor: (Ljava/lang/Object;)Z\n\n  public int hashCode();\n    descriptor: ()I\n\n  public java.lang.String toString();\n    descriptor: ()Ljava/lang/String;\n}\n",
+    "gg.grounds.dialogue.json.DialogueJsonCodec$PreparedContext": "public final class gg.grounds.dialogue.json.DialogueJsonCodec$PreparedContext {\n  public static final gg.grounds.dialogue.json.DialogueJsonCodec$PreparedContext$Companion Companion;\n    descriptor: Lgg/grounds/dialogue/json/DialogueJsonCodec$PreparedContext$Companion;\n  public final gg.grounds.dialogue.core.validation.ValidationLimits getLimits$gg_grounds_dialogue_json();\n    descriptor: ()Lgg/grounds/dialogue/core/validation/ValidationLimits;\n\n  public final gg.grounds.dialogue.core.text.TextCatalog texts();\n    descriptor: ()Lgg/grounds/dialogue/core/text/TextCatalog;\n\n  public final gg.grounds.dialogue.core.validation.HostCatalog catalog();\n    descriptor: ()Lgg/grounds/dialogue/core/validation/HostCatalog;\n\n  public gg.grounds.dialogue.json.DialogueJsonCodec$PreparedContext(gg.grounds.dialogue.core.text.TextCatalog, gg.grounds.dialogue.core.validation.HostCatalog, gg.grounds.dialogue.core.validation.ValidationLimits, kotlin.jvm.internal.DefaultConstructorMarker);\n    descriptor: (Lgg/grounds/dialogue/core/text/TextCatalog;Lgg/grounds/dialogue/core/validation/HostCatalog;Lgg/grounds/dialogue/core/validation/ValidationLimits;Lkotlin/jvm/internal/DefaultConstructorMarker;)V\n}\n",
+    "gg.grounds.dialogue.json.DialogueJsonCodec$PreparedContext$Companion": "public final class gg.grounds.dialogue.json.DialogueJsonCodec$PreparedContext$Companion {\n  public final gg.grounds.dialogue.json.DialogueJsonCodec$PreparedContext create$gg_grounds_dialogue_json(gg.grounds.dialogue.core.text.TextCatalog, gg.grounds.dialogue.core.validation.HostCatalog, gg.grounds.dialogue.core.validation.ValidationLimits);\n    descriptor: (Lgg/grounds/dialogue/core/text/TextCatalog;Lgg/grounds/dialogue/core/validation/HostCatalog;Lgg/grounds/dialogue/core/validation/ValidationLimits;)Lgg/grounds/dialogue/json/DialogueJsonCodec$PreparedContext;\n\n  public gg.grounds.dialogue.json.DialogueJsonCodec$PreparedContext$Companion(kotlin.jvm.internal.DefaultConstructorMarker);\n    descriptor: (Lkotlin/jvm/internal/DefaultConstructorMarker;)V\n}\n"
+  },
+  "classes": {
+    "gg.grounds.dialogue.json.ContentCanonicalizer": {
+      "flags": 49,
+      "members": {
+        "method:<init>:()V": {
+          "flags": 1,
+          "offset": 1299
+        },
+        "method:pin:(Lgg/grounds/dialogue/core/definition/DialogueDefinition;Lgg/grounds/dialogue/core/text/TextCatalog;)Lgg/grounds/dialogue/core/validation/ContentPin;": {
+          "flags": 17,
+          "offset": 1360
+        }
+      }
+    },
+    "gg.grounds.dialogue.json.DialogueCatalogLoader": {
+      "flags": 49,
+      "members": {
+        "field:codec:Lgg/grounds/dialogue/json/DialogueJsonCodec;": {
+          "flags": 18,
+          "offset": 8010
+        },
+        "field:current:Ljava/util/concurrent/atomic/AtomicReference;": {
+          "flags": 18,
+          "offset": 8030
+        },
+        "field:requests:Ljava/util/concurrent/atomic/AtomicLong;": {
+          "flags": 18,
+          "offset": 8058
+        },
+        "method:<init>:()V": {
+          "flags": 1,
+          "offset": 8080
+        },
+        "method:current:()Ljava/util/Optional;": {
+          "flags": 17,
+          "offset": 8193
+        },
+        "method:reload:(Lgg/grounds/dialogue/json/DialogueCatalogLoader$ContentSources;)Lgg/grounds/dialogue/json/DialogueCatalogLoader$ReloadResult;": {
+          "flags": 17,
+          "offset": 8286
+        }
+      }
+    },
+    "gg.grounds.dialogue.json.DialogueCatalogLoader$ContentSources": {
+      "flags": 49,
+      "members": {
+        "field:Companion:Lgg/grounds/dialogue/json/DialogueCatalogLoader$ContentSources$Companion;": {
+          "flags": 26,
+          "offset": 2396
+        },
+        "field:dialogueData:Ljava/util/Map;": {
+          "flags": 18,
+          "offset": 2416
+        },
+        "field:hostCatalogData:[B": {
+          "flags": 18,
+          "offset": 2472
+        },
+        "field:textData:Ljava/util/Map;": {
+          "flags": 18,
+          "offset": 2444
+        },
+        "method:<clinit>:()V": {
+          "flags": 8,
+          "offset": 3313
+        },
+        "method:<init>:(Ljava/util/Map;Ljava/util/Map;[B)V": {
+          "flags": 1,
+          "offset": 2494
+        },
+        "method:dialogues:()Ljava/util/Map;": {
+          "flags": 17,
+          "offset": 2704
+        },
+        "method:equals:(Ljava/lang/Object;)Z": {
+          "flags": 1,
+          "offset": 2957
+        },
+        "method:hashCode:()I": {
+          "flags": 1,
+          "offset": 3141
+        },
+        "method:hostCatalog:()[B": {
+          "flags": 17,
+          "offset": 2878
+        },
+        "method:texts:()Ljava/util/Map;": {
+          "flags": 17,
+          "offset": 2791
+        },
+        "method:toString:()Ljava/lang/String;": {
+          "flags": 1,
+          "offset": 3227
+        }
+      }
+    },
+    "gg.grounds.dialogue.json.DialogueCatalogLoader$ContentSources$Companion": {
+      "flags": 48,
+      "members": {
+        "method:<init>:()V": {
+          "flags": 2,
+          "offset": 2466
+        },
+        "method:<init>:(Lkotlin/jvm/internal/DefaultConstructorMarker;)V": {
+          "flags": 4097,
+          "offset": 2895
+        },
+        "method:copy:(Ljava/util/Map;)Ljava/util/Map;": {
+          "flags": 17,
+          "offset": 2527
+        }
+      }
+    },
+    "gg.grounds.dialogue.json.DialogueCatalogLoader$ReloadResult": {
+      "flags": 49,
+      "members": {
+        "field:activated:Z": {
+          "flags": 18,
+          "offset": 2936
+        },
+        "field:candidate:Lgg/grounds/dialogue/json/DialogueCatalogLoader$ValidatedCatalogue;": {
+          "flags": 18,
+          "offset": 2916
+        },
+        "field:problems:Ljava/util/List;": {
+          "flags": 18,
+          "offset": 2944
+        },
+        "method:<init>:(Ljava/util/List;Lgg/grounds/dialogue/json/DialogueCatalogLoader$ValidatedCatalogue;Z)V": {
+          "flags": 1,
+          "offset": 2962
+        },
+        "method:activated:()Z": {
+          "flags": 17,
+          "offset": 3304
+        },
+        "method:candidate:()Lgg/grounds/dialogue/json/DialogueCatalogLoader$ValidatedCatalogue;": {
+          "flags": 17,
+          "offset": 3231
+        },
+        "method:equals:(Ljava/lang/Object;)Z": {
+          "flags": 1,
+          "offset": 3445
+        },
+        "method:hashCode:()I": {
+          "flags": 1,
+          "offset": 3629
+        },
+        "method:isValid:()Z": {
+          "flags": 17,
+          "offset": 3365
+        },
+        "method:problems:()Ljava/util/List;": {
+          "flags": 17,
+          "offset": 3144
+        },
+        "method:toString:()Ljava/lang/String;": {
+          "flags": 1,
+          "offset": 3760
+        }
+      }
+    },
+    "gg.grounds.dialogue.json.DialogueCatalogLoader$ValidatedCatalogue": {
+      "flags": 49,
+      "members": {
+        "field:contentPin:Lgg/grounds/dialogue/core/validation/ContentPin;": {
+          "flags": 18,
+          "offset": 2679
+        },
+        "field:entries:Ljava/util/Map;": {
+          "flags": 18,
+          "offset": 2707
+        },
+        "field:generation:J": {
+          "flags": 18,
+          "offset": 2699
+        },
+        "method:<init>:(Ljava/util/Map;Lgg/grounds/dialogue/core/validation/ContentPin;J)V": {
+          "flags": 1,
+          "offset": 2725
+        },
+        "method:contentPin:()Lgg/grounds/dialogue/core/validation/ContentPin;": {
+          "flags": 17,
+          "offset": 2997
+        },
+        "method:entries:()Ljava/util/Map;": {
+          "flags": 17,
+          "offset": 2910
+        },
+        "method:equals:(Ljava/lang/Object;)Z": {
+          "flags": 1,
+          "offset": 3131
+        },
+        "method:generation:()J": {
+          "flags": 17,
+          "offset": 3070
+        },
+        "method:hashCode:()I": {
+          "flags": 1,
+          "offset": 3316
+        },
+        "method:toString:()Ljava/lang/String;": {
+          "flags": 1,
+          "offset": 3402
+        }
+      }
+    },
+    "gg.grounds.dialogue.json.DialogueJsonCodec": {
+      "flags": 49,
+      "members": {
+        "field:limits:Lgg/grounds/dialogue/core/validation/ValidationLimits;": {
+          "flags": 18,
+          "offset": 24513
+        },
+        "method:<init>:()V": {
+          "flags": 1,
+          "offset": 38995
+        },
+        "method:<init>:(Lgg/grounds/dialogue/core/validation/ValidationLimits;)V": {
+          "flags": 1,
+          "offset": 24535
+        },
+        "method:<init>:(Lgg/grounds/dialogue/core/validation/ValidationLimits;ILkotlin/jvm/internal/DefaultConstructorMarker;)V": {
+          "flags": 4097,
+          "offset": 24657
+        },
+        "method:arguments:(Lcom/google/gson/JsonObject;)Ljava/util/Map;": {
+          "flags": 18,
+          "offset": 36713
+        },
+        "method:array:(Lcom/google/gson/JsonObject;Ljava/lang/String;)Ljava/util/List;": {
+          "flags": 18,
+          "offset": 35447
+        },
+        "method:bool:(Lcom/google/gson/JsonObject;Ljava/lang/String;Z)Z": {
+          "flags": 18,
+          "offset": 34995
+        },
+        "method:condition:(Lcom/google/gson/JsonElement;)Lgg/grounds/dialogue/core/definition/DialogueDefinition$Condition;": {
+          "flags": 18,
+          "offset": 37319
+        },
+        "method:decode:([BLjava/util/Map;[B)Lgg/grounds/dialogue/json/DialogueJsonCodec$DecodeResult;": {
+          "flags": 17,
+          "offset": 26544
+        },
+        "method:decodeDefinition:([BLgg/grounds/dialogue/json/DialogueJsonCodec$PreparedContext;)Lgg/grounds/dialogue/json/DialogueJsonCodec$DecodeResult;": {
+          "flags": 17,
+          "offset": 26804
+        },
+        "method:definition:(Lcom/google/gson/JsonObject;)Lgg/grounds/dialogue/core/definition/DialogueDefinition;": {
+          "flags": 18,
+          "offset": 29339
+        },
+        "method:delivery:(Ljava/lang/String;)Lgg/grounds/dialogue/core/definition/DialogueDefinition$Delivery;": {
+          "flags": 18,
+          "offset": 37479
+        },
+        "method:encode:(Lgg/grounds/dialogue/core/definition/DialogueDefinition;)[B": {
+          "flags": 17,
+          "offset": 27650
+        },
+        "method:fail:(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lgg/grounds/dialogue/json/DialogueJsonCodec$DecodeFailure;": {
+          "flags": 18,
+          "offset": 38863
+        },
+        "method:fields:(Lcom/google/gson/JsonObject;[Ljava/lang/String;)V": {
+          "flags": 146,
+          "offset": 36247
+        },
+        "method:host:(Lcom/google/gson/JsonObject;)Lgg/grounds/dialogue/core/validation/HostCatalog;": {
+          "flags": 18,
+          "offset": 37637
+        },
+        "method:kind:(Ljava/lang/String;)Lgg/grounds/dialogue/core/validation/HostCatalog$Kind;": {
+          "flags": 18,
+          "offset": 33354
+        },
+        "method:node:(Lcom/google/gson/JsonObject;)Lgg/grounds/dialogue/core/definition/DialogueDefinition$Node;": {
+          "flags": 18,
+          "offset": 31210
+        },
+        "method:normalizeNumbers:(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;": {
+          "flags": 18,
+          "offset": 33616
+        },
+        "method:number:(Lcom/google/gson/JsonObject;Ljava/lang/String;)Ljava/math/BigDecimal;": {
+          "flags": 18,
+          "offset": 35232
+        },
+        "method:obj:(Lcom/google/gson/JsonElement;)Lcom/google/gson/JsonObject;": {
+          "flags": 18,
+          "offset": 34560
+        },
+        "method:optionalObject:(Lcom/google/gson/JsonObject;Ljava/lang/String;)Lcom/google/gson/JsonObject;": {
+          "flags": 18,
+          "offset": 36581
+        },
+        "method:parse:([BILjava/lang/String;)Lcom/google/gson/JsonElement;": {
+          "flags": 18,
+          "offset": 27767
+        },
+        "method:prepareContext:(Ljava/util/Map;[B)Lgg/grounds/dialogue/json/DialogueJsonCodec$ContextResult;": {
+          "flags": 17,
+          "offset": 24723
+        },
+        "method:providers:(Lcom/google/gson/JsonObject;)Ljava/util/Map;": {
+          "flags": 18,
+          "offset": 38039
+        },
+        "method:read:(Lcom/google/gson/stream/JsonReader;ILjava/lang/String;)Lcom/google/gson/JsonElement;": {
+          "flags": 18,
+          "offset": 28408
+        },
+        "method:s:(Lcom/google/gson/JsonObject;Ljava/lang/String;)Ljava/lang/String;": {
+          "flags": 18,
+          "offset": 34894
+        },
+        "method:stringSet:(Lcom/google/gson/JsonObject;Ljava/lang/String;)Ljava/util/Set;": {
+          "flags": 18,
+          "offset": 36002
+        },
+        "method:stringValue:(Lcom/google/gson/JsonElement;)Ljava/lang/String;": {
+          "flags": 18,
+          "offset": 34724
+        },
+        "method:strings:(Lcom/google/gson/JsonObject;Ljava/lang/String;)Ljava/util/List;": {
+          "flags": 18,
+          "offset": 35648
+        },
+        "method:unicode:(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V": {
+          "flags": 18,
+          "offset": 34414
+        }
+      }
+    },
+    "gg.grounds.dialogue.json.DialogueJsonCodec$ContextResult": {
+      "flags": 49,
+      "members": {
+        "field:context:Lgg/grounds/dialogue/json/DialogueJsonCodec$PreparedContext;": {
+          "flags": 18,
+          "offset": 2739
+        },
+        "field:problems:Ljava/util/List;": {
+          "flags": 18,
+          "offset": 2759
+        },
+        "method:<init>:(Ljava/util/List;Lgg/grounds/dialogue/json/DialogueJsonCodec$PreparedContext;)V": {
+          "flags": 1,
+          "offset": 2777
+        },
+        "method:context:()Lgg/grounds/dialogue/json/DialogueJsonCodec$PreparedContext;": {
+          "flags": 17,
+          "offset": 3017
+        },
+        "method:equals:(Ljava/lang/Object;)Z": {
+          "flags": 1,
+          "offset": 3170
+        },
+        "method:hashCode:()I": {
+          "flags": 1,
+          "offset": 3328
+        },
+        "method:isValid:()Z": {
+          "flags": 17,
+          "offset": 3090
+        },
+        "method:problems:()Ljava/util/List;": {
+          "flags": 17,
+          "offset": 2930
+        },
+        "method:toString:()Ljava/lang/String;": {
+          "flags": 1,
+          "offset": 3446
+        }
+      }
+    },
+    "gg.grounds.dialogue.json.DialogueJsonCodec$DecodeFailure": {
+      "flags": 48,
+      "members": {
+        "field:code:Ljava/lang/String;": {
+          "flags": 18,
+          "offset": 1186
+        },
+        "field:file:Ljava/lang/String;": {
+          "flags": 18,
+          "offset": 1206
+        },
+        "field:path:Ljava/lang/String;": {
+          "flags": 18,
+          "offset": 1226
+        },
+        "method:<init>:(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V": {
+          "flags": 1,
+          "offset": 1248
+        },
+        "method:getCode:()Ljava/lang/String;": {
+          "flags": 17,
+          "offset": 1469
+        },
+        "method:getFile:()Ljava/lang/String;": {
+          "flags": 17,
+          "offset": 1542
+        },
+        "method:getPath:()Ljava/lang/String;": {
+          "flags": 17,
+          "offset": 1615
+        }
+      }
+    },
+    "gg.grounds.dialogue.json.DialogueJsonCodec$DecodeResult": {
+      "flags": 49,
+      "members": {
+        "field:problems:Ljava/util/List;": {
+          "flags": 18,
+          "offset": 2711
+        },
+        "field:validated:Lgg/grounds/dialogue/core/validation/ValidatedDialogue;": {
+          "flags": 18,
+          "offset": 2691
+        },
+        "method:<init>:(Ljava/util/List;Lgg/grounds/dialogue/core/validation/ValidatedDialogue;)V": {
+          "flags": 1,
+          "offset": 2729
+        },
+        "method:equals:(Ljava/lang/Object;)Z": {
+          "flags": 1,
+          "offset": 3122
+        },
+        "method:hashCode:()I": {
+          "flags": 1,
+          "offset": 3288
+        },
+        "method:isValid:()Z": {
+          "flags": 17,
+          "offset": 3042
+        },
+        "method:problems:()Ljava/util/List;": {
+          "flags": 17,
+          "offset": 2882
+        },
+        "method:toString:()Ljava/lang/String;": {
+          "flags": 1,
+          "offset": 3406
+        },
+        "method:validated:()Lgg/grounds/dialogue/core/validation/ValidatedDialogue;": {
+          "flags": 17,
+          "offset": 2969
+        }
+      }
+    },
+    "gg.grounds.dialogue.json.DialogueJsonCodec$PreparedContext": {
+      "flags": 49,
+      "members": {
+        "field:Companion:Lgg/grounds/dialogue/json/DialogueJsonCodec$PreparedContext$Companion;": {
+          "flags": 25,
+          "offset": 1832
+        },
+        "field:catalog:Lgg/grounds/dialogue/core/validation/HostCatalog;": {
+          "flags": 18,
+          "offset": 1872
+        },
+        "field:limits:Lgg/grounds/dialogue/core/validation/ValidationLimits;": {
+          "flags": 18,
+          "offset": 1892
+        },
+        "field:texts:Lgg/grounds/dialogue/core/text/TextCatalog;": {
+          "flags": 18,
+          "offset": 1852
+        },
+        "method:<clinit>:()V": {
+          "flags": 8,
+          "offset": 2366
+        },
+        "method:<init>:(Lgg/grounds/dialogue/core/text/TextCatalog;Lgg/grounds/dialogue/core/validation/HostCatalog;Lgg/grounds/dialogue/core/validation/ValidationLimits;)V": {
+          "flags": 2,
+          "offset": 1914
+        },
+        "method:<init>:(Lgg/grounds/dialogue/core/text/TextCatalog;Lgg/grounds/dialogue/core/validation/HostCatalog;Lgg/grounds/dialogue/core/validation/ValidationLimits;Lkotlin/jvm/internal/DefaultConstructorMarker;)V": {
+          "flags": 4097,
+          "offset": 2274
+        },
+        "method:catalog:()Lgg/grounds/dialogue/core/validation/HostCatalog;": {
+          "flags": 17,
+          "offset": 2201
+        },
+        "method:getLimits$gg_grounds_dialogue_json:()Lgg/grounds/dialogue/core/validation/ValidationLimits;": {
+          "flags": 17,
+          "offset": 2055
+        },
+        "method:texts:()Lgg/grounds/dialogue/core/text/TextCatalog;": {
+          "flags": 17,
+          "offset": 2128
+        }
+      }
+    },
+    "gg.grounds.dialogue.json.DialogueJsonCodec$PreparedContext$Companion": {
+      "flags": 49,
+      "members": {
+        "method:<init>:()V": {
+          "flags": 2,
+          "offset": 1787
+        },
+        "method:<init>:(Lkotlin/jvm/internal/DefaultConstructorMarker;)V": {
+          "flags": 4097,
+          "offset": 2020
+        },
+        "method:create$gg_grounds_dialogue_json:(Lgg/grounds/dialogue/core/text/TextCatalog;Lgg/grounds/dialogue/core/validation/HostCatalog;Lgg/grounds/dialogue/core/validation/ValidationLimits;)Lgg/grounds/dialogue/json/DialogueJsonCodec$PreparedContext;": {
+          "flags": 17,
+          "offset": 1848
+        }
+      }
+    },
+    "gg.grounds.dialogue.json.DialogueJsonCodec$WhenMappings": {
+      "flags": 4145,
+      "members": {
+        "field:$EnumSwitchMapping$0:[I": {
+          "flags": 4121,
+          "offset": 701
+        },
+        "method:<clinit>:()V": {
+          "flags": 8,
+          "offset": 711
+        }
+      }
+    }
+  },
+  "raw": {
+    "gg.grounds.dialogue.json.ContentCanonicalizer": "public final class gg.grounds.dialogue.json.ContentCanonicalizer {\n  public gg.grounds.dialogue.json.ContentCanonicalizer();\n    descriptor: ()V\n\n  public final gg.grounds.dialogue.core.validation.ContentPin pin(gg.grounds.dialogue.core.definition.DialogueDefinition, gg.grounds.dialogue.core.text.TextCatalog);\n    descriptor: (Lgg/grounds/dialogue/core/definition/DialogueDefinition;Lgg/grounds/dialogue/core/text/TextCatalog;)Lgg/grounds/dialogue/core/validation/ContentPin;\n}\n",
+    "gg.grounds.dialogue.json.DialogueCatalogLoader": "public final class gg.grounds.dialogue.json.DialogueCatalogLoader {\n  public gg.grounds.dialogue.json.DialogueCatalogLoader();\n    descriptor: ()V\n\n  public final java.util.Optional<gg.grounds.dialogue.json.DialogueCatalogLoader$ValidatedCatalogue> current();\n    descriptor: ()Ljava/util/Optional;\n\n  public final gg.grounds.dialogue.json.DialogueCatalogLoader$ReloadResult reload(gg.grounds.dialogue.json.DialogueCatalogLoader$ContentSources);\n    descriptor: (Lgg/grounds/dialogue/json/DialogueCatalogLoader$ContentSources;)Lgg/grounds/dialogue/json/DialogueCatalogLoader$ReloadResult;\n}\n",
+    "gg.grounds.dialogue.json.DialogueCatalogLoader$ContentSources": "public final class gg.grounds.dialogue.json.DialogueCatalogLoader$ContentSources {\n  public gg.grounds.dialogue.json.DialogueCatalogLoader$ContentSources(java.util.Map<java.lang.String, byte[]>, java.util.Map<java.lang.String, byte[]>, byte[]);\n    descriptor: (Ljava/util/Map;Ljava/util/Map;[B)V\n\n  public final java.util.Map<java.lang.String, byte[]> dialogues();\n    descriptor: ()Ljava/util/Map;\n\n  public final java.util.Map<java.lang.String, byte[]> texts();\n    descriptor: ()Ljava/util/Map;\n\n  public final byte[] hostCatalog();\n    descriptor: ()[B\n\n  public boolean equals(java.lang.Object);\n    descriptor: (Ljava/lang/Object;)Z\n\n  public int hashCode();\n    descriptor: ()I\n\n  public java.lang.String toString();\n    descriptor: ()Ljava/lang/String;\n}\n",
+    "gg.grounds.dialogue.json.DialogueCatalogLoader$ReloadResult": "public final class gg.grounds.dialogue.json.DialogueCatalogLoader$ReloadResult {\n  public gg.grounds.dialogue.json.DialogueCatalogLoader$ReloadResult(java.util.List<gg.grounds.dialogue.core.validation.ValidationReport$Problem>, gg.grounds.dialogue.json.DialogueCatalogLoader$ValidatedCatalogue, boolean);\n    descriptor: (Ljava/util/List;Lgg/grounds/dialogue/json/DialogueCatalogLoader$ValidatedCatalogue;Z)V\n\n  public final java.util.List<gg.grounds.dialogue.core.validation.ValidationReport$Problem> problems();\n    descriptor: ()Ljava/util/List;\n\n  public final gg.grounds.dialogue.json.DialogueCatalogLoader$ValidatedCatalogue candidate();\n    descriptor: ()Lgg/grounds/dialogue/json/DialogueCatalogLoader$ValidatedCatalogue;\n\n  public final boolean activated();\n    descriptor: ()Z\n\n  public final boolean isValid();\n    descriptor: ()Z\n\n  public boolean equals(java.lang.Object);\n    descriptor: (Ljava/lang/Object;)Z\n\n  public int hashCode();\n    descriptor: ()I\n\n  public java.lang.String toString();\n    descriptor: ()Ljava/lang/String;\n}\n",
+    "gg.grounds.dialogue.json.DialogueCatalogLoader$ValidatedCatalogue": "public final class gg.grounds.dialogue.json.DialogueCatalogLoader$ValidatedCatalogue {\n  public gg.grounds.dialogue.json.DialogueCatalogLoader$ValidatedCatalogue(java.util.Map<java.lang.String, gg.grounds.dialogue.core.validation.ValidatedDialogue>, gg.grounds.dialogue.core.validation.ContentPin, long);\n    descriptor: (Ljava/util/Map;Lgg/grounds/dialogue/core/validation/ContentPin;J)V\n\n  public final java.util.Map<java.lang.String, gg.grounds.dialogue.core.validation.ValidatedDialogue> entries();\n    descriptor: ()Ljava/util/Map;\n\n  public final gg.grounds.dialogue.core.validation.ContentPin contentPin();\n    descriptor: ()Lgg/grounds/dialogue/core/validation/ContentPin;\n\n  public final long generation();\n    descriptor: ()J\n\n  public boolean equals(java.lang.Object);\n    descriptor: (Ljava/lang/Object;)Z\n\n  public int hashCode();\n    descriptor: ()I\n\n  public java.lang.String toString();\n    descriptor: ()Ljava/lang/String;\n}\n",
+    "gg.grounds.dialogue.json.DialogueJsonCodec": "public final class gg.grounds.dialogue.json.DialogueJsonCodec {\n  public gg.grounds.dialogue.json.DialogueJsonCodec(gg.grounds.dialogue.core.validation.ValidationLimits);\n    descriptor: (Lgg/grounds/dialogue/core/validation/ValidationLimits;)V\n\n  public gg.grounds.dialogue.json.DialogueJsonCodec(gg.grounds.dialogue.core.validation.ValidationLimits, int, kotlin.jvm.internal.DefaultConstructorMarker);\n    descriptor: (Lgg/grounds/dialogue/core/validation/ValidationLimits;ILkotlin/jvm/internal/DefaultConstructorMarker;)V\n\n  public final gg.grounds.dialogue.json.DialogueJsonCodec$ContextResult prepareContext(java.util.Map<java.lang.String, byte[]>, byte[]);\n    descriptor: (Ljava/util/Map;[B)Lgg/grounds/dialogue/json/DialogueJsonCodec$ContextResult;\n\n  public final gg.grounds.dialogue.json.DialogueJsonCodec$DecodeResult decode(byte[], java.util.Map<java.lang.String, byte[]>, byte[]);\n    descriptor: ([BLjava/util/Map;[B)Lgg/grounds/dialogue/json/DialogueJsonCodec$DecodeResult;\n\n  public final gg.grounds.dialogue.json.DialogueJsonCodec$DecodeResult decodeDefinition(byte[], gg.grounds.dialogue.json.DialogueJsonCodec$PreparedContext);\n    descriptor: ([BLgg/grounds/dialogue/json/DialogueJsonCodec$PreparedContext;)Lgg/grounds/dialogue/json/DialogueJsonCodec$DecodeResult;\n\n  public final byte[] encode(gg.grounds.dialogue.core.definition.DialogueDefinition);\n    descriptor: (Lgg/grounds/dialogue/core/definition/DialogueDefinition;)[B\n\n  public gg.grounds.dialogue.json.DialogueJsonCodec();\n    descriptor: ()V\n}\n",
+    "gg.grounds.dialogue.json.DialogueJsonCodec$ContextResult": "public final class gg.grounds.dialogue.json.DialogueJsonCodec$ContextResult {\n  public gg.grounds.dialogue.json.DialogueJsonCodec$ContextResult(java.util.List<gg.grounds.dialogue.core.validation.ValidationReport$Problem>, gg.grounds.dialogue.json.DialogueJsonCodec$PreparedContext);\n    descriptor: (Ljava/util/List;Lgg/grounds/dialogue/json/DialogueJsonCodec$PreparedContext;)V\n\n  public final java.util.List<gg.grounds.dialogue.core.validation.ValidationReport$Problem> problems();\n    descriptor: ()Ljava/util/List;\n\n  public final gg.grounds.dialogue.json.DialogueJsonCodec$PreparedContext context();\n    descriptor: ()Lgg/grounds/dialogue/json/DialogueJsonCodec$PreparedContext;\n\n  public final boolean isValid();\n    descriptor: ()Z\n\n  public boolean equals(java.lang.Object);\n    descriptor: (Ljava/lang/Object;)Z\n\n  public int hashCode();\n    descriptor: ()I\n\n  public java.lang.String toString();\n    descriptor: ()Ljava/lang/String;\n}\n",
+    "gg.grounds.dialogue.json.DialogueJsonCodec$DecodeResult": "public final class gg.grounds.dialogue.json.DialogueJsonCodec$DecodeResult {\n  public gg.grounds.dialogue.json.DialogueJsonCodec$DecodeResult(java.util.List<gg.grounds.dialogue.core.validation.ValidationReport$Problem>, gg.grounds.dialogue.core.validation.ValidatedDialogue);\n    descriptor: (Ljava/util/List;Lgg/grounds/dialogue/core/validation/ValidatedDialogue;)V\n\n  public final java.util.List<gg.grounds.dialogue.core.validation.ValidationReport$Problem> problems();\n    descriptor: ()Ljava/util/List;\n\n  public final gg.grounds.dialogue.core.validation.ValidatedDialogue validated();\n    descriptor: ()Lgg/grounds/dialogue/core/validation/ValidatedDialogue;\n\n  public final boolean isValid();\n    descriptor: ()Z\n\n  public boolean equals(java.lang.Object);\n    descriptor: (Ljava/lang/Object;)Z\n\n  public int hashCode();\n    descriptor: ()I\n\n  public java.lang.String toString();\n    descriptor: ()Ljava/lang/String;\n}\n",
+    "gg.grounds.dialogue.json.DialogueJsonCodec$PreparedContext": "public final class gg.grounds.dialogue.json.DialogueJsonCodec$PreparedContext {\n  public static final gg.grounds.dialogue.json.DialogueJsonCodec$PreparedContext$Companion Companion;\n    descriptor: Lgg/grounds/dialogue/json/DialogueJsonCodec$PreparedContext$Companion;\n  public final gg.grounds.dialogue.core.validation.ValidationLimits getLimits$gg_grounds_dialogue_json();\n    descriptor: ()Lgg/grounds/dialogue/core/validation/ValidationLimits;\n\n  public final gg.grounds.dialogue.core.text.TextCatalog texts();\n    descriptor: ()Lgg/grounds/dialogue/core/text/TextCatalog;\n\n  public final gg.grounds.dialogue.core.validation.HostCatalog catalog();\n    descriptor: ()Lgg/grounds/dialogue/core/validation/HostCatalog;\n\n  public gg.grounds.dialogue.json.DialogueJsonCodec$PreparedContext(gg.grounds.dialogue.core.text.TextCatalog, gg.grounds.dialogue.core.validation.HostCatalog, gg.grounds.dialogue.core.validation.ValidationLimits, kotlin.jvm.internal.DefaultConstructorMarker);\n    descriptor: (Lgg/grounds/dialogue/core/text/TextCatalog;Lgg/grounds/dialogue/core/validation/HostCatalog;Lgg/grounds/dialogue/core/validation/ValidationLimits;Lkotlin/jvm/internal/DefaultConstructorMarker;)V\n}\n",
+    "gg.grounds.dialogue.json.DialogueJsonCodec$PreparedContext$Companion": "public final class gg.grounds.dialogue.json.DialogueJsonCodec$PreparedContext$Companion {\n  public final gg.grounds.dialogue.json.DialogueJsonCodec$PreparedContext create$gg_grounds_dialogue_json(gg.grounds.dialogue.core.text.TextCatalog, gg.grounds.dialogue.core.validation.HostCatalog, gg.grounds.dialogue.core.validation.ValidationLimits);\n    descriptor: (Lgg/grounds/dialogue/core/text/TextCatalog;Lgg/grounds/dialogue/core/validation/HostCatalog;Lgg/grounds/dialogue/core/validation/ValidationLimits;)Lgg/grounds/dialogue/json/DialogueJsonCodec$PreparedContext;\n\n  public gg.grounds.dialogue.json.DialogueJsonCodec$PreparedContext$Companion(kotlin.jvm.internal.DefaultConstructorMarker);\n    descriptor: (Lkotlin/jvm/internal/DefaultConstructorMarker;)V\n}\n",
+    "gg.grounds.dialogue.json.DialogueJsonCodec$WhenMappings": "public final class gg.grounds.dialogue.json.DialogueJsonCodec$WhenMappings {\n  public static final int[] $EnumSwitchMapping$0;\n    descriptor: [I\n}\n"
+  }
+}
