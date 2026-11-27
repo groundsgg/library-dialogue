@@ -824,7 +824,7 @@ internal constructor(
         }
 
         private fun effectFadeDuration(): Duration {
-            val value = preferences.effects()["npcEffectsFadeMs"] ?: return Duration.ZERO
+            val value = preferences.effects["npcEffectsFadeMs"] ?: return Duration.ZERO
             val millis = value.toLongOrNull()
             if (millis == null || millis !in 0L..1000L) {
                 diagnostic.accept("INVALID_EFFECT_VALUE:npcEffectsFadeMs")
@@ -1118,7 +1118,7 @@ internal constructor(
         val COUNTS = WeakHashMap<Player, AtomicInteger>()
 
         fun verticalOffset(preferences: PresentationPreferences): Double {
-            val value = preferences.effects()["npcVerticalOffset"] ?: return 0.0
+            val value = preferences.effects["npcVerticalOffset"] ?: return 0.0
             val offset = value.toDoubleOrNull()
             if (offset == null || offset !in 0.0..16.0) {
                 throw DialoguePresenter.FallbackRequired("UNSUPPORTED_RASTER")

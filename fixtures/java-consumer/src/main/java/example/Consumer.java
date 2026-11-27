@@ -22,6 +22,26 @@ public final class Consumer {
   }
 
   public static void main(String[] args) {
+    var defaults = PresentationPreferences.defaults();
+    var explicit = new PresentationPreferences("hud", Duration.ofMillis(35), false, Map.of());
+    if (!defaults.equals(explicit)
+        || !defaults.equals(new PresentationPreferences())
+        || !defaults.surfaceKey().equals("hud")
+        || !defaults.graphemeDelay().equals(Duration.ofMillis(35))
+        || defaults.reducedMotion()
+        || !defaults.effects().isEmpty())
+      throw new AssertionError("Java preference constructors and accessors changed");
+    for (Map<String, String> invalid :
+        List.of(
+            Collections.<String, String>singletonMap(null, "value"),
+            Collections.<String, String>singletonMap("key", null))) {
+      try {
+        new PresentationPreferences("hud", Duration.ZERO, false, invalid);
+        throw new AssertionError("Null effect entry accepted");
+      } catch (NullPointerException expected) {
+        // Map.copyOf must continue to reject null keys and values from Java.
+      }
+    }
     String definition =
         """
         {"schemaVersion":1,"id":"consumer:hello","contentVersion":"1","entry":"hello","locales":{"default":"en","supported":["en"]},"nodes":{"hello":{"type":"message","speaker":"npc","text":"line","next":"end"},"end":{"type":"end","reason":"completed"}}}

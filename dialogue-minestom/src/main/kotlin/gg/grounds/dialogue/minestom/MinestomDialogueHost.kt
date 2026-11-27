@@ -348,7 +348,7 @@ private constructor(
         val closeObservation = close.minimalCompletionStage()
         @Volatile
         private var status =
-            PresentationStatus(request.preferences().surfaceKey(), "", "PREPARING", 0)
+            PresentationStatus(request.preferences().surfaceKey, "", "PREPARING", 0)
         @Volatile
         var session: MinestomDialogueSession? = null
             private set
@@ -534,7 +534,7 @@ private constructor(
 
         fun hudLayout(preferences: PresentationPreferences): LayoutProfile =
             try {
-                val effects = preferences.effects()
+                val effects = preferences.effects
                 val placement =
                     LayoutProfile.ChoicePlacement.valueOf(
                         effects.getOrDefault("hudChoices", "below").uppercase(Locale.ROOT)
@@ -575,10 +575,10 @@ private constructor(
                     "locale" to listOf(locale.tag(), locale.revision(), locale.fallbackTag()),
                     "preferences" to
                         mapOf(
-                            "surface" to preferences.surfaceKey(),
-                            "delay" to preferences.graphemeDelay().toNanos(),
-                            "reducedMotion" to preferences.reducedMotion(),
-                            "effects" to preferences.effects(),
+                            "surface" to preferences.surfaceKey,
+                            "delay" to preferences.graphemeDelay.toNanos(),
+                            "reducedMotion" to preferences.reducedMotion,
+                            "effects" to preferences.effects,
                         ),
                     "context" to ContentFingerprint.argumentData(request.context()),
                     "controls" to

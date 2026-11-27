@@ -185,7 +185,7 @@ class HudPlacementTest {
                 java.util.function.Function { preferences ->
                     LayoutProfile.compactHud(
                         LayoutProfile.ChoicePlacement.valueOf(
-                            preferences.effects()["hudChoices"]!!.uppercase(Locale.ROOT)
+                            preferences.effects["hudChoices"]!!.uppercase(Locale.ROOT)
                         )
                     )
                 },
@@ -233,8 +233,7 @@ class HudPlacementTest {
                             java.util.function.Function { preferences ->
                                 LayoutProfile.compactHud(
                                     LayoutProfile.ChoicePlacement.valueOf(
-                                        preferences
-                                            .effects()
+                                        preferences.effects
                                             .getOrDefault("hudChoices", "below")
                                             .uppercase(Locale.ROOT)
                                     )

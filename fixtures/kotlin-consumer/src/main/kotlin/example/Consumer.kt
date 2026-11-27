@@ -2,13 +2,23 @@ package example
 
 import gg.grounds.dialogue.core.definition.DialogueBuilder
 import gg.grounds.dialogue.core.definition.DialogueDefinition
+import gg.grounds.dialogue.core.runtime.PresentationPreferences
 import gg.grounds.dialogue.core.text.ResolvedText
 import gg.grounds.dialogue.core.text.TextCatalog
 import gg.grounds.dialogue.core.validation.*
 import gg.grounds.dialogue.json.DialogueJsonCodec
 import gg.grounds.dialogue.presentation.*
+import java.time.Duration
 
 fun main() {
+    val defaults = PresentationPreferences()
+    check(defaults == PresentationPreferences.defaults())
+    check(defaults.surfaceKey == "hud")
+    check(defaults.graphemeDelay == Duration.ofMillis(35))
+    check(!defaults.reducedMotion && defaults.effects.isEmpty())
+    val preferences = PresentationPreferences(reducedMotion = true, surfaceKey = "npc")
+    check(preferences.surfaceKey == "npc" && preferences.reducedMotion)
+    check(preferences.graphemeDelay == Duration.ofMillis(35) && preferences.effects.isEmpty())
     val definition =
         DialogueBuilder.dialogue("consumer:kotlin")
             .node("start", DialogueDefinition.Message("npc", "line", null, emptyList(), "end"))

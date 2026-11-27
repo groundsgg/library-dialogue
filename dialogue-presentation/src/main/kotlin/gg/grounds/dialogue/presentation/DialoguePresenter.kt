@@ -395,7 +395,7 @@ class DialoguePresenter : DialogueRenderer {
         var preparationFailure: Throwable? = null
         var preferences = request.preferences
         var surface: DialogueSurface.SurfaceHandle? = null
-        var surfaceKey = preferences.surfaceKey()
+        var surfaceKey = preferences.surfaceKey
         var lastView: DialogueView? = null
         var generation = 0L
         var outputGeneration = 0L
@@ -652,7 +652,7 @@ class DialoguePresenter : DialogueRenderer {
                     previous.work.completeExceptionally(CancellationException("Superseded surface"))
                     changing = null
                 }
-                if (next.surfaceKey() == surfaceKey) {
+                if (next.surfaceKey == surfaceKey) {
                     val configureGeneration = generation
                     call { requireNotNull(surface).configure(next) }
                         .whenComplete { _, error ->
@@ -696,8 +696,7 @@ class DialoguePresenter : DialogueRenderer {
                             result.completeExceptionally(cause)
                         } else result.complete(null)
                     }
-                open(next.surfaceKey(), operation.gen, deadline, next).whenComplete { value, error
-                    ->
+                open(next.surfaceKey, operation.gen, deadline, next).whenComplete { value, error ->
                     queue.execute { continueSwitch(operation, value, error) }
                 }
             }
@@ -729,7 +728,7 @@ class DialoguePresenter : DialogueRenderer {
             val frame =
                 try {
                     lastView?.let {
-                        composeCurrent(it, operation.next.surfaceKey(), operation.next)
+                        composeCurrent(it, operation.next.surfaceKey, operation.next)
                     }
                 } catch (failure: Throwable) {
                     reject(operation, "SURFACE_LAYOUT_REJECTED", failure)
@@ -766,7 +765,7 @@ class DialoguePresenter : DialogueRenderer {
             }
             val old = surface
             surface = value
-            surfaceKey = operation.next.surfaceKey()
+            surfaceKey = operation.next.surfaceKey
             preferences = operation.next
             operation.committed = true
             outputGeneration++
@@ -1119,7 +1118,7 @@ class DialoguePresenter : DialogueRenderer {
                 selected,
                 enabled,
                 if (selected) requireNotNull(profile.theme).selectedScale() else 1.0,
-                if (preferences.reducedMotion()) Duration.ZERO
+                if (preferences.reducedMotion) Duration.ZERO
                 else requireNotNull(profile.theme).transition(),
                 choiceId,
             )

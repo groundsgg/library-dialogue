@@ -12,7 +12,7 @@ class VisualOptions private constructor() {
             key: String,
             diagnostic: Consumer<String>,
         ): Boolean {
-            val value = preferences.effects().getOrDefault(key, "false")
+            val value = preferences.effects.getOrDefault(key, "false")
             if (value != "true" && value != "false") {
                 diagnostic.accept("INVALID_EFFECT_VALUE:$key")
                 return false

@@ -23,8 +23,8 @@ data class NpcPanelOptions(val choiceGap: Double, val choiceAngle: Double) {
         fun from(preferences: PresentationPreferences): NpcPanelOptions =
             try {
                 NpcPanelOptions(
-                    preferences.effects().getOrDefault("npcChoiceGap", "12").toDouble(),
-                    preferences.effects().getOrDefault("npcChoiceAngle", "12").toDouble(),
+                    preferences.effects.getOrDefault("npcChoiceGap", "12").toDouble(),
+                    preferences.effects.getOrDefault("npcChoiceAngle", "12").toDouble(),
                 )
             } catch (_: IllegalArgumentException) {
                 throw DialoguePresenter.FallbackRequired("UNSUPPORTED_RASTER")

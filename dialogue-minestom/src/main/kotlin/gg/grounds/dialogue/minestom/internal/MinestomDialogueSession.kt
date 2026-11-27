@@ -268,7 +268,7 @@ class MinestomDialogueSession(
                                 val effective =
                                     (renderer as? DialogueInputSource)?.effectiveSurface()
                                 val enabled =
-                                    soundPreferences.effects()["typingSound"] == "true" &&
+                                    soundPreferences.effects["typingSound"] == "true" &&
                                         effective in setOf("hud", "npc")
                                 if (
                                     typingSound.observe(
@@ -344,12 +344,12 @@ class MinestomDialogueSession(
             )
         val requestedPreferences = currentRequest.preferences()
         val preferences =
-            if (requestedPreferences.surfaceKey() == "chat") {
+            if (requestedPreferences.surfaceKey == "chat") {
                 PresentationPreferences(
                     "chat",
                     Duration.ZERO,
-                    requestedPreferences.reducedMotion(),
-                    requestedPreferences.effects(),
+                    requestedPreferences.reducedMotion,
+                    requestedPreferences.effects,
                 )
             } else {
                 requestedPreferences
@@ -561,7 +561,7 @@ class MinestomDialogueSession(
 
     private fun validAnchor(): Boolean {
         val currentRequest = request ?: return true
-        val binding = currentBinding() ?: return currentRequest.preferences().surfaceKey() != "npc"
+        val binding = currentBinding() ?: return currentRequest.preferences().surfaceKey != "npc"
         return try {
             binding.instance === currentRequest.player().instance && binding.snapshot.get().valid
         } catch (_: Throwable) {
@@ -741,7 +741,7 @@ class MinestomDialogueSession(
     }
 
     private fun choiceAudioEnabled(): Boolean =
-        soundPreferences.effects()["choiceSounds"] == "true" &&
+        soundPreferences.effects["choiceSounds"] == "true" &&
             (renderer as? DialogueInputSource)?.effectiveSurface() in setOf("hud", "npc")
 
     private fun playSelection(receipt: SelectionReceipt) {
