@@ -86,10 +86,10 @@ class DialogueRuntime private constructor(private val options: RuntimeOptions) {
                         ),
                     "preferences" to
                         mapOf(
-                            "surface" to preferences.surfaceKey(),
-                            "revealNanos" to preferences.graphemeDelay().toNanos(),
-                            "reducedMotion" to preferences.reducedMotion(),
-                            "effects" to preferences.effects(),
+                            "surface" to preferences.surfaceKey,
+                            "revealNanos" to preferences.graphemeDelay.toNanos(),
+                            "reducedMotion" to preferences.reducedMotion,
+                            "effects" to preferences.effects,
                         ),
                     "context" to ContentFingerprint.argumentData(request.context()),
                     "cancellation" to request.cancellation().id().toString(),

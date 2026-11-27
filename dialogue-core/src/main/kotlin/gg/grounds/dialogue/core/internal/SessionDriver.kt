@@ -187,16 +187,15 @@ class SessionDriver(
         renderAcknowledgements.add(ack)
         val frame = view
         val timing =
-            if (frame.state() == State.REVEALING && !preferences.graphemeDelay().isZero)
+            if (frame.state() == State.REVEALING && !preferences.graphemeDelay.isZero)
                 Optional.of(
                     TypingTiming(
                         id,
                         visit,
                         renderRevision,
-                        preferences.graphemeDelay().toNanos(),
+                        preferences.graphemeDelay.toNanos(),
                         enteredNanos,
-                        enteredNanos +
-                            frame.totalGraphemes() * preferences.graphemeDelay().toNanos(),
+                        enteredNanos + frame.totalGraphemes() * preferences.graphemeDelay.toNanos(),
                     )
                 )
             else Optional.empty()
@@ -653,7 +652,7 @@ class SessionDriver(
                     selected = initialSelection(m, offers)
                 val line = resolved[0].plain
                 val total = Graphemes.split(line).size
-                val immediate = revealAll || preferences.graphemeDelay().isZero || total == 0
+                val immediate = revealAll || preferences.graphemeDelay.isZero || total == 0
                 enteredNanos = options.scheduler.nanoTime()
                 setView(
                     if (immediate) State.WAITING_FOR_INPUT else State.REVEALING,
@@ -721,7 +720,7 @@ class SessionDriver(
         val expected = visit
         val expectedReveal = revealGeneration
         revealTimer =
-            options.scheduler.schedule(preferences.graphemeDelay()) {
+            options.scheduler.schedule(preferences.graphemeDelay) {
                 queue.execute {
                     if (
                         !active() ||
@@ -738,9 +737,9 @@ class SessionDriver(
                                 view.totalGraphemes().toLong(),
                                 maxOf(
                                     0L,
-                                    if (preferences.graphemeDelay().isZero)
+                                    if (preferences.graphemeDelay.isZero)
                                         view.totalGraphemes().toLong()
-                                    else elapsed / preferences.graphemeDelay().toNanos(),
+                                    else elapsed / preferences.graphemeDelay.toNanos(),
                                 ),
                             )
                             .toInt()
@@ -1085,7 +1084,7 @@ class SessionDriver(
                 } else preferences = next
                 val m = current() as? Message
                 if (m != null && !translating && view.revealedGraphemes() < view.totalGraphemes()) {
-                    if (preferences.graphemeDelay().isZero)
+                    if (preferences.graphemeDelay.isZero)
                         setView(
                             if (confirming) State.WAITING_FOR_PROVIDER else State.WAITING_FOR_INPUT,
                             view.speaker(),
@@ -1099,7 +1098,7 @@ class SessionDriver(
                     else {
                         enteredNanos =
                             options.scheduler.nanoTime() -
-                                view.revealedGraphemes() * preferences.graphemeDelay().toNanos()
+                                view.revealedGraphemes() * preferences.graphemeDelay.toNanos()
                         if (!confirming)
                             setView(
                                 State.REVEALING,

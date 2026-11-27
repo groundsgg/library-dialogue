@@ -3,26 +3,18 @@ package gg.grounds.dialogue.core.runtime
 import java.time.Duration
 
 class PresentationPreferences(
-    private val surfaceKey: String,
-    private val graphemeDelay: Duration,
-    private val reducedMotion: Boolean,
-    effects: Map<String, String>,
+    @get:JvmName("surfaceKey") val surfaceKey: String = "hud",
+    @get:JvmName("graphemeDelay") val graphemeDelay: Duration = Duration.ofMillis(35),
+    @get:JvmName("reducedMotion") val reducedMotion: Boolean = false,
+    effects: Map<String, String> = emptyMap(),
 ) {
-    private val effects = java.util.Map.copyOf(effects)
+    @get:JvmName("effects") val effects: Map<String, String> = java.util.Map.copyOf(effects)
 
     init {
         require(!graphemeDelay.isNegative && graphemeDelay <= Duration.ofSeconds(60)) {
             "Invalid reveal delay"
         }
     }
-
-    fun surfaceKey(): String = surfaceKey
-
-    fun graphemeDelay(): Duration = graphemeDelay
-
-    fun reducedMotion(): Boolean = reducedMotion
-
-    fun effects(): Map<String, String> = effects
 
     override fun equals(other: Any?): Boolean =
         other is PresentationPreferences &&
@@ -43,8 +35,6 @@ class PresentationPreferences(
         "PresentationPreferences[surfaceKey=$surfaceKey, graphemeDelay=$graphemeDelay, reducedMotion=$reducedMotion, effects=$effects]"
 
     companion object {
-        @JvmStatic
-        fun defaults(): PresentationPreferences =
-            PresentationPreferences("hud", Duration.ofMillis(35), false, emptyMap())
+        @JvmStatic fun defaults(): PresentationPreferences = PresentationPreferences()
     }
 }

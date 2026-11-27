@@ -63,15 +63,15 @@ class MinestomDialogueRenderer(
 
     override fun effectiveSurface(): String {
         val run = active
-        return if (run == null || !run.firstAck) "" else run.effective.surfaceKey()
+        return if (run == null || !run.firstAck) "" else run.effective.surfaceKey
     }
 
     override fun hiddenHotbar(): Boolean {
         val run = active
         return run != null &&
             run.firstAck &&
-            run.effective.surfaceKey() != "chat" &&
-            run.effective.effects()["hideHud"] == "true"
+            run.effective.surfaceKey != "chat" &&
+            run.effective.effects["hideHud"] == "true"
     }
 
     override fun targets(): TargetSnapshot? {
@@ -190,8 +190,8 @@ class MinestomDialogueRenderer(
         private fun report() {
             status.accept(
                 PresentationStatus(
-                    requested.surfaceKey(),
-                    if (firstAck) effective.surfaceKey() else "",
+                    requested.surfaceKey,
+                    if (firstAck) effective.surfaceKey else "",
                     diagnostic,
                     surfaces.get(),
                 )
@@ -201,9 +201,9 @@ class MinestomDialogueRenderer(
         private fun chat(): PresentationPreferences =
             PresentationPreferences(
                 "chat",
-                effective.graphemeDelay(),
-                effective.reducedMotion(),
-                effective.effects(),
+                effective.graphemeDelay,
+                effective.reducedMotion,
+                effective.effects,
             )
 
         fun begin() {
@@ -236,7 +236,7 @@ class MinestomDialogueRenderer(
                 if (closed.get()) return@await
                 if (error != null) {
                     val code = known(error)
-                    if (!fallback && preferences.surfaceKey() != "chat" && code != null) {
+                    if (!fallback && preferences.surfaceKey != "chat" && code != null) {
                         effective = chat()
                         diagnostic = code
                         prepareAttempt(effective, true)
@@ -305,7 +305,7 @@ class MinestomDialogueRenderer(
                         displayed == null ||
                         changing ||
                         !firstAck ||
-                        effective.surfaceKey() != "npc" ||
+                        effective.surfaceKey != "npc" ||
                         displayed !== targets.current() ||
                         currentLatest == null ||
                         displayed.stateRevision() != currentLatest.stateRevision() ||
@@ -373,7 +373,7 @@ class MinestomDialogueRenderer(
                         inflight = false
                         if (error != null) {
                             val code = known(error)
-                            if (code != null && effective.surfaceKey() != "chat") {
+                            if (code != null && effective.surfaceKey != "chat") {
                                 diagnostic = code
                                 switchOutput(chat(), false, null, batchDeadline)
                             } else {
@@ -445,7 +445,7 @@ class MinestomDialogueRenderer(
                 }
                 if (error != null) {
                     val code = known(error)
-                    if (code != null && preferences.surfaceKey() != "chat") {
+                    if (code != null && preferences.surfaceKey != "chat") {
                         diagnostic = code
                         switchOutput(chat(), false, result, deadline)
                     } else {
