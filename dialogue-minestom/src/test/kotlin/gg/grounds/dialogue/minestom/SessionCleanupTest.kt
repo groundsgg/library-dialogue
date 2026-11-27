@@ -80,17 +80,17 @@ class SessionCleanupTest {
         ): MinestomDialogueRequest {
             val request = base.request("lifecycle", "v1")
             return MinestomDialogueRequest(
-                request.requestId(),
-                request.player(),
-                request.hostGeneration(),
+                request.requestId,
+                request.player,
+                request.hostGeneration,
                 content,
                 services,
-                request.context(),
-                request.locale(),
+                request.context,
+                request.locale,
                 PresentationPreferences(renderer, Duration.ZERO, false, emptyMap()),
                 mapOf("npc" to binding),
                 actors,
-                request.controls(),
+                request.controls,
                 0,
             )
         }

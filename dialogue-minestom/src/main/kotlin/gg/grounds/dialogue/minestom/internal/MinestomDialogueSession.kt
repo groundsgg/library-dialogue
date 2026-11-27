@@ -63,24 +63,24 @@ class MinestomDialogueSession(
     private var ready: Consumer<DialogueStartResult>? = ready
     private var closed: BiConsumer<MinestomDialogueSession, Throwable?>? = closed
     private val finishing = AtomicBoolean()
-    private val impulse = AtomicLong(request.openingImpulse())
+    private val impulse = AtomicLong(request.openingImpulse)
     private val inputs: MinestomInputAdapter
     @Volatile private var handle: DialogueHandle? = null
     @Volatile private var view: DialogueView? = null
     private var rejection: DialogueStartResult.Rejected? = null
     private var lastSpeaker: MinestomSpeakerBinding? =
-        if (request.speakers().size == 1) request.speakers().values.first() else null
+        if (request.speakers.size == 1) request.speakers.values.first() else null
     private var sampledSpeaker: MinestomSpeakerBinding? = null
     private var leave: DialogueLeavePolicy? = null
     private val distanceGrace: Duration = options.distanceGrace
     private val typingSound = TypingSound()
-    private var soundPreferences = request.preferences()
+    private var soundPreferences = request.preferences
     private val soundEpoch = AtomicLong()
     private val speechInvalidationEpoch = AtomicLong()
     private val manualReveals = java.util.concurrent.atomic.AtomicInteger()
-    private val soundPlayer = request.player()
-    private val soundInstance = request.player().instance
-    private val speechListener = request.speechListener()
+    private val soundPlayer = request.player
+    private val soundInstance = request.player.instance
+    private val speechListener = request.speechListener
     private val timedSpeechListener = speechListener as? MinestomDialogueTimedSpeechListener
     private var speechEnabled = speechListener !== MinestomDialogueSpeechListener.NO_OP
     private var speechActive = false
@@ -111,10 +111,10 @@ class MinestomDialogueSession(
     init {
         inputs =
             MinestomInputAdapter(
-                request.player(),
-                request.hostGeneration(),
+                request.player,
+                request.hostGeneration,
                 guard,
-                request.controls(),
+                request.controls,
                 scheduler,
                 token,
                 object : MinestomInputAdapter.Target {
@@ -146,7 +146,7 @@ class MinestomDialogueSession(
                         this@MinestomDialogueSession.submitOwned(input)
                 },
                 NpcHitTest.OcclusionTest { from, to ->
-                    MinestomOcclusion.visible(request.player().instance, from, to)
+                    MinestomOcclusion.visible(request.player.instance, from, to)
                 },
                 options.budgets,
             )
@@ -163,9 +163,9 @@ class MinestomDialogueSession(
         }
         val currentRequest = request ?: return
         try {
-            for (binding in currentRequest.speakers().values) {
+            for (binding in currentRequest.speakers.values) {
                 if (
-                    binding.instance !== currentRequest.player().instance ||
+                    binding.instance !== currentRequest.player.instance ||
                         !binding.snapshot.get().valid
                 ) {
                     cancel(DialogueEndReason.HOST_CHANGED)
@@ -176,7 +176,7 @@ class MinestomDialogueSession(
             cancel(DialogueEndReason.HOST_CHANGED)
             return
         }
-        val services: DialogueServices = currentRequest.services()
+        val services: DialogueServices = currentRequest.services
         val decorated = DialogueRenderer { prepare ->
             requireNotNull(renderer).prepare(prepare).thenApply { surface ->
                 object : DialogueRenderer.PresentationHandle {
@@ -339,10 +339,10 @@ class MinestomDialogueSession(
                 services.outcomes(),
                 services.texts(),
                 decorated,
-                currentRequest.actors(),
+                currentRequest.actors,
                 services.capabilities(),
             )
-        val requestedPreferences = currentRequest.preferences()
+        val requestedPreferences = currentRequest.preferences
         val preferences =
             if (requestedPreferences.surfaceKey == "chat") {
                 PresentationPreferences(
@@ -357,16 +357,16 @@ class MinestomDialogueSession(
         runtime
             .start(
                 DialogueStart(
-                    currentRequest.requestId(),
-                    currentRequest.player().uuid.toString(),
-                    currentRequest.hostGeneration(),
-                    currentRequest.content(),
+                    currentRequest.requestId,
+                    currentRequest.player.uuid.toString(),
+                    currentRequest.hostGeneration,
+                    currentRequest.content,
                     bindings,
-                    currentRequest.context(),
-                    currentRequest.locale(),
+                    currentRequest.context,
+                    currentRequest.locale,
                     preferences,
                     token,
-                    currentRequest.openingImpulse(),
+                    currentRequest.openingImpulse,
                 )
             )
             .whenComplete { result, error ->
@@ -396,9 +396,9 @@ class MinestomDialogueSession(
         val currentRequest = request ?: return null
         val currentView = view
         if (currentView != null) {
-            val node = currentRequest.content().definition().nodes()[currentView.nodeId()]
+            val node = currentRequest.content.definition().nodes()[currentView.nodeId()]
             if (node is DialogueDefinition.Message) {
-                lastSpeaker = currentRequest.speakers()[node.speaker()]
+                lastSpeaker = currentRequest.speakers[node.speaker()]
             }
         }
         return lastSpeaker
@@ -408,9 +408,9 @@ class MinestomDialogueSession(
         if (value.state() != DialogueView.State.REVEALING) return null
         val currentRequest = request ?: return null
         val message =
-            currentRequest.content().definition().nodes()[value.nodeId()]
+            currentRequest.content.definition().nodes()[value.nodeId()]
                 as? DialogueDefinition.Message ?: return null
-        val binding = currentRequest.speakers()[message.speaker()] ?: return null
+        val binding = currentRequest.speakers[message.speaker()] ?: return null
         return SpeechIdentity(
             value.sessionId(),
             value.nodeVisitId(),
@@ -561,9 +561,9 @@ class MinestomDialogueSession(
 
     private fun validAnchor(): Boolean {
         val currentRequest = request ?: return true
-        val binding = currentBinding() ?: return currentRequest.preferences().surfaceKey != "npc"
+        val binding = currentBinding() ?: return currentRequest.preferences.surfaceKey != "npc"
         return try {
-            binding.instance === currentRequest.player().instance && binding.snapshot.get().valid
+            binding.instance === currentRequest.player.instance && binding.snapshot.get().valid
         } catch (_: Throwable) {
             false
         }
@@ -595,11 +595,11 @@ class MinestomDialogueSession(
                 sampledSpeaker = binding
                 leave =
                     DialogueLeavePolicy(
-                        currentRequest.content().definition().interaction(),
+                        currentRequest.content.definition().interaction(),
                         distanceGrace,
                     )
             }
-            val player = currentRequest.player()
+            val player = currentRequest.player
             val eye = player.position.add(0.0, player.eyeHeight.toDouble(), 0.0)
             val toward = anchor.lookOrigin.sub(eye).asVec()
             val angle =
@@ -663,59 +663,58 @@ class MinestomDialogueSession(
         val current = view ?: return
         if (!guard.isCurrent()) return
         val source = renderer as? DialogueInputSource ?: return
-        source
-            .resolveChat(currentRequest.player(), currentRequest.hostGeneration(), value)
-            .ifPresent { target ->
-                if (!matchesChat(target, current)) return@ifPresent
-                if (
-                    current.state() == DialogueView.State.REVEALING ||
-                        target.choiceId == null ||
-                        target.choiceId == current.selectedChoiceId()
-                ) {
-                    submit(
-                        DialogueInput.Confirm(
-                            DialogueInput.InputStamp(
-                                target.sessionId,
-                                target.renderRevision,
-                                nextImpulse(),
-                            ),
-                            target.choiceId,
-                        )
-                    )
-                    return@ifPresent
-                }
+        source.resolveChat(currentRequest.player, currentRequest.hostGeneration, value).ifPresent {
+            target ->
+            if (!matchesChat(target, current)) return@ifPresent
+            if (
+                current.state() == DialogueView.State.REVEALING ||
+                    target.choiceId == null ||
+                    target.choiceId == current.selectedChoiceId()
+            ) {
                 submit(
-                        DialogueInput.Select(
-                            DialogueInput.InputStamp(
-                                target.sessionId,
-                                target.renderRevision,
-                                nextImpulse(),
-                            ),
-                            target.choiceId,
-                        )
+                    DialogueInput.Confirm(
+                        DialogueInput.InputStamp(
+                            target.sessionId,
+                            target.renderRevision,
+                            nextImpulse(),
+                        ),
+                        target.choiceId,
                     )
-                    .thenAccept { result ->
-                        val now = view
-                        if (
-                            result == InputResult.ACCEPTED &&
-                                guard.isCurrent() &&
-                                now != null &&
-                                matchesChat(target, now) &&
-                                target.choiceId == now.selectedChoiceId()
-                        ) {
-                            submit(
-                                DialogueInput.Confirm(
-                                    DialogueInput.InputStamp(
-                                        target.sessionId,
-                                        target.renderRevision,
-                                        nextImpulse(),
-                                    ),
-                                    target.choiceId,
-                                )
-                            )
-                        }
-                    }
+                )
+                return@ifPresent
             }
+            submit(
+                    DialogueInput.Select(
+                        DialogueInput.InputStamp(
+                            target.sessionId,
+                            target.renderRevision,
+                            nextImpulse(),
+                        ),
+                        target.choiceId,
+                    )
+                )
+                .thenAccept { result ->
+                    val now = view
+                    if (
+                        result == InputResult.ACCEPTED &&
+                            guard.isCurrent() &&
+                            now != null &&
+                            matchesChat(target, now) &&
+                            target.choiceId == now.selectedChoiceId()
+                    ) {
+                        submit(
+                            DialogueInput.Confirm(
+                                DialogueInput.InputStamp(
+                                    target.sessionId,
+                                    target.renderRevision,
+                                    nextImpulse(),
+                                ),
+                                target.choiceId,
+                            )
+                        )
+                    }
+                }
+        }
     }
 
     private fun matchesChat(target: TargetSnapshot.Target, current: DialogueView): Boolean =

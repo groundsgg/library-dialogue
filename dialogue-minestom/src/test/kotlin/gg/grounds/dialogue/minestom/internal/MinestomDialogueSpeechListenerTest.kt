@@ -172,9 +172,9 @@ class MinestomDialogueSpeechListenerTest {
                     PresentationPreferences("npc", Duration.ofMillis(90), false, emptyMap()),
                 )
             val services =
-                if (translations == null) original.services()
+                if (translations == null) original.services
                 else {
-                    val source = original.services()
+                    val source = original.services
                     DialogueServices(
                         source.generation(),
                         source.conditions(),
@@ -195,19 +195,19 @@ class MinestomDialogueSpeechListenerTest {
                 }
             request =
                 MinestomDialogueRequest(
-                    original.requestId(),
+                    original.requestId,
                     player,
-                    original.hostGeneration(),
-                    if (translations == null) original.content()
+                    original.hostGeneration,
+                    if (translations == null) original.content
                     else speechContent(translations, twoMessages),
                     services,
-                    original.context(),
-                    original.locale(),
-                    original.preferences(),
-                    original.speakers(),
-                    original.actors(),
-                    original.controls(),
-                    original.openingImpulse(),
+                    original.context,
+                    original.locale,
+                    original.preferences,
+                    original.speakers,
+                    original.actors,
+                    original.controls,
+                    original.openingImpulse,
                     listener,
                 )
             session =
@@ -274,7 +274,7 @@ class MinestomDialogueSpeechListenerTest {
         val event = fixture.listener.revealed.first()
         assertEquals("start", event.view().nodeId())
         assertEquals("npc", event.speakerRole())
-        assertSame(fixture.request.speakers()["npc"], event.speaker())
+        assertSame(fixture.request.speakers["npc"], event.speaker())
 
         val view = fixture.session.snapshot()!!
         assertEquals(

@@ -198,6 +198,139 @@ internal class MinestomDialogueHostTest {
     }
 
     @Test
+    fun requestPropertiesAndNamedConstructionRetainExplicitValuesAndDefaultListener(env: Env) {
+        val fixture = Fixture(env)
+        done(env, fixture.host.closeAsync())
+        val source = fixture.request("properties", "v1")
+        val request = requestFrom(source)
+        assertEquals("properties", request.requestId)
+        assertSame(fixture.player, request.player)
+        assertEquals(1L, request.hostGeneration)
+        assertSame(fixture.content, request.content)
+        assertSame(source.services, request.services)
+        assertEquals(emptyMap<String, Any>(), request.context)
+        assertSame(source.locale, request.locale)
+        assertSame(source.preferences, request.preferences)
+        assertSame(source.speakers["npc"], request.speakers["npc"])
+        assertNull(request.actors)
+        assertSame(source.controls, request.controls)
+        assertEquals(0L, request.openingImpulse)
+        assertSame(MinestomDialogueSpeechListener.NO_OP, request.speechListener)
+        val listener =
+            object : MinestomDialogueSpeechListener {
+                override fun onRevealed(event: MinestomDialogueSpeechEvent) = Unit
+
+                override fun onStop(reason: MinestomDialogueSpeechListener.StopReason) = Unit
+            }
+        val explicit = requestFrom(source, listener = listener)
+        assertSame(listener, explicit.speechListener)
+        assertEquals(request, explicit)
+        assertEquals(request.hashCode(), explicit.hashCode())
+        assertEquals(request.toString(), explicit.toString())
+        assertFalse(request.toString().contains("speechListener"))
+        assertNotEquals(request, requestFrom(source, id = "other"))
+        assertNotEquals(request, requestFrom(source, generation = 2))
+        assertNotEquals(request, requestFrom(source, impulse = 1))
+    }
+
+    @Test
+    fun requestMapsAreDefensiveUnmodifiableSnapshotsAndRejectNulls(env: Env) {
+        val fixture = Fixture(env)
+        done(env, fixture.host.closeAsync())
+        val source = fixture.request("maps", "v1")
+        val value = gg.grounds.dialogue.core.definition.ArgumentValue.Text("before")
+        val context =
+            mutableMapOf<String, gg.grounds.dialogue.core.definition.ArgumentValue>("key" to value)
+        val speakers = source.speakers.toMutableMap()
+        val request = requestFrom(source, context = context, speakers = speakers)
+        context.clear()
+        speakers.clear()
+        assertEquals(mapOf("key" to value), request.context)
+        assertEquals(setOf("npc"), request.speakers.keys)
+        assertThrows(UnsupportedOperationException::class.java) {
+            (request.context as MutableMap).clear()
+        }
+        assertThrows(UnsupportedOperationException::class.java) {
+            (request.speakers as MutableMap).clear()
+        }
+        @Suppress("UNCHECKED_CAST")
+        val nullKey =
+            mapOf(null to value) as Map<String, gg.grounds.dialogue.core.definition.ArgumentValue>
+        @Suppress("UNCHECKED_CAST")
+        val nullValue =
+            mapOf("key" to null) as Map<String, gg.grounds.dialogue.core.definition.ArgumentValue>
+        @Suppress("UNCHECKED_CAST")
+        val nullSpeakerKey =
+            mapOf(null to source.speakers.getValue("npc")) as Map<String, MinestomSpeakerBinding>
+        @Suppress("UNCHECKED_CAST")
+        val nullSpeaker = mapOf("npc" to null) as Map<String, MinestomSpeakerBinding>
+        assertThrows(NullPointerException::class.java) { requestFrom(source, context = nullKey) }
+        assertThrows(NullPointerException::class.java) { requestFrom(source, context = nullValue) }
+        assertThrows(NullPointerException::class.java) {
+            requestFrom(source, speakers = nullSpeakerKey)
+        }
+        assertThrows(NullPointerException::class.java) {
+            requestFrom(source, speakers = nullSpeaker)
+        }
+    }
+
+    @Test
+    fun requestIdentityRejectsBlankAndNegativeValuesButAcceptsZero(env: Env) {
+        val fixture = Fixture(env)
+        done(env, fixture.host.closeAsync())
+        val source = fixture.request("identity", "v1")
+        for (id in listOf("", " ", "\t\n")) {
+            assertThrows(IllegalArgumentException::class.java) { requestFrom(source, id = id) }
+        }
+        assertThrows(IllegalArgumentException::class.java) { requestFrom(source, generation = -1) }
+        assertThrows(IllegalArgumentException::class.java) { requestFrom(source, impulse = -1) }
+        val zero = requestFrom(source, generation = 0, impulse = 0)
+        assertEquals(0L, zero.hostGeneration)
+        assertEquals(0L, zero.openingImpulse)
+    }
+
+    private fun requestFrom(
+        source: MinestomDialogueRequest,
+        id: String = source.requestId,
+        generation: Long = source.hostGeneration,
+        impulse: Long = source.openingImpulse,
+        context: Map<String, gg.grounds.dialogue.core.definition.ArgumentValue> = source.context,
+        speakers: Map<String, MinestomSpeakerBinding> = source.speakers,
+        listener: MinestomDialogueSpeechListener? = null,
+    ): MinestomDialogueRequest {
+        if (listener != null)
+            return MinestomDialogueRequest(
+                requestId = id,
+                player = source.player,
+                hostGeneration = generation,
+                content = source.content,
+                services = source.services,
+                context = context,
+                locale = source.locale,
+                preferences = source.preferences,
+                speakers = speakers,
+                actors = source.actors,
+                controls = source.controls,
+                openingImpulse = impulse,
+                speechListener = listener,
+            )
+        return MinestomDialogueRequest(
+            openingImpulse = impulse,
+            controls = source.controls,
+            actors = source.actors,
+            speakers = speakers,
+            preferences = source.preferences,
+            locale = source.locale,
+            context = context,
+            services = source.services,
+            content = source.content,
+            hostGeneration = generation,
+            player = source.player,
+            requestId = id,
+        )
+    }
+
+    @Test
     fun nativeInputRouteOwnsOnlyActiveConnectionAndWaitsItsCatcher(env: Env) {
         val fixture = Fixture(env)
         done(env, fixture.host.closeAsync())

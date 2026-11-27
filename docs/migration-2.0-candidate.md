@@ -35,6 +35,73 @@ a zero-argument constructor. Delay validation remains inclusive from zero to
 rejects null keys and values; equality, hashing and text representation retain
 their existing value behavior.
 
+## Minestom request properties and optional listener
+
+`MinestomDialogueRequest` now exposes thirteen immutable Kotlin properties.
+This is another unpublished 2.0 candidate Kotlin source change. Java source and
+existing JVM signatures remain compatible:
+
+| Previous Kotlin call       | Candidate Kotlin property | Retained Java/JVM call     |
+| -------------------------- | ------------------------- | -------------------------- |
+| `request.requestId()`      | `request.requestId`       | `request.requestId()`      |
+| `request.player()`         | `request.player`          | `request.player()`         |
+| `request.hostGeneration()` | `request.hostGeneration`  | `request.hostGeneration()` |
+| `request.content()`        | `request.content`         | `request.content()`        |
+| `request.services()`       | `request.services`        | `request.services()`       |
+| `request.context()`        | `request.context`         | `request.context()`        |
+| `request.locale()`         | `request.locale`          | `request.locale()`         |
+| `request.preferences()`    | `request.preferences`     | `request.preferences()`    |
+| `request.speakers()`       | `request.speakers`        | `request.speakers()`       |
+| `request.actors()`         | `request.actors`          | `request.actors()`         |
+| `request.controls()`       | `request.controls`        | `request.controls()`       |
+| `request.openingImpulse()` | `request.openingImpulse`  | `request.openingImpulse()` |
+| `request.speechListener()` | `request.speechListener`  | `request.speechListener()` |
+
+Kotlin supports named arguments and may omit only `speechListener`:
+
+```kotlin
+val request = MinestomDialogueRequest(
+    requestId = "guide-start",
+    player = player,
+    hostGeneration = generation,
+    content = content,
+    services = services,
+    context = context,
+    locale = locale,
+    preferences = preferences,
+    speakers = speakers,
+    actors = null,
+    controls = controls,
+    openingImpulse = openingImpulse,
+)
+```
+
+The omitted listener is the same `MinestomDialogueSpeechListener.NO_OP` singleton.
+Pass `speechListener = listener` to retain an explicit listener. Every other
+parameter remains required, including the nullable `actors` parameter. Request
+IDs must remain nonblank; host generation and opening impulse must remain
+nonnegative. Context and speaker maps remain defensive, unmodifiable
+`Map.copyOf` snapshots that reject null keys and values. Equality, hash code and
+text representation preserve the existing omission of `speechListener`.
+
+Java keeps both existing constructors and all thirteen original accessor names;
+no JavaBean getters or duplicate Kotlin method aliases are added:
+
+```java
+var defaults = new MinestomDialogueRequest(
+    requestId, player, hostGeneration, content, services, context, locale,
+    preferences, speakers, actors, controls, openingImpulse);
+var explicit = new MinestomDialogueRequest(
+    requestId, player, hostGeneration, content, services, context, locale,
+    preferences, speakers, actors, controls, openingImpulse, listener);
+assert defaults.speechListener() == MinestomDialogueSpeechListener.NO_OP;
+assert explicit.speechListener() == listener;
+```
+
+The Kotlin default generates a synthetic default constructor in addition to the
+two retained Java constructors. It does not change native connection ownership,
+session lifecycle, input, sound, scheduling or presentation behavior.
+
 The historical binary consumer snapshot and all API/schema baselines remain
 unchanged. A broader manifest and gate for intentionally incompatible native
 2.0 JVM signatures remains future work; this unit does not add a major-version
