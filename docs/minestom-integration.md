@@ -27,7 +27,12 @@ acknowledged view and viewport and fails only observers associated with that
 attempt. Newer queued work keeps its original deadline; unknown/partial writes
 retain normal failure handling. The marker is recognized only through standard
 completion/execution wrappers, never an arbitrary cause chain. Core's own
-response to a failed render remains Core-owned.
+response to a failed render remains Core-owned. A nested callback's marker
+certifies only its own operation; built-in native writes downgrade it to ordinary
+failure unless their own early validation proves the enclosing frame is unchanged.
+Browse correlation includes page-intent identity, and staging/drawing are one
+serialized attempt. Superseded unattempted pages on the same acknowledged view
+may share the selected attempt's outcome; every superseded page need not be drawn.
 The short renderer overload and explicit null tokens preserve output, but require
 external resolution through the surface's issuing token store.
 

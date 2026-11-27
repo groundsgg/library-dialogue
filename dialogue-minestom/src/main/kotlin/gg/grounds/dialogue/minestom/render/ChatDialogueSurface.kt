@@ -5,6 +5,7 @@ import gg.grounds.dialogue.minestom.MinestomConnectionScope
 import gg.grounds.dialogue.minestom.input.ChatInputTokens
 import gg.grounds.dialogue.minestom.input.SurfaceInputTargets
 import gg.grounds.dialogue.minestom.input.TargetSnapshot
+import gg.grounds.dialogue.minestom.internal.nativeFrameWrite
 import gg.grounds.dialogue.presentation.DialoguePresenter
 import gg.grounds.dialogue.presentation.DialogueSurface
 import gg.grounds.dialogue.presentation.UiLabelSource
@@ -76,6 +77,10 @@ class ChatDialogueSurface(
                     DialogueSurface.FrameRejected("Native frame session mismatch")
                 )
             }
+            return nativeFrameWrite { replaceOwned(frame) }
+        }
+
+        private fun replaceOwned(frame: WidgetFrame): CompletionStage<Void> {
             if (closed || !scope.isCurrent() || context.cancellation.isCancelled()) {
                 return CompletableFuture.failedFuture(CancellationException())
             }

@@ -18,6 +18,7 @@ import gg.grounds.dialogue.minestom.channel.NativeVignetteBank
 import gg.grounds.dialogue.minestom.channel.OutputChannels
 import gg.grounds.dialogue.minestom.geometry.NpcPanelTransform
 import gg.grounds.dialogue.minestom.input.SurfaceInputTargets
+import gg.grounds.dialogue.minestom.internal.nativeFrameWrite
 import gg.grounds.dialogue.presentation.DialoguePresenter
 import gg.grounds.dialogue.presentation.DialogueSurface
 import gg.grounds.dialogue.presentation.WidgetFrame
@@ -358,6 +359,16 @@ internal constructor(
                     DialogueSurface.FrameRejected("Native frame session mismatch")
                 )
             }
+            val provenPrecommit = AtomicBoolean()
+            return nativeFrameWrite(provenPrecommit::get) {
+                replaceOwned(frame) { provenPrecommit.set(true) }
+            }
+        }
+
+        private fun replaceOwned(
+            frame: WidgetFrame,
+            rejectBeforeCommit: () -> Unit,
+        ): CompletionStage<Void> {
             val result = CompletableFuture<Void>()
             queue.execute {
                 writes.removeIf { it.isDone }
@@ -371,7 +382,7 @@ internal constructor(
                     return@execute
                 }
                 try {
-                    replacePanel(frame, result)
+                    replacePanel(frame, result, rejectBeforeCommit)
                 } catch (error: Throwable) {
                     result.completeExceptionally(error)
                 }
@@ -379,12 +390,18 @@ internal constructor(
             return result.minimalCompletionStage()
         }
 
-        private fun replacePanel(frame: WidgetFrame, result: CompletableFuture<Void>) {
+        private fun replacePanel(
+            frame: WidgetFrame,
+            result: CompletableFuture<Void>,
+            rejectBeforeCommit: () -> Unit,
+        ) {
             val speaker =
                 speaker.apply(frame.semantic())
                     ?: throw NullPointerException("Missing logical speaker binding")
-            if (speaker.instance !== scope.instance)
+            if (speaker.instance !== scope.instance) {
+                rejectBeforeCommit()
                 throw DialogueSurface.FrameRejected("NPC binding owner mismatch")
+            }
             val snapshot = speaker.snapshot.get()
             if (!snapshot.valid) {
                 context.cancellation.cancel(DialogueEndReason.HOST_CHANGED)

@@ -52,7 +52,10 @@ import net.minestom.server.entity.Player
  * [DialogueSurface.FrameRejected] is a proven precommit failure: its attempted observers fail, the
  * prior physical ACK remains usable, and newer pending work keeps its original deadline. Coalesced
  * or stale views not attempted retain the existing acknowledgement contract. Unknown write
- * failures, partial writes and timeouts retain their existing fatal/fallback behavior.
+ * failures, partial writes and timeouts retain their existing fatal/fallback behavior. Browse
+ * observers follow the selected page intent, not just its semantic view; superseded unattempted
+ * pages can share the selected attempt's ACK and ACCEPTED/STALE outcome. Page staging and drawing
+ * run in the same existing serialized attempt so pending requests cannot relabel an earlier draw.
  */
 class MinestomDialogueRenderer(
     private val scope: MinestomConnectionScope,
@@ -163,10 +166,16 @@ class MinestomDialogueRenderer(
         private val surfaces = AtomicLong()
         val ready = CompletableFuture<DialogueRenderer.PresentationHandle>()
 
+        private inner class BrowseIntent(val expected: DialogueView, val start: Int)
+
+        private var pageIntent: BrowseIntent? = null
+
         private inner class WriteObserver(
             val result: CompletableFuture<Void>,
             var selected: DialogueView,
+            var page: BrowseIntent?,
         ) {
+            var pageAccepted = false
             // A physical ACK may precede settlement while a newer frame is coalescing.
             var acknowledged = false
         }
@@ -338,14 +347,23 @@ class MinestomDialogueRenderer(
                     result.completeExceptionally(CancellationException())
                     return@execute
                 }
-                val current = latest
-                if (current == null || view.stateRevision() >= current.stateRevision())
-                    latest = view
-                frameIntent++
-                waiters.add(WriteObserver(result, checkNotNull(latest)))
-                flush()
+                admitWrite(view, result, pageIntent)
             }
             return result.minimalCompletionStage()
+        }
+
+        private fun admitWrite(
+            view: DialogueView,
+            result: CompletableFuture<Void>,
+            page: BrowseIntent?,
+        ): WriteObserver {
+            val current = latest
+            if (current == null || view.stateRevision() >= current.stateRevision()) latest = view
+            frameIntent++
+            val observer = WriteObserver(result, checkNotNull(latest), page)
+            waiters.add(observer)
+            flush()
+            return observer
         }
 
         fun browse(displayed: TargetSnapshot?, start: Int): CompletionStage<InputResult> {
@@ -361,6 +379,7 @@ class MinestomDialogueRenderer(
                         effective.surfaceKey != "npc" ||
                         displayed !== targets.current() ||
                         currentLatest == null ||
+                        currentLatest != acknowledgedView ||
                         displayed.stateRevision() != currentLatest.stateRevision() ||
                         displayed.renderRevision() != currentLatest.renderRevision() ||
                         currentDelegate !is ChoiceViewport.Controller
@@ -370,28 +389,19 @@ class MinestomDialogueRenderer(
                 }
                 browsers.removeIf(CompletableFuture<InputResult>::isDone)
                 browsers.add(result)
-                await(
-                    call { currentDelegate.setChoiceStart(currentLatest, start) },
-                    clock.nanoTime() + request.budgets.prepare.toNanos(),
-                ) { changed, error ->
-                    if (error != null) {
-                        result.completeExceptionally(error)
-                    } else {
-                        val latestView = latest
-                        if (latestView == null) {
-                            result.complete(InputResult.STALE)
-                        } else {
-                            replace(latestView).whenComplete { _, writeError ->
-                                if (writeError != null) result.completeExceptionally(writeError)
-                                else {
-                                    result.complete(
-                                        if (changed == true) InputResult.ACCEPTED
-                                        else InputResult.STALE
-                                    )
-                                }
-                            }
-                        }
-                    }
+                val selected = pageIntent
+                val page =
+                    if (selected?.expected == currentLatest && selected.start == start) selected
+                    else BrowseIntent(currentLatest, start)
+                pageIntent = page
+                val writing = CompletableFuture<Void>()
+                val observer = admitWrite(currentLatest, writing, page)
+                writing.whenComplete { _, error ->
+                    if (error != null) result.completeExceptionally(error)
+                    else
+                        result.complete(
+                            if (observer.pageAccepted) InputResult.ACCEPTED else InputResult.STALE
+                        )
                 }
             }
             return result.minimalCompletionStage()
@@ -420,44 +430,79 @@ class MinestomDialogueRenderer(
             val epoch = ++writeEpoch
             val writingIntent = frameIntent
             val frame = checkNotNull(latest)
-            attempted.forEach { it.selected = frame }
-            call { currentDelegate.replace(frame) }
-                .whenComplete { _, error ->
-                    queue.execute {
-                        if (closed.get() || epoch != writeEpoch) return@execute
-                        inflight = false
-                        if (error != null) {
-                            if (frameRejection(error) != null) {
-                                val rejected = waiters.filter {
-                                    !it.acknowledged && (it in attempted || it.selected == frame)
+            val requestedPage = attempted.lastOrNull()?.page
+            val page = requestedPage?.takeIf { it.expected == frame }
+            if (page == null && pageIntent === requestedPage) pageIntent = null
+            attempted.forEach {
+                it.selected = frame
+                it.page = page
+            }
+            val output =
+                if (page == null || currentDelegate !is ChoiceViewport.Controller) {
+                    attempted.forEach { it.pageAccepted = false }
+                    call { currentDelegate.replace(frame) }
+                } else {
+                    val writing = CompletableFuture<Void>()
+                    call { currentDelegate.setChoiceStart(frame, page.start) }
+                        .whenComplete { changed, error ->
+                            queue.execute {
+                                if (closed.get() || epoch != writeEpoch) {
+                                    writing.completeExceptionally(CancellationException())
+                                } else if (error != null) writing.completeExceptionally(error)
+                                else {
+                                    attempted.forEach { it.pageAccepted = changed == true }
+                                    call { currentDelegate.replace(frame) }
+                                        .whenComplete { _, failure ->
+                                            if (failure == null) writing.complete(null)
+                                            else writing.completeExceptionally(failure)
+                                        }
                                 }
-                                waiters.removeAll(rejected.toSet())
-                                rejected.forEach { it.result.completeExceptionally(error) }
-                                latest =
-                                    waiters.lastOrNull { !it.acknowledged }?.selected
-                                        ?: acknowledgedView
-                                if (waiters.any { !it.acknowledged }) flush()
-                                else completeAcknowledged()
-                                return@execute
                             }
-                            val code = known(error)
-                            if (code != null && effective.surfaceKey != "chat") {
-                                diagnostic = code
-                                switchOutput(chat(), false, null, batchDeadline)
-                            } else {
-                                fatal(error)
-                            }
-                            return@execute
                         }
-                        acknowledgedView = frame
-                        attempted.forEach { it.acknowledged = true }
-                        if (frame !== latest || writingIntent != frameIntent) {
-                            flush()
-                            return@execute
-                        }
-                        completeAcknowledged()
-                    }
+                    writing
                 }
+            output.whenComplete { _, error ->
+                queue.execute {
+                    if (closed.get() || epoch != writeEpoch) return@execute
+                    inflight = false
+                    if (error != null) {
+                        if (frameRejection(error) != null) {
+                            val rejected = waiters.filter {
+                                !it.acknowledged &&
+                                    (it in attempted || (it.selected == frame && it.page === page))
+                            }
+                            waiters.removeAll(rejected.toSet())
+                            rejected.forEach { it.result.completeExceptionally(error) }
+                            if (pageIntent === page) pageIntent = null
+                            latest =
+                                waiters.lastOrNull { !it.acknowledged }?.selected
+                                    ?: acknowledgedView
+                            if (waiters.any { !it.acknowledged }) flush()
+                            else completeAcknowledged()
+                            return@execute
+                        }
+                        val code = known(error)
+                        if (code != null && effective.surfaceKey != "chat") {
+                            diagnostic = code
+                            switchOutput(chat(), false, null, batchDeadline)
+                        } else {
+                            fatal(error)
+                        }
+                        return@execute
+                    }
+                    acknowledgedView = frame
+                    attempted.forEach { it.acknowledged = true }
+                    if (
+                        pageIntent === page && waiters.none { !it.acknowledged && it.page === page }
+                    )
+                        pageIntent = null
+                    if (frame !== latest || writingIntent != frameIntent) {
+                        flush()
+                        return@execute
+                    }
+                    completeAcknowledged()
+                }
+            }
         }
 
         private fun completeAcknowledged() {
@@ -580,6 +625,7 @@ class MinestomDialogueRenderer(
                         delegate = null
                         latest = null
                         acknowledgedView = null
+                        pageIntent = null
                         ready.completeExceptionally(
                             if (cleanup != null) OwnedResource.PreparationFailure(cleanup)
                             else failure ?: error

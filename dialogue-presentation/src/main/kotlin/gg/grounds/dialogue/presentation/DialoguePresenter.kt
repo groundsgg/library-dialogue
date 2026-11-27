@@ -395,6 +395,8 @@ class DialoguePresenter : DialogueRenderer {
         private var acknowledgedView: DialogueView? = null
         private var pageIntent: PageIntent? = null
         private val selectedViews = IdentityHashMap<CompletableFuture<Void>, DialogueView>()
+        private val selectedPages = IdentityHashMap<CompletableFuture<Void>, PageIntent?>()
+        private var inflightPage: PageIntent? = null
         val queue: SerialCommandQueue
         val scope: OwnedScope
         val ready = CompletableFuture<DialogueRenderer.PresentationHandle>()
@@ -453,16 +455,22 @@ class DialoguePresenter : DialogueRenderer {
         private fun acknowledge(composition: Composition) {
             acknowledgedView = composition.widgets.semantic()
             choiceCursor = composition.cursor
-            if (pageIntent === composition.page) pageIntent = null
+            val pendingSamePage =
+                pending?.waiters?.any { selectedPages[it] === composition.page } == true
+            if (pageIntent === composition.page && !pendingSamePage) pageIntent = null
         }
 
         private fun rejectFrame(frame: PendingFrame, composition: Composition, error: Throwable) {
             val next = pending
             if (next != null) {
-                val duplicates = next.waiters.filter { selectedViews[it] == frame.view }
+                val duplicates =
+                    next.waiters.filter {
+                        selectedViews[it] == frame.view && selectedPages[it] === composition.page
+                    }
                 next.waiters.removeAll(duplicates.toSet())
                 duplicates.forEach {
                     selectedViews.remove(it)
+                    selectedPages.remove(it)
                     it.completeExceptionally(error)
                 }
                 if (next.waiters.isEmpty()) pending = null
@@ -518,7 +526,9 @@ class DialoguePresenter : DialogueRenderer {
                     val valid =
                         currentLayout.navigationButtons &&
                             choiceCursor.copy().browse(current, currentLayout.choiceCapacity, start)
-                    if (valid) pageIntent = PageIntent(current, start)
+                    if (valid && (pageIntent?.expected != current || pageIntent?.start != start)) {
+                        pageIntent = PageIntent(current, start)
+                    }
                     result.complete(valid)
                 } catch (failure: Throwable) {
                     result.completeExceptionally(failure)
@@ -617,14 +627,17 @@ class DialoguePresenter : DialogueRenderer {
                         lastWritten >= view.stateRevision() -> result.complete(null)
                         pending != null -> {
                             selectedViews[result] = pending!!.view
+                            selectedPages[result] = pageIntent
                             pending!!.waiters += result
                         }
                         inflight != null -> {
                             selectedViews[result] = inflight!!.view
+                            selectedPages[result] = inflightPage
                             inflight!!.waiters += result
                         }
                         else -> {
                             selectedViews[result] = previous
+                            selectedPages[result] = pageIntent
                             enqueue(previous, listOf(result))
                         }
                     }
@@ -632,6 +645,7 @@ class DialoguePresenter : DialogueRenderer {
                 }
                 lastView = view
                 selectedViews[result] = view
+                selectedPages[result] = pageIntent
                 enqueue(view, listOf(result))
             }
             return result.minimalCompletionStage()
@@ -648,6 +662,7 @@ class DialoguePresenter : DialogueRenderer {
         fun finishFrame(frame: PendingFrame, error: Throwable?) {
             frame.waiters.forEach {
                 selectedViews.remove(it)
+                selectedPages.remove(it)
                 if (error == null) it.complete(null) else it.completeExceptionally(error)
             }
             frame.waiters.clear()
@@ -666,7 +681,11 @@ class DialoguePresenter : DialogueRenderer {
                     flush()
                     return
                 }
-            frame.waiters.forEach { selectedViews[it] = frame.view }
+            frame.waiters.forEach {
+                selectedViews[it] = frame.view
+                selectedPages[it] = composition.page
+            }
+            inflightPage = composition.page
             inflight = frame
             val gen = outputGeneration
             call { target.replace(composition.widgets) }
@@ -681,6 +700,7 @@ class DialoguePresenter : DialogueRenderer {
                         }
                         finishFrame(frame, error)
                         inflight = null
+                        inflightPage = null
                         flush()
                     }
                 }
@@ -850,6 +870,7 @@ class DialoguePresenter : DialogueRenderer {
                 transferred.addAll(it.waiters)
                 it.waiters.clear()
                 inflight = null
+                inflightPage = null
             }
             lastView?.let { enqueue(it, transferred) }
             scope.release(checkNotNull(old)).whenComplete { _, cleanup ->
@@ -883,6 +904,8 @@ class DialoguePresenter : DialogueRenderer {
                 outstanding.forEach { it.completeExceptionally(error) }
                 outstanding.clear()
                 selectedViews.clear()
+                selectedPages.clear()
+                inflightPage = null
                 pending?.let { finishFrame(it, error) }
                 pending = null
                 inflight?.let { finishFrame(it, error) }

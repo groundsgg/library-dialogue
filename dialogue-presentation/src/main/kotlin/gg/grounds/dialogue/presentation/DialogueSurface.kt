@@ -14,7 +14,9 @@ fun interface DialogueSurface {
      * The attempted frame committed no owned output, input or resource mutation. Previously
      * acknowledged output remains usable. Emit only after validation proves this contract;
      * ordinary/partial writes, acquisition failures, cancellation and timeouts are not rejections.
-     * Core retains authority over how it handles a failed rendering operation.
+     * The guarantee belongs to the enclosing frame operation. A child callback's rejection does not
+     * certify an enclosing frame which has already mutated owned state; that enclosing frame must
+     * report an ordinary failure instead. Core retains authority over failed rendering.
      */
     class FrameRejected(message: String) : IllegalArgumentException(message)
 

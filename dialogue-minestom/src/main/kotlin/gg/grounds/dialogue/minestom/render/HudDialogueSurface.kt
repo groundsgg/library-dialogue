@@ -11,6 +11,7 @@ import gg.grounds.dialogue.minestom.asset.AssetBundle
 import gg.grounds.dialogue.minestom.asset.PackStateTracker
 import gg.grounds.dialogue.minestom.channel.OutputChannels
 import gg.grounds.dialogue.minestom.input.SurfaceInputTargets
+import gg.grounds.dialogue.minestom.internal.nativeFrameWrite
 import gg.grounds.dialogue.presentation.DialoguePresenter
 import gg.grounds.dialogue.presentation.DialogueSurface
 import gg.grounds.dialogue.presentation.WidgetFrame
@@ -158,6 +159,10 @@ class HudDialogueSurface(
                     DialogueSurface.FrameRejected("Native frame session mismatch")
                 )
             }
+            return nativeFrameWrite { replaceOwned(frame) }
+        }
+
+        private fun replaceOwned(frame: WidgetFrame): CompletionStage<Void> {
             val result = CompletableFuture<Void>()
             queue.execute {
                 if (closed.get() || context.cancellation.isCancelled()) {

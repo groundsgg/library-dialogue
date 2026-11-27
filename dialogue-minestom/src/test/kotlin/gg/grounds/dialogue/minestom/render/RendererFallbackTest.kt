@@ -206,7 +206,7 @@ class RendererFallbackTest {
             budgets(),
         )
 
-    private class Clock : gg.grounds.dialogue.core.port.DialogueScheduler {
+    internal class Clock : gg.grounds.dialogue.core.port.DialogueScheduler {
         var now = 0L
         private val ready = java.util.ArrayDeque<Runnable>()
 

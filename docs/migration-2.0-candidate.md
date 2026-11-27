@@ -218,3 +218,21 @@ visible page and targets; validated native writes still retire old inputs before
 publishing their new acknowledged targets. The existing adapter impulse and
 surface-retirement fences remain in place. Refresh after rejection uses the last
 physical ACK rather than replaying the rejected desired view.
+
+A nested surface's `FrameRejected` certifies only that nested operation. Built-in
+native surfaces preserve the marker only for their own proven early validation;
+a sink, output/effect lease, release or acquisition failure cannot certify the
+enclosing frame. After owned work may have begun, nested markers become ordinary
+failures with their cause retained, and normal fatal/cleanup handling applies.
+
+Browse observers also carry page-intent identity. An immediate duplicate shares
+the current pending intent; returning to an offset after an intervening intent
+creates a new one. Rejecting offset 3 keeps a newer queued offset 6 eligible for
+its own write/ACK. Native page staging happens immediately before that selected
+write in the existing serial queue. Unattempted pages on the same acknowledged
+semantic view may coalesce and share the selected attempt's `ACCEPTED`/`STALE`
+outcome; this does not promise that every superseded page was drawn. `ACCEPTED`
+requires its selected actual frame ACK, while a selected invalid page is `STALE`
+after that ACK. Already-stale target/view admission is still denied, and queued
+work keeps the existing absolute deadline. A failed intent cannot be applied
+later by an unrelated refresh.
