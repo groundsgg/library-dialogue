@@ -10,7 +10,7 @@ from pathlib import Path
 
 from check_dialogue_compatibility import (
     ROOT, KOTLIN_VALUE_CLASSES, api_signature, compare_api, compare_schemas,
-    member_signatures, schemas, validate_baseline, validate_frozen_consumers,
+    schemas, validate_baseline, validate_frozen_consumers,
 )
 from verify_public_artifacts import artifact
 
@@ -20,6 +20,9 @@ SOURCE_COMMIT = 'f6772e81efd070cf8ca52a770061da5a90b67bf5'
 REFERENCE_SHA256 = '52c5616f41d6180de67552bcf9798556cb3ff453faee8cfa70c82d13e83462c0'
 ROLE = 'development-major-candidate-not-accepted-release-baseline'
 POLICY = 'jvm-conservative-v1-synthetic-accessors-only'
+CANDIDATE_POLICY = 'jvm-conservative-v2-retain-members'
+REFERENCE_EXCLUSIONS = {'dialogue-cli': 2, 'dialogue-core': 14, 'dialogue-json': 0,
+                        'dialogue-minestom': 75, 'dialogue-presentation': 13, 'dialogue-testkit': 0}
 
 
 def digest(path):
@@ -50,8 +53,29 @@ def keys(value, expected, label):
         raise ValueError(label + '_FIELDS_INVALID')
 
 
+class ClassMetadata(dict):
+    """Legacy JSON evidence plus an unambiguous classfile table held only in memory."""
+
+
+class Surface(dict):
+    def __init__(self, api, member_index):
+        super().__init__(api)
+        self.member_index = member_index
+
+
+def modified_utf8(data):
+    # JVM UTF-8 encodes NUL specially and supplementary characters as UTF-16 pairs.
+    if b'\x00' in data or any(byte >= 0xf0 for byte in data):
+        raise ValueError('CLASSFILE_UTF8_INVALID')
+    try:
+        text = data.replace(b'\xc0\x80', b'\x00').decode('utf-8', errors='surrogatepass')
+        return text.encode('utf-16-be', errors='surrogatepass').decode('utf-16-be', errors='surrogatepass')
+    except UnicodeError as error:
+        raise ValueError('CLASSFILE_UTF8_INVALID') from error
+
+
 def class_metadata(data):
-    """Read actual flags and member identity; no Kotlin/name-only visibility guesses."""
+    """Read exact tuples before producing the historical colon-separated evidence."""
     if data[:4] != b'\xca\xfe\xba\xbe':
         raise ValueError('CLASSFILE_INVALID')
     pos = 8
@@ -70,7 +94,7 @@ def class_metadata(data):
         pos += 1
         if tag == 1:
             size = u2()
-            cp[index] = data[pos:pos + size].decode('utf-8', errors='replace')
+            cp[index] = modified_utf8(data[pos:pos + size])
             pos += size
         elif tag in (3, 4): pos += 4
         elif tag in (5, 6): pos += 8; index += 1
@@ -83,57 +107,161 @@ def class_metadata(data):
     pos += 4
     interface_count = u2()
     pos += 2 * interface_count
-    members = {}
+    members, table = {}, {}
     for kind in ('field', 'method'):
         for _ in range(u2()):
             offset = pos
             access = u2()
             name, descriptor = cp[u2()], cp[u2()]
-            members[kind + ':' + name + ':' + descriptor] = {
-                'flags': access, 'offset': offset,
-            }
+            identity = (kind, name, descriptor)
+            evidence_key = kind + ':' + name + ':' + descriptor
+            if identity in table or evidence_key in members:
+                raise ValueError('DUPLICATE_JVM_MEMBER')
+            table[identity] = {'flags': access, 'offset': offset}
+            members[evidence_key] = table[identity]
             for _ in range(u2()):
                 u2()
                 size = struct.unpack_from('>I', data, pos)[0]
                 pos += 4 + size
-    return {'flags': flags, 'members': members}
+    result = ClassMetadata(flags=flags, members=members)
+    result.member_table = table
+    return result
 
 
-def snapshot(jar):
+def member_table(metadata):
+    if isinstance(metadata, ClassMetadata): return metadata.member_table
+    # This path is only for hash-pinned v1 evidence, whose names contain no colons.
+    keys(metadata, ('flags', 'members'), 'CLASS_METADATA')
+    if type(metadata['flags']) is not int or not isinstance(metadata['members'], dict):
+        raise ValueError('CLASS_METADATA_INVALID')
+    table, offsets = {}, set()
+    for key, value in metadata['members'].items():
+        parts = tuple(key.split(':', 2))
+        keys(value, ('flags', 'offset'), 'MEMBER_METADATA')
+        if (len(parts) != 3 or parts[0] not in ('field', 'method') or not all(parts)
+                or type(value['flags']) is not int or type(value['offset']) is not int
+                or value['offset'] < 0 or value['offset'] in offsets):
+            raise ValueError('MEMBER_METADATA_INVALID')
+        table[parts] = value
+        offsets.add(value['offset'])
+    return table
+
+
+def displayed_rows(signature):
+    lines = signature.splitlines(keepends=True)
+    rows = []
+    for index, line in enumerate(lines):
+        if not line.startswith('    descriptor: '): continue
+        if index == 0 or not lines[index - 1].startswith(('  public ', '  protected ')):
+            raise ValueError('JAVAP_MEMBER_DECLARATION_INVALID')
+        descriptor = line.strip().removeprefix('descriptor: ')
+        pair = (lines[index - 1].strip(), line.strip())
+        rows.append((index - 1, descriptor, pair))
+    if len({row[2] for row in rows}) != len(rows):
+        raise ValueError('AMBIGUOUS_JVM_MEMBER_DISPLAY')
+    return lines, rows
+
+
+def indexed_surface(module, raw, classes, exclusions=frozenset()):
+    api, member_index = {}, {}
+    for owner, signature in raw.items():
+        metadata = classes[owner]
+        if metadata['flags'] & 0x1000: continue
+        table = member_table(metadata)
+        visible = sorted(((key, value) for key, value in table.items() if value['flags'] & 0x5),
+                         key=lambda item: item[1]['offset'])
+        lines, rows = displayed_rows(signature)
+        if len(rows) != len(visible): raise ValueError('JAVAP_MEMBER_COUNT_MISMATCH: ' + owner)
+        excluded = set()
+        for (kind_name, value), (row, descriptor, pair) in zip(visible, rows):
+            kind, name, exact_descriptor = kind_name
+            if (descriptor != exact_descriptor
+                    or kind != ('method' if descriptor.startswith('(') else 'field')):
+                raise ValueError('JAVAP_MEMBER_DESCRIPTOR_MISMATCH: ' + owner)
+            identity = (module, owner, kind, name, exact_descriptor)
+            if identity in member_index: raise ValueError('DUPLICATE_JVM_MEMBER')
+            if (*identity, value['flags']) in exclusions:
+                excluded.update((row, row + 1))
+            else:
+                member_index[identity] = dict(value, pair=pair)
+        api[owner] = ''.join(line for index, line in enumerate(lines) if index not in excluded)
+    return Surface(api, member_index)
+
+
+def reference_surface(module, value):
+    keys(value, ('raw', 'classes', 'api'), 'REFERENCE_INVENTORY')
+    validate_api(value['raw'])
+    validate_api(value['api'])
+    if not isinstance(value['classes'], dict): raise ValueError('CLASS_METADATA_INVALID')
+    raw = indexed_surface(module, value['raw'], value['classes'])
+    if set(raw) != set(value['api']): raise ValueError('REFERENCE_TYPE_POLICY_MISMATCH')
+    excluded = set()
+    for owner, signature in value['api'].items():
+        _, rows = displayed_rows(signature)
+        pairs = {row[2] for row in rows}
+        actual = {key: member for key, member in raw.member_index.items() if key[1] == owner}
+        if not pairs <= {member['pair'] for member in actual.values()}:
+            raise ValueError('REFERENCE_MEMBER_POLICY_MISMATCH')
+        for identity, member in actual.items():
+            if member['pair'] in pairs: continue
+            if identity[2] != 'method' or member['flags'] not in (0x1009, 0x1019):
+                raise ValueError('REFERENCE_EXCLUSION_FLAGS_INVALID')
+            excluded.add((*identity, member['flags']))
+    surface = indexed_surface(module, value['raw'], value['classes'], excluded)
+    if surface != value['api']: raise ValueError('REFERENCE_FILTER_REPRODUCTION_FAILED')
+    return excluded, surface
+
+
+def snapshot(jar, module='dialogue-core', exclusions=frozenset()):
     raw = api_signature(jar)
     with zipfile.ZipFile(jar) as archive:
-        metadata = {name[:-6].replace('/', '.'): class_metadata(archive.read(name))
-                    for name in sorted(archive.namelist())
-                    if name.endswith('.class') and name != 'module-info.class'}
-    api = {}
-    for owner, signature in raw.items():
-        if metadata[owner]['flags'] & 0x1000:
-            continue
-        lines = signature.splitlines(keepends=True)
-        excluded = set()
-        for index, line in enumerate(lines[:-1]):
-            match = re.search(r'\b(access\$[\w$]+)\(', line)
-            if not match or not lines[index + 1].startswith('    descriptor: '):
-                continue
-            descriptor = lines[index + 1].strip().removeprefix('descriptor: ')
-            member = metadata[owner]['members'].get('method:' + match[1] + ':' + descriptor)
-            if member and member['flags'] & 0x1000:
-                excluded.update((index, index + 1))
-        api[owner] = ''.join(line for index, line in enumerate(lines) if index not in excluded)
-    return {'raw': raw, 'classes': metadata, 'api': api}
+        names = [name for name in archive.namelist() if name.endswith('.class') and name != 'module-info.class']
+        if len(names) != len(set(names)): raise ValueError('DUPLICATE_JAR_CLASS')
+        metadata = {name[:-6].replace('/', '.'): class_metadata(archive.read(name)) for name in sorted(names)}
+        if len(metadata) != len(names): raise ValueError('DUPLICATE_JAR_OWNER')
+    return {'raw': raw, 'classes': metadata, 'api': indexed_surface(module, raw, metadata, exclusions)}
+
+
+def normalized_pair(pair, kind, owner_is_final):
+    declaration, descriptor = pair
+    if owner_is_final and kind == 'method':
+        declaration = re.sub(r'^((?:public|protected)(?: static)?) final ', r'\1 ', declaration)
+    return declaration, descriptor
+
+
+def normalized_members(surface, module, owner, owner_is_final):
+    if not isinstance(surface, Surface): raise ValueError('JVM_MEMBER_INDEX_REQUIRED')
+    result, pairs = {}, set()
+    for identity, member in surface.member_index.items():
+        if identity[1] != owner: continue
+        if identity[0] != module: raise ValueError('JVM_MEMBER_MODULE_MISMATCH')
+        pair = normalized_pair(member['pair'], identity[2], owner_is_final)
+        if pair in pairs: raise ValueError('AMBIGUOUS_NORMALIZED_REVIEW_PAYLOAD')
+        result[identity] = pair
+        pairs.add(pair)
+    return result
+
+
+def floor_surface(module, api, reference):
+    # The legacy subset check ran first. Bind each floor display to one pinned tuple.
+    index = {}
+    for owner, signature in api.items():
+        final = bool(re.match(r'^(public|protected) final class ', signature.splitlines()[0]))
+        pinned = normalized_members(reference, module, owner, final)
+        _, rows = displayed_rows(signature)
+        for _, descriptor, pair in rows:
+            kind = 'method' if descriptor.startswith('(') else 'field'
+            normalized = normalized_pair(pair, kind, final)
+            matches = [key for key, value in pinned.items() if value == normalized]
+            if len(matches) != 1: raise ValueError('OLD_FLOOR_MEMBER_AMBIGUOUS')
+            index[matches[0]] = dict(reference.member_index[matches[0]], pair=pair)
+    return Surface(api, index)
 
 
 def normalized_header(owner, header):
     if owner in KOTLIN_VALUE_CLASSES:
         return header.replace(' extends java.lang.Record', '', 1)
     return header
-
-
-def member_identity(value):
-    declaration, descriptor = value
-    method = re.search(r'([\w.$]+)\(', declaration)
-    name = method.group(1) if method else declaration.removesuffix(';').rsplit(' ', 1)[-1]
-    return name, descriptor
 
 
 def differences(module, before, after):
@@ -155,14 +283,12 @@ def differences(module, before, after):
         if old_permitted != new_permitted:
             change('permitted', old_permitted, new_permitted)
         final = bool(re.match(r'^(public|protected) final class ', old_header))
-        old_members = member_signatures(original, final)
-        new_members = member_signatures(candidate, final)
-        for member in sorted(old_members - new_members):
-            # Pair declaration changes only by exact JVM name AND descriptor.
-            # Different overloads/replacements are never inferred from a name.
-            same_identity = [value for value in new_members if member_identity(value) == member_identity(member)]
-            if len(same_identity) > 1: raise ValueError('AMBIGUOUS_JVM_MEMBER')
-            change('member', list(member), list(same_identity[0]) if same_identity else None)
+        old_members = normalized_members(before, module, owner, final)
+        new_members = normalized_members(after, module, owner, final)
+        for identity, pair in sorted(old_members.items()):
+            target = new_members.get(identity)
+            if target != pair:
+                change('member', list(pair), list(target) if target is not None else None)
     return result
 
 
@@ -195,7 +321,7 @@ def identity(value):
     return json.dumps({key: value[key] for key in ('module', 'owner', 'kind', 'before')}, sort_keys=True)
 
 
-def check_changes(before, after, entries):
+def reviewed_entries(entries):
     if not isinstance(entries, list): raise ValueError('CHANGES_INVALID')
     reviewed = {}
     for entry in entries:
@@ -203,6 +329,11 @@ def check_changes(before, after, entries):
         key = identity(entry)
         if key in reviewed: raise ValueError('DUPLICATE_CHANGE')
         reviewed[key] = entry
+    return reviewed
+
+
+def check_changes(before, after, entries):
+    reviewed = reviewed_entries(entries)
     used = set()
     for module, api in before.items():
         for change in differences(module, api, after[module]):
@@ -215,8 +346,8 @@ def check_changes(before, after, entries):
             elif change['kind'] == 'member' and entry['after'] is not None:
                 owner = change['owner']
                 final = bool(re.match(r'^(public|protected) final class ', api[owner].splitlines()[0]))
-                target = tuple(entry['after'])
-                if target not in member_signatures(after[module][owner], final):
+                targets = normalized_members(after[module], module, owner, final)
+                if tuple(entry['after']) not in targets.values():
                     raise ValueError('REPLACEMENT_TARGET_MISSING: ' + key)
             elif entry['after'] != change['after']:
                 raise ValueError('CHANGE_AFTER_MISMATCH: ' + key)
@@ -231,7 +362,7 @@ def validate_api(value):
         raise ValueError('API_INVENTORY_INVALID')
 
 
-def validate_inputs(baseline):
+def load_reference(baseline):
     policy = baseline / 'major-candidate'
     reference = policy / 'reference-1.8'
     manifest = load(reference / 'manifest.json')
@@ -259,14 +390,28 @@ def validate_inputs(baseline):
     if baseline.resolve() == (ROOT / 'compatibility').resolve(): validate_frozen_consumers()
     old = load(baseline / 'baseline.json')
     compare_schemas(old['schemas'], manifest['schemas'])
-    reference_api = {module: load(reference / (module + '.json'))['api'] for module in MODULES}
+    values = {module: load(reference / (module + '.json')) for module in MODULES}
+    reference_api, exclusions = {}, set()
+    for module, value in values.items():
+        excluded, surface = reference_surface(module, value)
+        if len(excluded) != REFERENCE_EXCLUSIONS[module]:
+            raise ValueError('REFERENCE_EXCLUSION_COUNT_MISMATCH: ' + module)
+        reference_api[module] = surface
+        exclusions.update(excluded)
+    return manifest, values, reference_api, exclusions
+
+
+def validate_inputs(baseline):
+    manifest, values, reference_api, _ = load_reference(baseline)
+    policy = baseline / 'major-candidate'
     floors = {module: load(baseline / 'api' / (module + '.txt')) for module in MODULES}
     for module in MODULES:
-        validate_api(reference_api[module])
+        validate_api(floors[module])
         compare_api(floors[module], reference_api[module])
+        floors[module] = floor_surface(module, floors[module], reference_api[module])
     candidate = load(policy / 'candidate.json')
     keys(candidate, ('format', 'role', 'policy', 'modules', 'schemas'), 'CANDIDATE')
-    if (type(candidate['format']) is not int or candidate['format'] != 1 or candidate['role'] != ROLE or candidate['policy'] != POLICY
+    if (type(candidate['format']) is not int or candidate['format'] != 1 or candidate['role'] != ROLE or candidate['policy'] != CANDIDATE_POLICY
             or not isinstance(candidate['modules'], dict) or set(candidate['modules']) != set(MODULES)):
         raise ValueError('CANDIDATE_INVENTORY_INVALID')
     for api in candidate['modules'].values(): validate_api(api)
@@ -277,7 +422,7 @@ def validate_inputs(baseline):
             or type(breaks['targetMajor']) is not int or breaks['targetMajor'] != 2
             or breaks['reference'] != {'commit': SOURCE_COMMIT, 'manifestSha256': REFERENCE_SHA256}):
         raise ValueError('BREAK_REFERENCE_INVALID')
-    check_changes(reference_api, candidate['modules'], breaks['changes'])
+    reviewed_entries(breaks['changes'])
     return manifest, reference_api, floors, candidate, breaks
 
 
@@ -309,11 +454,11 @@ def inventory(repository, version, evidence=None):
     schema = None
     for module in MODULES:
         jar = artifact(repository / 'gg/grounds' / module / version, module, version, 'jar')
-        value = snapshot(jar)
+        value = snapshot(jar, module)
         modules[module] = value['api']
         if evidence is not None: emit(evidence / (module + '.json'), value)
         if module == 'dialogue-json': schema = schemas(jar)
-    return {'format': 1, 'role': ROLE, 'policy': POLICY, 'modules': modules, 'schemas': schema}
+    return {'format': 1, 'role': ROLE, 'policy': CANDIDATE_POLICY, 'modules': modules, 'schemas': schema}
 
 
 def check(repository, version, baseline=ROOT / 'compatibility', evidence=None):

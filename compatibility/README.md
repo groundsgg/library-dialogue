@@ -56,8 +56,13 @@ read. Reproduce into a scratch directory with Java 25:
 python3 tools/capture_dialogue_major_reference.py --source /path/to/isolated-source --output /path/to/reference-output
 ```
 
-Capture verifies and extracts the immutable source archive, builds local review
-publications and writes evidence. It never updates the checker's trust anchor.
+Capture requires an absent source directory or an empty real directory; files,
+symlinks and every preexisting entry are rejected before extraction or Gradle.
+It verifies and extracts the immutable source archive, builds local review
+publications and writes evidence. Reference reproduction applies only the closed
+set of 104 exclusions derived from the hash-pinned raw/filtered inventories and
+classfile metadata, and must reproduce the pinned evidence exactly. A discrepancy
+requires explicit provenance review. Capture never updates the checker's trust anchor.
 The current development inventory is explicitly labeled as such in
 `major-candidate/candidate.json`; regenerate it for a reviewed candidate change:
 
@@ -84,15 +89,23 @@ match both exact values. A type removal includes its full original inventory.
 Unknown fields/kinds, duplicate JSON keys or entries, unused entries and any
 unlisted differences fail. Patterns and prefixes never match changes.
 
+Member comparisons use the exact classfile tuple (module, owner, field/method,
+full JVM name, descriptor), including constructors and modified UTF-8 names.
+Ordered public/protected classfile tables are checked against javap declaration
+and descriptor pairs; ambiguous or unrepresentable mappings fail closed. Historical
+floor members are bound uniquely to the pinned reference before candidate checks.
 The comparison keeps the legacy explicit record-kind exceptions and redundant
 method-final normalization on final classes. It conservatively retains Kotlin
 JVM-public declarations outside excluded `.internal` packages, Kotlin default
 argument masks, `DefaultConstructorMarker` overloads, generic bridges,
 companions, `DefaultImpls` and ordinary dollar-named types. Synthetic generated
-types are excluded only using actual class `ACC_SYNTHETIC`. A compiler accessor
-is excluded only when its actual method flags contain `ACC_SYNTHETIC` **and** its
-name starts with `access$`; an ordinary user method with that name remains.
-Raw evidence retains every filtered declaration.
+types are excluded only using actual class `ACC_SYNTHETIC`. The candidate policy
+`jvm-conservative-v2-retain-members` retains every public/protected member of each
+included type, including generated accessors, generic bridges and user-declared
+`@JvmSynthetic` methods. Reference reproduction preserves the pinned v1 policy
+and its exact historical exclusions. Additional candidate members remain visible
+even when their identity and flags equal a historical helper. Raw evidence retains
+every declaration.
 
 This development gate neither accepts a 2.0 release baseline nor proves full
 Kotlin source compatibility or supported SPI classification. Excluded-package

@@ -106,7 +106,7 @@ class MajorCandidateTests(unittest.TestCase):
             tool.check_changes({'dialogue-core': before}, {'dialogue-core': after}, [dict(entry, after=None)])
         tool.check_changes({'dialogue-core': before}, {'dialogue-core': after}, [entry])
 
-    def test_synthetic_flags_filter_accessors_only_and_preserve_bridge(self):
+    def test_candidate_preserves_synthetic_accessors_and_bridge(self):
         tool = self.tool()
         jar = self.jars['access']
         with zipfile.ZipFile(jar) as archive:
@@ -121,7 +121,7 @@ class MajorCandidateTests(unittest.TestCase):
             archive.writestr('sample/Api.class', changed)
         value = tool.snapshot(target)
         self.assertIn('access$ordinary', value['api']['sample.Api'])
-        self.assertNotIn('access$generated', value['api']['sample.Api'])
+        self.assertIn('access$generated', value['api']['sample.Api'])
         self.assertIn('access$generated', value['raw']['sample.Api'])
         self.assertIn('compareTo(java.lang.Object)', self.api('bridge')['sample.Api'])
 
