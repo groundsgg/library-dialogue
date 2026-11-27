@@ -286,8 +286,8 @@ private constructor(
                         ticket::settled,
                     )
                 if (ticket.attach(session)) session.begin()
-            } catch (failure: Throwable) {
-                ticket.reject("START_FAILED", failure)
+            } catch (_: Throwable) {
+                ticket.reject("START_FAILED", null)
             }
         }
         return ticket
@@ -487,18 +487,25 @@ private constructor(
             return closeObservation
         }
 
-        fun reject(code: String, error: Throwable?) {
+        fun reject(code: String, cleanupError: Throwable?) {
             result.complete(DialogueStartResult.Rejected(code, emptyList()))
-            predecessor.whenComplete { _, beforeError -> settled(null, beforeError ?: error) }
+            val current = synchronized(lock) { session }
+            if (current != null) {
+                current.cancel(DialogueEndReason.FAILED)
+            } else {
+                predecessor.whenComplete { _, beforeError ->
+                    settled(null, beforeError ?: cleanupError)
+                }
+            }
         }
 
-        fun settled(source: MinestomDialogueSession?, error: Throwable?) {
+        fun settled(source: MinestomDialogueSession?, cleanupError: Throwable?) {
             val abandoned: List<CompletableFuture<Void>>
             val callback =
                 synchronized(lock) {
                     if (settled) return
                     settled = true
-                    cleanupFailed = error != null
+                    cleanupFailed = cleanupError != null
                     session = null
                     running = null
                     pendingLocale = null
@@ -510,18 +517,20 @@ private constructor(
             abandoned.forEach { it.completeExceptionally(CancellationException("Dialogue ended")) }
             if (!result.isDone) {
                 val code =
-                    if (error != null) "CLEANUP_FAILED" else token.reason()?.name ?: "START_FAILED"
+                    if (cleanupError != null) "CLEANUP_FAILED"
+                    else token.reason()?.name ?: "START_FAILED"
                 result.complete(DialogueStartResult.Rejected(code, emptyList()))
             }
-            callback?.invoke(this, if (error == null) null else source)
+            callback?.invoke(this, if (cleanupError == null) null else source)
             status =
                 PresentationStatus(
                     status.requestedSurface,
                     "",
-                    if (error == null) "CLOSED" else "CLEANUP_FAILED",
+                    if (cleanupError == null) "CLOSED" else "CLEANUP_FAILED",
                     status.surfaceGeneration,
                 )
-            if (error == null) close.complete(null) else close.completeExceptionally(error)
+            if (cleanupError == null) close.complete(null)
+            else close.completeExceptionally(cleanupError)
         }
     }
 

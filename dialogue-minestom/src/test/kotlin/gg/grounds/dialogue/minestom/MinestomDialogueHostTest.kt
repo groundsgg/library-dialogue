@@ -16,8 +16,11 @@ import gg.grounds.dialogue.minestom.asset.AssetBundle
 import gg.grounds.dialogue.minestom.asset.MinecraftPackProfile
 import gg.grounds.dialogue.minestom.channel.LocalOutputChannels
 import gg.grounds.dialogue.minestom.input.InputProfile
+import gg.grounds.dialogue.minestom.input.TargetSnapshot
+import gg.grounds.dialogue.minestom.internal.DialogueInputSource
 import gg.grounds.dialogue.presentation.UiLabelSource
 import java.time.Duration
+import java.util.Optional
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionStage
@@ -27,7 +30,9 @@ import net.kyori.adventure.resource.ResourcePackStatus
 import net.minestom.server.coordinate.Pos
 import net.minestom.server.coordinate.Vec
 import net.minestom.server.entity.EntityType
+import net.minestom.server.entity.Player
 import net.minestom.server.event.EventDispatcher
+import net.minestom.server.event.instance.AddEntityToInstanceEvent
 import net.minestom.server.event.player.PlayerDisconnectEvent
 import net.minestom.server.event.player.PlayerPacketEvent
 import net.minestom.server.event.player.PlayerResourcePackStatusEvent
@@ -562,6 +567,150 @@ internal class MinestomDialogueHostTest {
         gate.complete(null)
         assertInstanceOf(DialogueStartResult.Started::class.java, done(env, third.result()))
         done(env, fixture.host.closeAsync())
+    }
+
+    @Test
+    fun rendererFactoryFailureBeforeOwnershipAllowsFreshStart(env: Env) {
+        val fixture = Fixture(env)
+        done(env, fixture.host.closeAsync())
+        val factoryCalls = AtomicInteger()
+        val host =
+            MinestomDialogueHost(fixture.options) { _, _, _, _ ->
+                if (factoryCalls.incrementAndGet() == 1)
+                    throw IllegalStateException("factory failed before ownership")
+                DialogueRenderer {
+                    val surface = Surface()
+                    fixture.surfaces.add(surface)
+                    CompletableFuture.completedFuture(surface)
+                }
+            }
+
+        val first = host.begin(fixture.request("factory-failure-first", "v1"))
+        assertEquals(
+            "START_FAILED",
+            (done(env, first.result()) as DialogueStartResult.Rejected).code(),
+        )
+        assertTrue(fixture.surfaces.isEmpty(), "The failing factory acquired no handle")
+        val second = host.begin(fixture.request("factory-failure-second", "v1"))
+        assertInstanceOf(DialogueStartResult.Started::class.java, done(env, second.result()))
+        assertEquals(2, factoryCalls.get())
+        done(env, first.cancel(DialogueEndReason.CANCELLED))
+        done(env, host.closeAsync())
+        assertEquals(1, fixture.surfaces.single().closes)
+    }
+
+    @Test
+    fun hostCloseAfterFactoryFailureConfirmsCleanup(env: Env) {
+        val fixture = Fixture(env)
+        done(env, fixture.host.closeAsync())
+        val host =
+            MinestomDialogueHost(fixture.options) { _, _, _, _ ->
+                throw IllegalStateException("factory failed before ownership")
+            }
+        val first = host.begin(fixture.request("factory-failure-close", "v1"))
+        assertEquals(
+            "START_FAILED",
+            (done(env, first.result()) as DialogueStartResult.Rejected).code(),
+        )
+        done(env, host.closeAsync())
+        assertEquals("CLOSED", first.status().diagnostic)
+    }
+
+    @Test
+    fun inputPreparationFailureWaitsCleanupAcrossCancelledSuccessor(env: Env) {
+        val fixture = Fixture(env)
+        done(env, fixture.host.closeAsync())
+        val cleanup = CompletableFuture<Void>()
+        val surfaces = mutableListOf<Surface>()
+        val host =
+            MinestomDialogueHost(fixture.options) { _, _, _, _ ->
+                object : DialogueRenderer, DialogueInputSource {
+                    override fun effectiveSurface() = "hud"
+
+                    override fun resolveChat(
+                        player: Player,
+                        generation: Long,
+                        token: String,
+                    ): Optional<TargetSnapshot.Target> = Optional.empty()
+
+                    override fun prepare(
+                        request: DialogueRenderer.PresentationRequest
+                    ): CompletionStage<DialogueRenderer.PresentationHandle> {
+                        val surface = Surface()
+                        if (surfaces.isEmpty()) surface.cleanup = cleanup
+                        surfaces.add(surface)
+                        return CompletableFuture.completedFuture(surface)
+                    }
+                }
+            }
+        val spawnAttempts = AtomicInteger()
+        fixture.player.instance.eventNode().addListener(AddEntityToInstanceEvent::class.java) {
+            if (
+                it.entity.entityType == EntityType.INTERACTION &&
+                    spawnAttempts.incrementAndGet() == 1
+            )
+                it.isCancelled = true
+        }
+
+        val first = host.begin(fixture.request("input-failure-first", "v1"))
+        assertTrue(env.tickWhile({ surfaces.firstOrNull()?.closes != 1 }, Duration.ofSeconds(2)))
+        assertFalse(
+            first.result().toCompletableFuture().isDone,
+            "Rejection waits for owned cleanup",
+        )
+        assertTrue(
+            fixture.player.instance.entities.none { it.entityType == EntityType.INTERACTION }
+        )
+        val cancelled = host.begin(fixture.request("input-failure-cancelled", "v1"))
+        val cancellation = cancelled.cancel(DialogueEndReason.CANCELLED)
+        val third = host.begin(fixture.request("input-failure-third", "v1"))
+        repeat(20) { env.tick() }
+        assertFalse(cancellation.toCompletableFuture().isDone)
+        assertFalse(third.result().toCompletableFuture().isDone)
+        assertEquals(1, surfaces.size)
+
+        cleanup.complete(null)
+        assertEquals(
+            "START_FAILED",
+            (done(env, first.result()) as DialogueStartResult.Rejected).code(),
+        )
+        done(env, cancellation)
+        assertEquals(
+            "CANCELLED",
+            (done(env, cancelled.result()) as DialogueStartResult.Rejected).code(),
+        )
+        assertInstanceOf(DialogueStartResult.Started::class.java, done(env, third.result()))
+        assertEquals(2, surfaces.size)
+        assertEquals(2, spawnAttempts.get())
+        done(env, host.closeAsync())
+        assertTrue(surfaces.all { it.closes == 1 })
+        assertTrue(
+            fixture.player.instance.entities.none { it.entityType == EntityType.INTERACTION }
+        )
+    }
+
+    @Test
+    fun cancelledMiddleStartPreservesFailedCleanupBarrier(env: Env) {
+        val fixture = Fixture(env)
+        val first = fixture.host.begin(fixture.request("failed-barrier-a", "v1"))
+        done(env, first.result())
+        val gate = CompletableFuture<Void>()
+        fixture.surfaces.first().cleanup = gate
+        val middle = fixture.host.begin(fixture.request("failed-barrier-b", "v1"))
+        val cancellation = middle.cancel(DialogueEndReason.CANCELLED)
+        val third = fixture.host.begin(fixture.request("failed-barrier-c", "v1"))
+        repeat(20) { env.tick() }
+        assertFalse(cancellation.toCompletableFuture().isDone)
+        assertFalse(third.result().toCompletableFuture().isDone)
+        gate.completeExceptionally(IllegalStateException("uncertain removal"))
+        assertEquals(
+            "CLEANUP_FAILED",
+            (done(env, third.result()) as DialogueStartResult.Rejected).code(),
+        )
+        assertNotNull(done(env, cancellation.handle { _, failure -> failure }))
+        assertNotNull(done(env, fixture.host.closeAsync().handle { _, failure -> failure }))
+        assertEquals(1, fixture.prepares.get())
+        assertEquals(1, fixture.surfaces.single().closes)
     }
 
     @Test
