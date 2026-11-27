@@ -105,25 +105,25 @@ class ChoiceSoundSessionTest {
                 )
             val request =
                 MinestomDialogueRequest(
-                    original.requestId(),
+                    original.requestId,
                     player,
-                    original.hostGeneration(),
+                    original.hostGeneration,
                     content(),
                     DialogueServices(
                         "v1",
                         mapOf("test:available" to ConditionProvider { condition() }),
-                        original.services().actions(),
-                        original.services().outcomes(),
-                        original.services().texts(),
-                        original.services().capabilities(),
+                        original.services.actions(),
+                        original.services.outcomes(),
+                        original.services.texts(),
+                        original.services.capabilities(),
                     ),
-                    original.context(),
-                    original.locale(),
-                    original.preferences(),
-                    original.speakers(),
-                    original.actors(),
-                    original.controls(),
-                    original.openingImpulse(),
+                    original.context,
+                    original.locale,
+                    original.preferences,
+                    original.speakers,
+                    original.actors,
+                    original.controls,
+                    original.openingImpulse,
                 )
             session =
                 MinestomDialogueSession(

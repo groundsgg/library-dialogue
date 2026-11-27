@@ -85,18 +85,18 @@ class TypingSoundSessionTest {
                 )
             val request =
                 gg.grounds.dialogue.minestom.MinestomDialogueRequest(
-                    original.requestId(),
+                    original.requestId,
                     player,
-                    original.hostGeneration(),
-                    original.content(),
-                    original.services(),
-                    original.context(),
-                    original.locale(),
-                    original.preferences(),
-                    original.speakers(),
-                    original.actors(),
-                    original.controls(),
-                    original.openingImpulse(),
+                    original.hostGeneration,
+                    original.content,
+                    original.services,
+                    original.context,
+                    original.locale,
+                    original.preferences,
+                    original.speakers,
+                    original.actors,
+                    original.controls,
+                    original.openingImpulse,
                 )
             session =
                 MinestomDialogueSession(

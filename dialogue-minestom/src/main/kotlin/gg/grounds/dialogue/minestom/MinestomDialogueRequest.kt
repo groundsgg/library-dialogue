@@ -9,84 +9,34 @@ import gg.grounds.dialogue.minestom.input.InputProfile
 import net.minestom.server.entity.Player
 
 @JvmSuppressWildcards
-class MinestomDialogueRequest(
-    private val requestId: String,
-    private val player: Player,
-    private val hostGeneration: Long,
-    private val content: ValidatedDialogue,
-    private val services: DialogueServices,
+class MinestomDialogueRequest
+@JvmOverloads
+constructor(
+    @get:JvmName("requestId") val requestId: String,
+    @get:JvmName("player") val player: Player,
+    @get:JvmName("hostGeneration") val hostGeneration: Long,
+    @get:JvmName("content") val content: ValidatedDialogue,
+    @get:JvmName("services") val services: DialogueServices,
     context: Map<String, ArgumentValue>,
-    private val locale: LocaleContext,
-    private val preferences: PresentationPreferences,
+    @get:JvmName("locale") val locale: LocaleContext,
+    @get:JvmName("preferences") val preferences: PresentationPreferences,
     speakers: Map<String, MinestomSpeakerBinding>,
-    private val actors: ActorPort?,
-    private val controls: InputProfile,
-    private val openingImpulse: Long,
-    private val speechListener: MinestomDialogueSpeechListener,
+    @get:JvmName("actors") val actors: ActorPort?,
+    @get:JvmName("controls") val controls: InputProfile,
+    @get:JvmName("openingImpulse") val openingImpulse: Long,
+    @get:JvmName("speechListener")
+    val speechListener: MinestomDialogueSpeechListener = MinestomDialogueSpeechListener.NO_OP,
 ) {
-    constructor(
-        requestId: String,
-        player: Player,
-        hostGeneration: Long,
-        content: ValidatedDialogue,
-        services: DialogueServices,
-        context: Map<String, ArgumentValue>,
-        locale: LocaleContext,
-        preferences: PresentationPreferences,
-        speakers: Map<String, MinestomSpeakerBinding>,
-        actors: ActorPort?,
-        controls: InputProfile,
-        openingImpulse: Long,
-    ) : this(
-        requestId,
-        player,
-        hostGeneration,
-        content,
-        services,
-        context,
-        locale,
-        preferences,
-        speakers,
-        actors,
-        controls,
-        openingImpulse,
-        MinestomDialogueSpeechListener.NO_OP,
-    )
+    @get:JvmName("context") val context: Map<String, ArgumentValue> = java.util.Map.copyOf(context)
 
-    private val context = java.util.Map.copyOf(context)
-    private val speakers = java.util.Map.copyOf(speakers)
+    @get:JvmName("speakers")
+    val speakers: Map<String, MinestomSpeakerBinding> = java.util.Map.copyOf(speakers)
 
     init {
         require(requestId.isNotBlank() && hostGeneration >= 0 && openingImpulse >= 0) {
             "Invalid start identity"
         }
     }
-
-    fun requestId(): String = requestId
-
-    fun player(): Player = player
-
-    fun hostGeneration(): Long = hostGeneration
-
-    fun content(): ValidatedDialogue = content
-
-    fun services(): DialogueServices = services
-
-    fun context(): Map<String, ArgumentValue> = context
-
-    fun locale(): LocaleContext = locale
-
-    fun preferences(): PresentationPreferences = preferences
-
-    fun speakers(): Map<String, MinestomSpeakerBinding> = speakers
-
-    fun actors(): ActorPort? = actors
-
-    fun controls(): InputProfile = controls
-
-    fun openingImpulse(): Long = openingImpulse
-
-    fun speechListener(): MinestomDialogueSpeechListener = speechListener
 
     override fun equals(other: Any?): Boolean =
         other is MinestomDialogueRequest &&

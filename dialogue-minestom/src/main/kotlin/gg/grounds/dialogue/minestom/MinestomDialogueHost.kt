@@ -140,11 +140,11 @@ private constructor(
     ): DialogueRenderer {
         val targets = SurfaceInputTargets()
         val tokens =
-            ChatInputTokens(request.player(), request.hostGeneration(), targets, clock::nanoTime)
+            ChatInputTokens(request.player, request.hostGeneration, targets, clock::nanoTime)
         val controls =
             DialoguePresenter.Controls(
-                DialoguePresenter.ConfirmAction.valueOf(request.controls().primaryConfirm().name),
-                request.controls().scroll(),
+                DialoguePresenter.ConfirmAction.valueOf(request.controls.primaryConfirm().name),
+                request.controls.scroll(),
             )
         val chat =
             ChatDialogueSurface(
@@ -152,7 +152,7 @@ private constructor(
                 targets,
                 tokens,
                 {
-                    request.player().sendMessage(it)
+                    request.player.sendMessage(it)
                     CompletableFuture.completedFuture(null)
                 },
                 options.labels,
@@ -169,8 +169,8 @@ private constructor(
             }
         val hud =
             HudDialogueSurface(
-                request.player(),
-                request.hostGeneration(),
+                request.player,
+                request.hostGeneration,
                 guard,
                 packs,
                 options.assets,
@@ -179,11 +179,11 @@ private constructor(
                 clock,
                 diagnostics,
             )
-        val lastSpeaker = AtomicReference(request.speakers().values.singleOrNull())
+        val lastSpeaker = AtomicReference(request.speakers.values.singleOrNull())
         val npc =
             NpcDialogueSurface(
-                request.player(),
-                request.hostGeneration(),
+                request.player,
+                request.hostGeneration,
                 guard,
                 packs,
                 options.assets,
@@ -191,8 +191,8 @@ private constructor(
                 targets,
                 clock,
                 { view ->
-                    val node = request.content().definition().nodes()[view.nodeId()]
-                    if (node is Message) lastSpeaker.set(request.speakers()[node.speaker()])
+                    val node = request.content.definition().nodes()[view.nodeId()]
+                    if (node is Message) lastSpeaker.set(request.speakers[node.speaker()])
                     lastSpeaker.get()
                 },
                 diagnostics,
@@ -235,23 +235,22 @@ private constructor(
 
     fun begin(request: MinestomDialogueRequest): MinestomDialogueStart {
         val identity = identity(request)
-        val admissionInstance = request.player().instance
+        val admissionInstance = request.player.instance
         val previous: Ticket?
         val ticket =
             synchronized(lock) {
-                val old = starts[request.requestId()]
+                val old = starts[request.requestId]
                 if (old != null) {
-                    if (old.identity == identity && old.player.get() === request.player())
-                        return old
+                    if (old.identity == identity && old.player.get() === request.player) return old
                     return rejected(request, "START_REQUEST_CONFLICT")
                 }
                 if (closeView != null) return rejected(request, "HOST_CLOSED")
                 if (starts.size >= 65_536) return rejected(request, "START_REGISTER_FULL")
                 val candidate = Ticket(request, identity, ::finished)
-                starts[request.requestId()] = candidate
-                previous = if (admissionInstance == null) null else active[request.player()]
+                starts[request.requestId] = candidate
+                previous = if (admissionInstance == null) null else active[request.player]
                 if (previous != null) candidate.predecessor = previous.closeObservation
-                if (admissionInstance != null) active[request.player()] = candidate
+                if (admissionInstance != null) active[request.player] = candidate
                 candidate
             }
         if (admissionInstance == null) {
@@ -267,8 +266,7 @@ private constructor(
                 return@whenComplete
             }
             if (ticket.cancelled()) return@whenComplete
-            val guard =
-                ConnectionGuard(request.player(), request.hostGeneration(), admissionInstance)
+            val guard = ConnectionGuard(request.player, request.hostGeneration, admissionInstance)
             if (!guard.isCurrent()) {
                 ticket.reject("HOST_CHANGED", null)
                 return@whenComplete
@@ -339,7 +337,7 @@ private constructor(
         private var finished: ((Ticket, MinestomDialogueSession?) -> Unit)?,
     ) : MinestomDialogueStart {
         private val lock = Any()
-        val player = WeakReference(request.player())
+        val player = WeakReference(request.player)
         val token = CancellationToken()
         private val cancelReason = AtomicReference<DialogueEndReason>()
         private val result = CompletableFuture<DialogueStartResult>()
@@ -347,8 +345,7 @@ private constructor(
         val close = CompletableFuture<Void>()
         val closeObservation = close.minimalCompletionStage()
         @Volatile
-        private var status =
-            PresentationStatus(request.preferences().surfaceKey, "", "PREPARING", 0)
+        private var status = PresentationStatus(request.preferences.surfaceKey, "", "PREPARING", 0)
         @Volatile
         var session: MinestomDialogueSession? = null
             private set
@@ -361,7 +358,7 @@ private constructor(
         private var running: DialogueHandle? = null
         private var pendingLocale: LocaleContext? = null
         private var pendingPreferences: PresentationPreferences? = null
-        private var localeRevision = request.locale().revision()
+        private var localeRevision = request.locale.revision()
         private val intentWaiters = ArrayList<CompletableFuture<Void>>()
         var predecessor: CompletionStage<Void> = CompletableFuture.completedFuture(null)
 
@@ -552,26 +549,26 @@ private constructor(
             }
 
         fun identity(request: MinestomDialogueRequest): String {
-            val preferences = request.preferences()
-            val controls = request.controls()
-            val locale = request.locale()
+            val preferences = request.preferences
+            val controls = request.controls
+            val locale = request.locale
             val values =
                 mapOf(
-                    "player" to request.player().uuid.toString(),
-                    "hostGeneration" to request.hostGeneration(),
-                    "content" to request.content().contentPin().sha256,
-                    "author" to request.content().catalog().generation(),
-                    "policy" to request.content().limits().toString(),
-                    "services" to request.services().generation(),
+                    "player" to request.player.uuid.toString(),
+                    "hostGeneration" to request.hostGeneration,
+                    "content" to request.content.contentPin().sha256,
+                    "author" to request.content.catalog().generation(),
+                    "policy" to request.content.limits().toString(),
+                    "services" to request.services.generation(),
                     "speakers" to
-                        request.speakers().mapValues { (_, binding) ->
+                        request.speakers.mapValues { (_, binding) ->
                             mapOf(
                                 "generation" to binding.generation,
                                 "instance" to binding.instance.uuid.toString(),
                             )
                         },
-                    "actors" to (request.actors() != null),
-                    "capabilities" to request.services().capabilities().sorted(),
+                    "actors" to (request.actors != null),
+                    "capabilities" to request.services.capabilities().sorted(),
                     "locale" to listOf(locale.tag(), locale.revision(), locale.fallbackTag()),
                     "preferences" to
                         mapOf(
@@ -580,7 +577,7 @@ private constructor(
                             "reducedMotion" to preferences.reducedMotion,
                             "effects" to preferences.effects,
                         ),
-                    "context" to ContentFingerprint.argumentData(request.context()),
+                    "context" to ContentFingerprint.argumentData(request.context),
                     "controls" to
                         mapOf(
                             "open" to controls.open().map { it.name }.sorted(),
@@ -589,7 +586,7 @@ private constructor(
                             "scroll" to controls.scroll(),
                             "quiet" to controls.quietPeriod().toNanos(),
                         ),
-                    "openingImpulse" to request.openingImpulse(),
+                    "openingImpulse" to request.openingImpulse,
                 )
             return ContentFingerprint.hash(ContentFingerprint.canonicalBytes(values)).sha256
         }
