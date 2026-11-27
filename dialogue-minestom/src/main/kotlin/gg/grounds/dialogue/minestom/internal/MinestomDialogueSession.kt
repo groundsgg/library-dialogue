@@ -859,19 +859,22 @@ class MinestomDialogueSession(
                 inputs.closeAsync().toCompletableFuture(),
             )
             .whenComplete { _, cleanup ->
-                val failure = cleanup ?: initialError
-                val terminal = rejection
+                val terminal =
+                    rejection
+                        ?: initialError?.let {
+                            DialogueStartResult.Rejected("START_FAILED", emptyList())
+                        }
                 if (terminal != null) {
                     ready?.accept(
-                        if (failure == null) terminal
+                        if (cleanup == null) terminal
                         else DialogueStartResult.Rejected("CLEANUP_FAILED", emptyList())
                     )
                 }
-                if (failure == null) scheduler.releaseAfterCleanup()
+                if (cleanup == null) scheduler.releaseAfterCleanup()
                 val callback = closed
                 closed = null
                 ready = null
-                if (failure == null) {
+                if (cleanup == null) {
                     request = null
                     renderer = null
                     view = null
@@ -880,7 +883,7 @@ class MinestomDialogueSession(
                     sampledSpeaker = null
                     leave = null
                 }
-                callback?.accept(this, failure)
+                callback?.accept(this, cleanup)
             }
     }
 }
