@@ -11,9 +11,11 @@ import gg.grounds.dialogue.core.runtime.DialogueEndReason
 import gg.grounds.dialogue.core.runtime.DialogueFailure
 import gg.grounds.dialogue.core.runtime.DialogueView
 import gg.grounds.dialogue.core.runtime.PresentationPreferences
+import gg.grounds.dialogue.core.validation.ContentFingerprint
 import gg.grounds.dialogue.presentation.internal.DialogueFrameComposer
-import gg.grounds.dialogue.presentation.internal.profilePin
+import gg.grounds.dialogue.presentation.internal.GraphicalFrameInput
 import java.time.Duration
+import java.util.Locale
 import java.util.concurrent.CancellationException
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionStage
@@ -117,14 +119,85 @@ class DialoguePresenter : DialogueRenderer {
         preferences: PresentationPreferences,
         choiceStart: Int?,
     ): WidgetFrame {
+        val profile = profile(key)
+        if (profile.semanticOnly) return WidgetFrame(view, emptyList(), "semantic", "semantic")
+        val layout = profile.resolveLayout(preferences)
+        val metrics = requireNotNull(profile.metrics)
+        val reasons = linkedMapOf<String, String>()
+        view
+            .choices()
+            .filter { it.availability != DialogueView.Availability.AVAILABLE }
+            .forEach { reasons[it.id] = checkNotNull(it.unavailableReason) }
+        val ui =
+            requireNotNull(
+                labels.resolve(
+                    UiLabelSource.LabelRequest(
+                        view.localeTag(),
+                        view.hint(),
+                        controls,
+                        view.notice(),
+                        reasons,
+                        metrics.supportsControlGlyphs(),
+                    )
+                )
+            )
+        val theme = requireNotNull(profile.theme)
         return DialogueFrameComposer.compose(
-            view,
-            profile(key),
-            preferences,
-            controls,
-            labels,
-            choiceStart,
+            GraphicalFrameInput(
+                view,
+                layout,
+                theme,
+                metrics,
+                ui,
+                if (preferences.reducedMotion()) Duration.ZERO else theme.transition(),
+                choiceStart,
+            )
         )
+    }
+
+    /**
+     * Computes the same canonical profile pin for surface preparation regardless of layout style.
+     */
+    private fun profilePin(
+        profile: SurfaceProfile,
+        preferences: PresentationPreferences,
+    ): String {
+        if (profile.semanticOnly) return "semantic"
+        val layoutProfile = profile.resolveLayout(preferences)
+        val theme = requireNotNull(profile.theme)
+        val layout = linkedMapOf<String, Any>()
+        layout["key"] = layoutProfile.key
+        if (layoutProfile.style != LayoutProfile.Style.PANELS)
+            layout["style"] = layoutProfile.style.name
+        layout["width"] = layoutProfile.width
+        layout["choiceWidth"] = layoutProfile.choiceWidth
+        layout["padding"] = layoutProfile.padding
+        if (layoutProfile.choicePadding != layoutProfile.padding)
+            layout["choicePadding"] = layoutProfile.choicePadding
+        layout["maxTextLines"] = layoutProfile.maxTextLines
+        layout["choiceCapacity"] = layoutProfile.choiceCapacity
+        layout["maxChoiceLines"] = layoutProfile.maxChoiceLines
+        layout["placement"] = layoutProfile.placement.name.lowercase(Locale.ROOT)
+        layout["gap"] = layoutProfile.gap
+        if (layoutProfile.columnGap != layoutProfile.gap)
+            layout["columnGap"] = layoutProfile.columnGap
+        if (layoutProfile.navigationButtons) layout["navigationButtons"] = true
+        return ContentFingerprint.hash(
+                ContentFingerprint.canonicalBytes(
+                    mapOf(
+                        "layout" to layout,
+                        "theme" to
+                            mapOf(
+                                "id" to theme.id(),
+                                "colours" to theme.colours(),
+                                "selectedScale" to theme.selectedScale(),
+                                "transitionNanos" to theme.transition().toNanos(),
+                            ),
+                        "font" to requireNotNull(profile.metrics).pin(),
+                    )
+                )
+            )
+            .sha256
     }
 
     override fun prepare(

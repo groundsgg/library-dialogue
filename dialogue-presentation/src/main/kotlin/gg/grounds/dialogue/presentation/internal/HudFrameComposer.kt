@@ -1,16 +1,13 @@
 package gg.grounds.dialogue.presentation.internal
 
 import gg.grounds.dialogue.core.runtime.DialogueView
-import gg.grounds.dialogue.core.runtime.PresentationPreferences
 import gg.grounds.dialogue.core.text.Graphemes
 import gg.grounds.dialogue.core.text.ResolvedText
 import gg.grounds.dialogue.presentation.ChoiceViewport
 import gg.grounds.dialogue.presentation.DialoguePresenter.FallbackRequired
-import gg.grounds.dialogue.presentation.DialoguePresenter.SurfaceProfile
 import gg.grounds.dialogue.presentation.FontMetrics
 import gg.grounds.dialogue.presentation.LayoutProfile
 import gg.grounds.dialogue.presentation.TextLayout
-import gg.grounds.dialogue.presentation.UiLabelSource
 import gg.grounds.dialogue.presentation.WidgetFrame
 import gg.grounds.dialogue.presentation.WidgetFrame.Kind
 import gg.grounds.dialogue.presentation.WidgetFrame.Rect
@@ -22,14 +19,11 @@ import kotlin.math.round
 
 /** Preserves the prototype HUD's fixed ten-pixel raster and its chrome geometry. */
 internal object HudFrameComposer {
-    fun compose(
-        view: DialogueView,
-        profile: SurfaceProfile,
-        layout: LayoutProfile,
-        preferences: PresentationPreferences,
-        ui: UiLabelSource.UiLabels,
-    ): WidgetFrame {
-        val metrics = requireNotNull(profile.metrics)
+    fun compose(input: GraphicalFrameInput): WidgetFrame {
+        val view = input.view
+        val layout = input.layout
+        val metrics = input.metrics
+        val ui = input.ui
         if (
             metrics.lineHeight() != 10.0 ||
                 layout.choiceCapacity != 3 ||
@@ -53,8 +47,8 @@ internal object HudFrameComposer {
                 false,
                 true,
                 null,
-                profile,
-                preferences,
+                input.theme,
+                input.transition,
             )
         val name = ResolvedText(view.speaker(), view.localeTag())
         val nameLayout = layout(name, metrics, layout.width - 18, 1)
@@ -71,8 +65,8 @@ internal object HudFrameComposer {
                 false,
                 true,
                 null,
-                profile,
-                preferences,
+                input.theme,
+                input.transition,
             )
         val window = ChoiceViewport().window(view.choices(), view.selectedChoiceId(), 3)
         val choiceLabels = ArrayList<ResolvedText>()
@@ -148,8 +142,8 @@ internal object HudFrameComposer {
                     choice.id == view.selectedChoiceId(),
                     choice.availability == DialogueView.Availability.AVAILABLE,
                     choice.id,
-                    profile,
-                    preferences,
+                    input.theme,
+                    input.transition,
                 )
         }
         val hint = ResolvedText(ui.hint(), view.localeTag())
@@ -167,8 +161,8 @@ internal object HudFrameComposer {
                 false,
                 true,
                 null,
-                profile,
-                preferences,
+                input.theme,
+                input.transition,
             )
         if (ui.notice().isNotEmpty()) {
             val notice = ResolvedText(ui.notice(), view.localeTag())
@@ -191,8 +185,8 @@ internal object HudFrameComposer {
                     false,
                     true,
                     null,
-                    profile,
-                    preferences,
+                    input.theme,
+                    input.transition,
                 )
         }
         val chrome =
@@ -219,7 +213,7 @@ internal object HudFrameComposer {
             view,
             widgets,
             metrics.pin(),
-            requireNotNull(profile.theme),
+            input.theme,
             chrome,
             scroll,
         )
