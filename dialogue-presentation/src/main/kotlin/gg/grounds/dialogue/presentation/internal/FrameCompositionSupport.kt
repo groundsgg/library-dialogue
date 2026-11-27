@@ -1,20 +1,16 @@
 package gg.grounds.dialogue.presentation.internal
 
-import gg.grounds.dialogue.core.runtime.PresentationPreferences
 import gg.grounds.dialogue.core.text.ResolvedText
-import gg.grounds.dialogue.core.validation.ContentFingerprint
 import gg.grounds.dialogue.presentation.ChoiceViewport
 import gg.grounds.dialogue.presentation.DialoguePresenter.FallbackRequired
-import gg.grounds.dialogue.presentation.DialoguePresenter.SurfaceProfile
+import gg.grounds.dialogue.presentation.DialogueTheme
 import gg.grounds.dialogue.presentation.FontMetrics
-import gg.grounds.dialogue.presentation.LayoutProfile
 import gg.grounds.dialogue.presentation.TextLayout
 import gg.grounds.dialogue.presentation.WidgetFrame
 import gg.grounds.dialogue.presentation.WidgetFrame.Kind
 import gg.grounds.dialogue.presentation.WidgetFrame.Rect
 import gg.grounds.dialogue.presentation.WidgetFrame.Widget
 import java.time.Duration
-import java.util.Locale
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
@@ -64,8 +60,8 @@ internal fun widget(
     selected: Boolean,
     enabled: Boolean,
     choiceId: String?,
-    profile: SurfaceProfile,
-    preferences: PresentationPreferences,
+    theme: DialogueTheme,
+    transition: Duration,
 ): Widget =
     Widget(
         id,
@@ -77,50 +73,7 @@ internal fun widget(
         revealed,
         selected,
         enabled,
-        if (selected) requireNotNull(profile.theme).selectedScale() else 1.0,
-        if (preferences.reducedMotion()) Duration.ZERO
-        else requireNotNull(profile.theme).transition(),
+        if (selected) theme.selectedScale() else 1.0,
+        transition,
         choiceId,
     )
-
-/** Computes the same canonical profile pin for surface preparation regardless of layout style. */
-internal fun profilePin(
-    profile: SurfaceProfile,
-    preferences: PresentationPreferences,
-): String {
-    if (profile.semanticOnly) return "semantic"
-    val layoutProfile = profile.resolveLayout(preferences)
-    val theme = requireNotNull(profile.theme)
-    val layout = linkedMapOf<String, Any>()
-    layout["key"] = layoutProfile.key
-    if (layoutProfile.style != LayoutProfile.Style.PANELS)
-        layout["style"] = layoutProfile.style.name
-    layout["width"] = layoutProfile.width
-    layout["choiceWidth"] = layoutProfile.choiceWidth
-    layout["padding"] = layoutProfile.padding
-    if (layoutProfile.choicePadding != layoutProfile.padding)
-        layout["choicePadding"] = layoutProfile.choicePadding
-    layout["maxTextLines"] = layoutProfile.maxTextLines
-    layout["choiceCapacity"] = layoutProfile.choiceCapacity
-    layout["maxChoiceLines"] = layoutProfile.maxChoiceLines
-    layout["placement"] = layoutProfile.placement.name.lowercase(Locale.ROOT)
-    layout["gap"] = layoutProfile.gap
-    if (layoutProfile.columnGap != layoutProfile.gap) layout["columnGap"] = layoutProfile.columnGap
-    if (layoutProfile.navigationButtons) layout["navigationButtons"] = true
-    return ContentFingerprint.hash(
-            ContentFingerprint.canonicalBytes(
-                mapOf(
-                    "layout" to layout,
-                    "theme" to
-                        mapOf(
-                            "id" to theme.id(),
-                            "colours" to theme.colours(),
-                            "selectedScale" to theme.selectedScale(),
-                            "transitionNanos" to theme.transition().toNanos(),
-                        ),
-                    "font" to requireNotNull(profile.metrics).pin(),
-                )
-            )
-        )
-        .sha256
-}

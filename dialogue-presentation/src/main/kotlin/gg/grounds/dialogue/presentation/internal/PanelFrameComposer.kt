@@ -1,13 +1,10 @@
 package gg.grounds.dialogue.presentation.internal
 
 import gg.grounds.dialogue.core.runtime.DialogueView
-import gg.grounds.dialogue.core.runtime.PresentationPreferences
 import gg.grounds.dialogue.core.text.Graphemes
 import gg.grounds.dialogue.core.text.ResolvedText
 import gg.grounds.dialogue.presentation.ChoiceViewport
-import gg.grounds.dialogue.presentation.DialoguePresenter.SurfaceProfile
 import gg.grounds.dialogue.presentation.LayoutProfile
-import gg.grounds.dialogue.presentation.UiLabelSource
 import gg.grounds.dialogue.presentation.WidgetFrame
 import gg.grounds.dialogue.presentation.WidgetFrame.Kind
 import gg.grounds.dialogue.presentation.WidgetFrame.Rect
@@ -17,15 +14,12 @@ import kotlin.math.max
 
 /** Lays out generic PANELS; selection growth leaves the choice hit rectangles unchanged. */
 internal object PanelFrameComposer {
-    fun compose(
-        view: DialogueView,
-        profile: SurfaceProfile,
-        layout: LayoutProfile,
-        preferences: PresentationPreferences,
-        ui: UiLabelSource.UiLabels,
-        choiceStart: Int?,
-    ): WidgetFrame {
-        val metrics = requireNotNull(profile.metrics)
+    fun compose(input: GraphicalFrameInput): WidgetFrame {
+        val view = input.view
+        val layout = input.layout
+        val metrics = input.metrics
+        val ui = input.ui
+        val choiceStart = input.choiceStart
         val widgets = ArrayList<Widget>()
         val text = ResolvedText(view.text(), view.localeTag())
         val body = layout(text, metrics, layout.width - 2 * layout.padding, layout.maxTextLines)
@@ -43,8 +37,8 @@ internal object PanelFrameComposer {
                 false,
                 true,
                 null,
-                profile,
-                preferences,
+                input.theme,
+                input.transition,
             )
         val name = ResolvedText(view.speaker(), view.localeTag())
         val nameLayout = layout(name, metrics, layout.width - 2 * layout.padding, 1)
@@ -65,8 +59,8 @@ internal object PanelFrameComposer {
                 false,
                 true,
                 null,
-                profile,
-                preferences,
+                input.theme,
+                input.transition,
             )
         val window =
             ChoiceViewport()
@@ -114,8 +108,7 @@ internal object PanelFrameComposer {
             }
         }
         val cardHeight = maxLabelHeight + 2 * layout.choicePadding
-        val growth =
-            ceil(layout.choiceWidth * (requireNotNull(profile.theme).selectedScale() - 1) / 2)
+        val growth = ceil(layout.choiceWidth * (input.theme.selectedScale() - 1) / 2)
         val columnGap = layout.columnGap + growth
         val x =
             when (layout.placement) {
@@ -142,8 +135,8 @@ internal object PanelFrameComposer {
                     choice.id == view.selectedChoiceId(),
                     choice.availability == DialogueView.Availability.AVAILABLE,
                     choice.id,
-                    profile,
-                    preferences,
+                    input.theme,
+                    input.transition,
                 )
         }
         val hintText = ResolvedText(ui.hint(), view.localeTag())
@@ -174,8 +167,8 @@ internal object PanelFrameComposer {
                 false,
                 true,
                 null,
-                profile,
-                preferences,
+                input.theme,
+                input.transition,
             )
         if (ui.notice().isNotEmpty()) {
             val statusText = ResolvedText(ui.notice(), view.localeTag())
@@ -197,8 +190,8 @@ internal object PanelFrameComposer {
                     false,
                     true,
                     null,
-                    profile,
-                    preferences,
+                    input.theme,
+                    input.transition,
                 )
         }
         var scroll =
@@ -242,7 +235,7 @@ internal object PanelFrameComposer {
             view,
             widgets,
             metrics.pin(),
-            requireNotNull(profile.theme),
+            input.theme,
             null,
             scroll,
         )
