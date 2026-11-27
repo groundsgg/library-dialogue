@@ -1,4 +1,8 @@
 import importlib.util
+import contextlib
+import io
+import shutil
+from unittest.mock import patch
 import os
 import hashlib
 import json
@@ -79,7 +83,85 @@ class CompatibilityTests(unittest.TestCase):
         tool = self.tool()
         with self.assertRaises(ValueError): tool.validate_baseline({'commit':'wrong'})
 
+class FrozenConsumerInputsTests(unittest.TestCase):
+    def test_invalid_frozen_inputs_rejected_before_any_compile(self):
+        import check_dialogue_compatibility as tool
+        root = TOOL.parent.parent
+        snapshot = Path('compatibility/consumers/e299b88-v1')
+        cases = ('missing_manifest', 'invalid_manifest', 'wrong_source', 'wrong_target',
+                 'wrong_version', 'changed_hash', 'missing_file', 'changed_source',
+                 'changed_harness', 'extra_file', 'symlink')
+        for case in cases:
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as temporary:
+                mirror = Path(temporary)
+                (mirror / '.evidence/compatibility-baseline-maven').mkdir(parents=True)
+                (mirror / 'fixtures').symlink_to(root / 'fixtures', target_is_directory=True)
+                frozen = mirror / snapshot
+                shutil.copytree(root / snapshot, frozen)
+                manifest = frozen / 'manifest.json'
+                source = frozen / 'java-consumer/src/main/java/example/Consumer.java'
+                data = json.loads(manifest.read_text())
+                if case == 'missing_manifest': manifest.unlink()
+                elif case == 'invalid_manifest': manifest.write_text('{')
+                elif case == 'wrong_source':
+                    data['source_commit'] = '0' * 40
+                    manifest.write_text(json.dumps(data))
+                elif case == 'wrong_target':
+                    data['legacy_sdk']['commit'] = '0' * 40
+                    manifest.write_text(json.dumps(data))
+                elif case == 'wrong_version':
+                    data['legacy_sdk']['version'] = '1.8.0'
+                    manifest.write_text(json.dumps(data))
+                elif case == 'changed_hash':
+                    data['files']['java-consumer/src/main/java/example/Consumer.java'] = '0' * 64
+                    manifest.write_text(json.dumps(data))
+                elif case == 'missing_file': source.unlink()
+                elif case == 'changed_source': source.write_text(source.read_text() + '\n// changed\n')
+                elif case == 'changed_harness':
+                    harness = frozen / 'java-consumer/build.gradle.kts'
+                    harness.write_text(harness.read_text() + '\n// changed\n')
+                elif case == 'extra_file': (frozen / 'java-consumer/init.gradle').write_text('unexpected')
+                elif case == 'symlink':
+                    outside = mirror / 'external.java'
+                    source.rename(outside)
+                    source.symlink_to(outside)
+                with patch.object(tool, 'ROOT', mirror), patch.object(
+                    tool.subprocess, 'run', side_effect=AssertionError('Gradle ran before validation')
+                ):
+                    with self.assertRaisesRegex(ValueError, 'FROZEN_CONSUMER_'):
+                        tool.binary_consumers(mirror / 'unused-repo', 'candidate')
+
+
 class BinaryConsumerTests(unittest.TestCase):
+    def test_current_candidate_sources_do_not_change_historical_binary_gate(self):
+        import check_dialogue_compatibility as tool
+        root = TOOL.parent.parent
+        with tempfile.TemporaryDirectory(dir=root / '.evidence') as temporary:
+            mirror = Path(temporary)
+            (mirror / '.evidence').mkdir()
+            (mirror / '.evidence/compatibility-baseline-maven').symlink_to(
+                root / '.evidence/compatibility-baseline-maven', target_is_directory=True
+            )
+            (mirror / 'gradlew').symlink_to(root / 'gradlew')
+            # These current sources cannot compile against the archived SDK. A historical
+            # binary check must still execute the separately frozen, qualified consumers.
+            for language, extension in (('java', 'java'), ('kotlin', 'kt')):
+                current = mirror / 'fixtures' / (language + '-consumer')
+                shutil.copytree(root / 'fixtures' / (language + '-consumer'), current,
+                                ignore=shutil.ignore_patterns('build', '.gradle', '.kotlin'))
+                source = current / 'src/main' / language / 'example' / ('Consumer.' + extension)
+                source.write_text('package example; import unavailable.future.sdk.FutureApi;')
+            snapshot = Path('compatibility/consumers/e299b88-v1')
+            if (root / snapshot).exists(): shutil.copytree(root / snapshot, mirror / snapshot)
+            output = io.StringIO()
+            with patch.object(tool, 'ROOT', mirror), contextlib.redirect_stdout(output):
+                try:
+                    tool.binary_consumers(root / '.evidence/maven', '0.1.0-SNAPSHOT')
+                except subprocess.CalledProcessError as failure:
+                    self.fail(failure.stdout + failure.stderr)
+            self.assertIn('CONSUMER_OK java', output.getvalue())
+            self.assertIn('CONSUMER_OK kotlin', output.getvalue())
+            self.assertIn('BINARY_COMPATIBILITY_OK', output.getvalue())
     def test_precompiledConsumerRejectsChangedCandidateMethod(self):
         import sys
         sys.path.insert(0,str(TOOL.parent))
