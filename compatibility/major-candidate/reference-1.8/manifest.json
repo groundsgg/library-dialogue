@@ -1,0 +1,72 @@
+{
+  "archiveSha256": "14d9c84f456585f9fe2593ebede5c29af0954630bc7838a59913bad8397ed872",
+  "files": {
+    "dialogue-cli.json": "87570aa2802caeb77a7355ca902f0e777e634cf14bc790b5d0e3a05f18e8bf02",
+    "dialogue-core.json": "0bacb7265bf87740037a5c8ab37af3551fa3ea34a73947667fee2efbe2b91d5c",
+    "dialogue-json.json": "deae750020681beaa40c05bef0a499eb00f9de2e959672ef78f7a65d64eabc88",
+    "dialogue-minestom.json": "35fe668963619a62dea884c8468c6a1f564bd2060a2598cd463db434ebd013b1",
+    "dialogue-presentation.json": "26536b7f2345913b058f9de80b2ea5dbe1e01a341164b25e2c78f520bf1197ce",
+    "dialogue-testkit.json": "b21f5b38b3dff4c0087a758543dff872cc5cb9091c1ac436c4ba569f0d3be2e3"
+  },
+  "format": 1,
+  "java": 25,
+  "legacyFiles": {
+    "api/dialogue-cli.txt": "b8f2b5a808d92174106db0175d6a7b73cd74435587b8883e60c21158857b77b4",
+    "api/dialogue-core.txt": "84833935a3c3ce662ab4ecbc0021b0d37207c7c70c50123fde5a174117759769",
+    "api/dialogue-json.txt": "db394c95161605c6654f9f69aa1e19c28a251b23bc5ff2c154ea63ab5297b602",
+    "api/dialogue-minestom.txt": "7724443af5fcbfb32d7835ca803ce4da8bf65295efa391973355088aa4a9ae9a",
+    "api/dialogue-presentation.txt": "8f4d2579ede74d3b90fbbc3fd634a842ec3ff5c742c66a124810720a9b89db84",
+    "api/dialogue-testkit.txt": "1ebb7870c3e914bf9d92be8e8da3f26f2058f786a222cddef0beb3d7ac3a05d7",
+    "baseline.json": "031ec42fd98db862bc6f0e8da7c2a505bd49b0c83a23af30582bf6bc41f12d4c",
+    "consumers/e299b88-v1/java-consumer/build.gradle.kts": "dc13b9c826e847beecc1b551dc9cabd2466dcd7bc9f74841a00af40bf71edc85",
+    "consumers/e299b88-v1/java-consumer/settings.gradle.kts": "9d5b8be75757128e1033e57b20cb9416a19ac2cab2c3db30b9c7515333084da1",
+    "consumers/e299b88-v1/java-consumer/src/main/java/example/Consumer.java": "88eaa9f2d6de924e43cbfd1eb0fcdc22887a62f117d01717ea4e79068af79da7",
+    "consumers/e299b88-v1/kotlin-consumer/build.gradle.kts": "f3d398832f848bb04bab4bb2d981e65f6a3c68848b437367a7d4e0ad1bbf6971",
+    "consumers/e299b88-v1/kotlin-consumer/settings.gradle.kts": "5600c1b8850842cfc95f8368f78b7c16e0486accc25121a63ac7978f7bc74be5",
+    "consumers/e299b88-v1/kotlin-consumer/src/main/kotlin/example/Consumer.kt": "ceae1031dc3256aea7f9fe668e82e12e892989a74a3d3a0da0e0e779eeae244c",
+    "consumers/e299b88-v1/manifest.json": "8fe1774803de03d9710dc8f6377eb4f932c759d2841d2860b8cb6f2028e5252a",
+    "tooling-baseline.json": "c4f373127cebd40a3ffbb57ba5c1e3769ab9a24159db5c7dc3759605fe438792"
+  },
+  "modules": {
+    "dialogue-cli": {
+      "inventoryTypes": 19,
+      "jarSha256": "19f864f4920a7cc1348dbcc038850d1b4edd8306bdb02b5555475277703463e4",
+      "rawTypes": 20
+    },
+    "dialogue-core": {
+      "inventoryTypes": 105,
+      "jarSha256": "a0d8c9a585f80f1174acf19821adb179d3f422eb45f95c9be62362d3bb29fa18",
+      "rawTypes": 105
+    },
+    "dialogue-json": {
+      "inventoryTypes": 10,
+      "jarSha256": "7f5d1cc248aa681b574c9a5fca63b37f12bb787d06804ed346a91206cda462e4",
+      "rawTypes": 11
+    },
+    "dialogue-minestom": {
+      "inventoryTypes": 83,
+      "jarSha256": "221a17fbd197fcda20a4870e89b37659bdb28ecbc7de57904f1112c0605d8a39",
+      "rawTypes": 84
+    },
+    "dialogue-presentation": {
+      "inventoryTypes": 49,
+      "jarSha256": "6b753dc9a1ed6c3cd68094d634367718469a7eccfdc1d82027bc74f4f4033d8c",
+      "rawTypes": 52
+    },
+    "dialogue-testkit": {
+      "inventoryTypes": 9,
+      "jarSha256": "f9a9bcfc516aa429891f34b065a2c4f6ee98419be6927e0fc8ab899413701ad6",
+      "rawTypes": 9
+    }
+  },
+  "origin": "immutable git archive; isolated local Gradle publication; not downloaded release bytes",
+  "policy": "jvm-conservative-v1-synthetic-accessors-only",
+  "publicationVersion": "0.1.0-SNAPSHOT",
+  "schemas": {
+    "schemas/dialogue-v1.schema.json": "7082cc0823fba8cf009eecb0e97f813736cfd71440739824ad2847edb4d67c6d",
+    "schemas/host-catalog-v1.schema.json": "7e7b10ae22f3d839d7d02b37241e1fde660d0612d2d61e19bfad730381650529",
+    "schemas/texts-v1.schema.json": "7889d42943e3793f8a6a62f8be3424069f21ac66cbdd71e1ea816a71f1350aaa"
+  },
+  "sourceCommit": "f6772e81efd070cf8ca52a770061da5a90b67bf5",
+  "sourceRelease": "1.8.0"
+}

@@ -21,6 +21,7 @@ jobs:
       - run: ./gradlew check publishAllPublicationsToReviewRepository :dialogue-cli:distZip
       - run: python3 tools/verify_public_artifacts.py
       - run: python3 tools/check_dialogue_compatibility.py --check --repository .evidence/maven --version 0.1.0-SNAPSHOT
+      - run: python3 tools/check_dialogue_major_candidate.py --check --repository .evidence/maven --version 0.1.0-SNAPSHOT
       - run: python3 -m unittest discover -s tools -p '*_test.py'
       - name: Verify fresh local Maven and ZIP consumers
         run: >-

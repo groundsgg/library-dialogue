@@ -30,6 +30,71 @@ The existing API, schema and tooling baseline files remain authoritative and
 unchanged. Any future accepted consumer snapshot must use a new versioned
 directory with reviewed provenance and integrity; do not regenerate this snapshot
 from the current fixtures. An intentionally incompatible 2.0 candidate can fail
-these legacy gates. A future major-version candidate mode is not implemented by
-this fix, and these inputs do not authorize accepting a new API or schema
-baseline.
+these legacy gates. The separate development major candidate audit below does
+not authorize accepting a new API or schema baseline.
+
+## Explicit development major candidate
+
+`python3 tools/check_dialogue_major_candidate.py --check --repository .evidence/maven --version 0.1.0-SNAPSHOT`
+adds a separate, explicitly invoked target-major-2 audit. CI runs it alongside the
+existing strict checker. The initially empty reviewed break manifest does not
+relax any current binary, source, schema, artifact or consumer gate. Activating a
+future incompatible major mode requires an explicit reviewed CI change; no file
+or branch name activates it automatically.
+
+`major-candidate/reference-1.8/manifest.json` is pinned by SHA-256 in the checker.
+It binds all six source-derived reference inventories, original JAR hashes,
+immutable source commit `f6772e81efd070cf8ca52a770061da5a90b67bf5`, source release
+metadata `1.8.0`, local coordinates `0.1.0-SNAPSHOT`, Java 25, the source archive
+hash, unchanged historical floor files and frozen consumer provenance. These are
+local archive builds, not downloaded release bytes. Each inventory preserves raw
+JVM signatures, actual class/member flags and the filtered comparison surface.
+Missing, corrupted or truncated reference files fail before candidate JARs are
+read. Reproduce into a scratch directory with Java 25:
+
+```sh
+python3 tools/capture_dialogue_major_reference.py --source /path/to/isolated-source --output /path/to/reference-output
+```
+
+Capture verifies and extracts the immutable source archive, builds local review
+publications and writes evidence. It never updates the checker's trust anchor.
+The current development inventory is explicitly labeled as such in
+`major-candidate/candidate.json`; regenerate it for a reviewed candidate change:
+
+```sh
+python3 tools/check_dialogue_major_candidate.py --capture-candidate compatibility/major-candidate/candidate.json --repository .evidence/maven --version 0.1.0-SNAPSHOT --evidence .evidence/major-candidate-raw
+```
+
+Every actual candidate JAR must match the complete recorded module inventory,
+including additions. Additions are recorded API, not binary breaks. Both the
+full six-module 1.8 reference and the older historical floors are audited. V1
+schema hashes must remain exact and cannot be excepted.
+
+`major-candidate/breaks.json` binds target major 2 to the reference commit and
+manifest hash. Each reviewed `changes` entry requires `module`, `owner`, `kind`
+(`type`, `header`, `member`, or `permitted`), exact `before`, exact `after`,
+`rationale` and `migration`. Member values are two-item arrays containing the
+exact declaration and `descriptor: ...` line. A removed member/type uses
+`after: null`; its migration identifies the replacement. An optional member
+replacement must identify an exact candidate declaration/descriptor that exists;
+there is no overload-name inference. A changed declaration with the same exact
+JVM member name and descriptor requires its exact actual `after` declaration;
+it cannot be approved as a removal. Header and permitted-subclass changes must
+match both exact values. A type removal includes its full original inventory.
+Unknown fields/kinds, duplicate JSON keys or entries, unused entries and any
+unlisted differences fail. Patterns and prefixes never match changes.
+
+The comparison keeps the legacy explicit record-kind exceptions and redundant
+method-final normalization on final classes. It conservatively retains Kotlin
+JVM-public declarations outside excluded `.internal` packages, Kotlin default
+argument masks, `DefaultConstructorMarker` overloads, generic bridges,
+companions, `DefaultImpls` and ordinary dollar-named types. Synthetic generated
+types are excluded only using actual class `ACC_SYNTHETIC`. A compiler accessor
+is excluded only when its actual method flags contain `ACC_SYNTHETIC` **and** its
+name starts with `access$`; an ordinary user method with that name remains.
+Raw evidence retains every filtered declaration.
+
+This development gate neither accepts a 2.0 release baseline nor proves full
+Kotlin source compatibility or supported SPI classification. Excluded-package
+leaks still require the later supported-SPI gate. Historical precompiled consumer
+checks and current-source consumer checks remain separate and active.

@@ -1,0 +1,9 @@
+{
+  "changes": [],
+  "format": 1,
+  "reference": {
+    "commit": "f6772e81efd070cf8ca52a770061da5a90b67bf5",
+    "manifestSha256": "52c5616f41d6180de67552bcf9798556cb3ff453faee8cfa70c82d13e83462c0"
+  },
+  "targetMajor": 2
+}
