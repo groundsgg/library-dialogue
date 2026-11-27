@@ -134,15 +134,35 @@ class FrozenConsumerInputsTests(unittest.TestCase):
 
 class BinaryConsumerTests(unittest.TestCase):
     def test_current_candidate_sources_do_not_change_historical_binary_gate(self):
-        import check_dialogue_compatibility as tool
         root = TOOL.parent.parent
+        self.assert_current_fixture_independence(root, root / '.evidence/maven')
+
+    def test_current_candidate_sources_work_without_legacy_cache(self):
+        root = TOOL.parent.parent
+        with tempfile.TemporaryDirectory(dir=root / '.evidence') as temporary:
+            cold_root = Path(temporary)
+            (cold_root / '.evidence').mkdir()
+            (cold_root / 'gradlew').symlink_to(root / 'gradlew')
+            (cold_root / '.git').symlink_to(root / '.git')
+            (cold_root / 'fixtures').symlink_to(root / 'fixtures', target_is_directory=True)
+            snapshot = Path('compatibility/consumers/e299b88-v1')
+            shutil.copytree(root / snapshot, cold_root / snapshot)
+            # A fresh CI checkout has candidate publications but no legacy Maven cache.
+            self.assert_current_fixture_independence(cold_root, root / '.evidence/maven')
+
+    def assert_current_fixture_independence(self, root, repository):
+        import check_dialogue_compatibility as tool
         with tempfile.TemporaryDirectory(dir=root / '.evidence') as temporary:
             mirror = Path(temporary)
             (mirror / '.evidence').mkdir()
-            (mirror / '.evidence/compatibility-baseline-maven').symlink_to(
-                root / '.evidence/compatibility-baseline-maven', target_is_directory=True
-            )
+            legacy_cache = root / '.evidence/compatibility-baseline-maven'
+            if legacy_cache.is_dir():
+                (mirror / '.evidence/compatibility-baseline-maven').symlink_to(
+                    legacy_cache, target_is_directory=True
+                )
             (mirror / 'gradlew').symlink_to(root / 'gradlew')
+            # git archive must see this mirror as a checkout root on the capture path.
+            (mirror / '.git').symlink_to(root / '.git')
             # These current sources cannot compile against the archived SDK. A historical
             # binary check must still execute the separately frozen, qualified consumers.
             for language, extension in (('java', 'java'), ('kotlin', 'kt')):
@@ -156,7 +176,7 @@ class BinaryConsumerTests(unittest.TestCase):
             output = io.StringIO()
             with patch.object(tool, 'ROOT', mirror), contextlib.redirect_stdout(output):
                 try:
-                    tool.binary_consumers(root / '.evidence/maven', '0.1.0-SNAPSHOT')
+                    tool.binary_consumers(repository, '0.1.0-SNAPSHOT')
                 except subprocess.CalledProcessError as failure:
                     self.fail(failure.stdout + failure.stderr)
             self.assertIn('CONSUMER_OK java', output.getvalue())
