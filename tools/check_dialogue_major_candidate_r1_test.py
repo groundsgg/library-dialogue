@@ -23,7 +23,8 @@ class R1Tests(unittest.TestCase):
         cls.temp = tempfile.TemporaryDirectory()
         cls.root = Path(cls.temp.name)
         cls.jars = {}
-        cache = Path.home() / '.gradle/caches/modules-2/files-2.1'
+        gradle_home = Path(os.environ.get('GRADLE_USER_HOME', Path.home() / '.gradle'))
+        cache = gradle_home / 'caches/modules-2/files-2.1'
         dependencies = [('org.jetbrains.kotlin', name, '2.4.0') for name in (
             'kotlin-compiler-embeddable', 'kotlin-build-tools-api', 'kotlin-stdlib',
             'kotlin-script-runtime', 'kotlin-daemon-embeddable')]
