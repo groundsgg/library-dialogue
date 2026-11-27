@@ -26,7 +26,9 @@ import java.util.HashMap
 import java.util.Optional
 import java.util.concurrent.CancellationException
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionException
 import java.util.concurrent.CompletionStage
+import java.util.concurrent.ExecutionException
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import java.util.function.BiConsumer
@@ -47,6 +49,10 @@ import net.minestom.server.entity.Player
  * their prepared session. Ownership failures complete the operation exceptionally before output
  * state changes and never trigger fallback. Acknowledgement publishes input; close retires it and
  * waits for owned resources, including late acquisitions, through the supplied scheduler.
+ * [DialogueSurface.FrameRejected] is a proven precommit failure: its attempted observers fail, the
+ * prior physical ACK remains usable, and newer pending work keeps its original deadline. Coalesced
+ * or stale views not attempted retain the existing acknowledgement contract. Unknown write
+ * failures, partial writes and timeouts retain their existing fatal/fallback behavior.
  */
 class MinestomDialogueRenderer(
     private val scope: MinestomConnectionScope,
@@ -156,7 +162,17 @@ class MinestomDialogueRenderer(
         val closed = AtomicBoolean()
         private val surfaces = AtomicLong()
         val ready = CompletableFuture<DialogueRenderer.PresentationHandle>()
-        private val waiters = ArrayList<CompletableFuture<Void>>()
+
+        private inner class WriteObserver(
+            val result: CompletableFuture<Void>,
+            var selected: DialogueView,
+        ) {
+            // A physical ACK may precede settlement while a newer frame is coalescing.
+            var acknowledged = false
+        }
+
+        private val waiters = ArrayList<WriteObserver>()
+        private var acknowledgedView: DialogueView? = null
         private val configurations = ArrayList<CompletableFuture<Void>>()
         private val browsers = ArrayList<CompletableFuture<InputResult>>()
         private val waits = ArrayList<PendingOperation<*>>()
@@ -313,7 +329,7 @@ class MinestomDialogueRenderer(
         override fun replace(view: DialogueView): CompletionStage<Void> {
             if (view.sessionId() != request.sessionId) {
                 return CompletableFuture.failedFuture(
-                    IllegalArgumentException("Native frame session mismatch")
+                    DialogueSurface.FrameRejected("Native frame session mismatch")
                 )
             }
             val result = CompletableFuture<Void>()
@@ -326,7 +342,7 @@ class MinestomDialogueRenderer(
                 if (current == null || view.stateRevision() >= current.stateRevision())
                     latest = view
                 frameIntent++
-                waiters.add(result)
+                waiters.add(WriteObserver(result, checkNotNull(latest)))
                 flush()
             }
             return result.minimalCompletionStage()
@@ -354,7 +370,6 @@ class MinestomDialogueRenderer(
                 }
                 browsers.removeIf(CompletableFuture<InputResult>::isDone)
                 browsers.add(result)
-                invalidate()
                 await(
                     call { currentDelegate.setChoiceStart(currentLatest, start) },
                     clock.nanoTime() + request.budgets.prepare.toNanos(),
@@ -399,16 +414,32 @@ class MinestomDialogueRenderer(
                     if (error != null && batch === currentBatch) fatal(error)
                 }
             }
+            val attempted = waiters.filter { !it.acknowledged }
+            if (attempted.isEmpty()) return
             inflight = true
             val epoch = ++writeEpoch
             val writingIntent = frameIntent
             val frame = checkNotNull(latest)
+            attempted.forEach { it.selected = frame }
             call { currentDelegate.replace(frame) }
                 .whenComplete { _, error ->
                     queue.execute {
                         if (closed.get() || epoch != writeEpoch) return@execute
                         inflight = false
                         if (error != null) {
+                            if (frameRejection(error) != null) {
+                                val rejected = waiters.filter {
+                                    !it.acknowledged && (it in attempted || it.selected == frame)
+                                }
+                                waiters.removeAll(rejected.toSet())
+                                rejected.forEach { it.result.completeExceptionally(error) }
+                                latest =
+                                    waiters.lastOrNull { !it.acknowledged }?.selected
+                                        ?: acknowledgedView
+                                if (waiters.any { !it.acknowledged }) flush()
+                                else completeAcknowledged()
+                                return@execute
+                            }
                             val code = known(error)
                             if (code != null && effective.surfaceKey != "chat") {
                                 diagnostic = code
@@ -418,21 +449,29 @@ class MinestomDialogueRenderer(
                             }
                             return@execute
                         }
+                        acknowledgedView = frame
+                        attempted.forEach { it.acknowledged = true }
                         if (frame !== latest || writingIntent != frameIntent) {
                             flush()
                             return@execute
                         }
-                        firstAck = true
-                        if (diagnostic == "PREPARING") diagnostic = ""
-                        report()
-                        val completed = waiters.toList()
-                        waiters.clear()
-                        val current = batch
-                        batch = null
-                        current?.complete(null)
-                        completed.forEach { it.complete(null) }
+                        completeAcknowledged()
                     }
                 }
+        }
+
+        private fun completeAcknowledged() {
+            if (acknowledgedView != null) {
+                firstAck = true
+                if (diagnostic == "PREPARING") diagnostic = ""
+                report()
+            }
+            val completed = waiters.toList()
+            waiters.clear()
+            val current = batch
+            batch = null
+            current?.complete(null)
+            completed.forEach { it.result.complete(null) }
         }
 
         override fun reconfigure(preferences: PresentationPreferences): CompletionStage<Void> {
@@ -509,7 +548,7 @@ class MinestomDialogueRenderer(
             invalidate()
             val pending = waiters.toList()
             waiters.clear()
-            pending.forEach { it.completeExceptionally(error) }
+            pending.forEach { it.result.completeExceptionally(error) }
             request.cancellation.cancel(DialogueEndReason.FAILED)
             closeAsync()
         }
@@ -529,7 +568,7 @@ class MinestomDialogueRenderer(
                 waits.forEach(PendingOperation<*>::cancel)
                 waits.clear()
                 val error = CancellationException("Renderer closed")
-                waiters.forEach { it.completeExceptionally(error) }
+                waiters.forEach { it.result.completeExceptionally(error) }
                 waiters.clear()
                 configurations.forEach { it.completeExceptionally(error) }
                 configurations.clear()
@@ -540,6 +579,7 @@ class MinestomDialogueRenderer(
                         if (active === this) active = null
                         delegate = null
                         latest = null
+                        acknowledgedView = null
                         ready.completeExceptionally(
                             if (cleanup != null) OwnedResource.PreparationFailure(cleanup)
                             else failure ?: error
@@ -563,6 +603,14 @@ class MinestomDialogueRenderer(
                 "UNSUPPORTED_RASTER",
                 "OUTPUT_SUPPRESSED",
             )
+
+        private fun frameRejection(error: Throwable): DialogueSurface.FrameRejected? {
+            var current = error
+            while (current is CompletionException || current is ExecutionException) {
+                current = current.cause ?: return null
+            }
+            return current as? DialogueSurface.FrameRejected
+        }
 
         private fun known(error: Throwable): String? {
             var current: Throwable? = error

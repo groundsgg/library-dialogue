@@ -2,6 +2,7 @@ package gg.grounds.dialogue.minestom.render
 
 import com.google.gson.Gson
 import com.google.gson.JsonParser
+import gg.grounds.dialogue.core.port.DialogueRenderer
 import gg.grounds.dialogue.core.port.DialogueScheduler
 import gg.grounds.dialogue.core.runtime.CancellationToken
 import gg.grounds.dialogue.core.runtime.DialogueEndReason
@@ -115,13 +116,14 @@ class NpcDialogueSurfaceTest {
         val hud = ArrayList<Component>()
         val output = ArrayList<List<Key>>()
         var writeGate = CompletableFuture.completedFuture<Void>(null)
+        var hudGate = CompletableFuture.completedFuture<Void>(null)
         val packs = PackStateTracker()
         val token = CancellationToken()
         val channels =
             LocalOutputChannels(
                 { _, component ->
                     hud.add(component)
-                    CompletableFuture.completedFuture(null)
+                    hudGate
                 },
                 assets.profile().postEffects,
                 { _, keys ->
@@ -133,6 +135,7 @@ class NpcDialogueSurfaceTest {
         val feet = AtomicReference(Vec(0.0, 42.0, 0.0))
         var anchorUnavailable = false
         var overriddenBinding: MinestomSpeakerBinding? = null
+        var bindingForView: ((DialogueView) -> MinestomSpeakerBinding?)? = null
         val surface: NpcDialogueSurface
 
         init {
@@ -170,7 +173,7 @@ class NpcDialogueSurfaceTest {
                     object : DialogueScheduler by scheduler {
                         override fun nanoTime(): Long = time?.get() ?: scheduler.nanoTime()
                     },
-                    { overriddenBinding ?: binding },
+                    { bindingForView?.invoke(it) ?: overriddenBinding ?: binding },
                     {},
                     { entity, world, position ->
                         entity.setInstance(world, position).thenCompose { gate }
@@ -227,6 +230,232 @@ class NpcDialogueSurfaceTest {
 
         fun displays(): List<Entity> =
             first.instance.entities.filter { it.entityType == EntityType.TEXT_DISPLAY }
+    }
+
+    private fun nativeRenderer(fixture: Fixture): MinestomDialogueRenderer =
+        MinestomDialogueRenderer(
+            fixture.guard,
+            mapOf(
+                "npc" to
+                    DialoguePresenter.SurfaceProfile(
+                        fixture.surface,
+                        LayoutProfile.npc(),
+                        DialogueTheme.neutral(),
+                        RenderFixtures.ASSETS.metrics(),
+                        false,
+                    ),
+                "chat" to
+                    DialoguePresenter.SurfaceProfile.semantic {
+                        CompletableFuture.failedFuture(
+                            AssertionError("Ownership rejection must not fall back")
+                        )
+                    },
+            ),
+            MinestomDialogueScheduler(fixture.first.instance),
+            DialoguePresenter.Controls.defaults(),
+            gg.grounds.dialogue.presentation.UiLabelSource.defaults(),
+            fixture.targets,
+            {},
+        )
+
+    private fun prepareNative(env: Env, fixture: Fixture, renderer: MinestomDialogueRenderer) =
+        done(
+            env,
+            renderer.prepare(
+                DialogueRenderer.PresentationRequest(
+                    RenderFixtures.SESSION,
+                    fixture.first.uuid.toString(),
+                    1,
+                    PresentationPreferences("npc", Duration.ZERO, false, emptyMap()),
+                    fixture.token,
+                    Long.MAX_VALUE,
+                )
+            ),
+        )
+
+    private fun nativeView(
+        text: String,
+        revision: Long = 1,
+        selected: String = "c1",
+    ): DialogueView {
+        val view = RenderFixtures.view(text, text.length)
+        return DialogueView(
+            view.sessionId(),
+            view.contentPin(),
+            view.nodeId(),
+            view.nodeVisitId(),
+            view.state(),
+            revision,
+            revision,
+            view.localeTag(),
+            view.speaker(),
+            view.text(),
+            (1..7).map {
+                DialogueView.ChoiceView(
+                    "c$it",
+                    "Choice $it",
+                    DialogueView.Availability.AVAILABLE,
+                    "",
+                )
+            },
+            selected,
+            view.totalGraphemes(),
+            view.revealedGraphemes(),
+            view.hint(),
+            view.notice(),
+            view.pendingAction(),
+        )
+    }
+
+    @Test
+    fun integratedQueuedValidWriteSurvivesForeignAttemptAndDuplicates(env: Env) {
+        val fixture = Fixture(env, CompletableFuture.completedFuture(null))
+        val renderer = nativeRenderer(fixture)
+        val handle = prepareNative(env, fixture, renderer)
+        done(env, handle.replace(nativeView("accepted")))
+        var foreignReads = 0
+        var badAttempts = 0
+        val foreign =
+            MinestomSpeakerBinding("foreign", env.createFlatInstance()) {
+                foreignReads++
+                throw AssertionError("Foreign snapshot must not be read")
+            }
+        fixture.bindingForView = {
+            if (it.text() == "bad") {
+                badAttempts++
+                foreign
+            } else null
+        }
+        val bad = nativeView("bad", 3)
+        val rejected = handle.replace(bad)
+        val duplicate = handle.replace(bad)
+        val lower = handle.replace(nativeView("lower coalesced", 2))
+        val good = handle.replace(nativeView("good", 4))
+        assertThrows(CompletionException::class.java) { done(env, rejected) }
+        assertThrows(CompletionException::class.java) { done(env, duplicate) }
+        assertThrows(CompletionException::class.java) { done(env, lower) }
+        done(env, good)
+        assertEquals(1, badAttempts)
+        assertEquals(0, foreignReads)
+        assertFalse(fixture.token.isCancelled())
+        assertEquals(4L, fixture.targets.current()!!.stateRevision())
+        renderer.refreshOutput()
+        repeat(15) { env.tick() }
+        assertEquals(1, badAttempts)
+        done(env, handle.closeAsync())
+        assertTrue(fixture.displays().isEmpty())
+    }
+
+    @Test
+    fun rejectedBrowseKeepsMatchingPageAndTargetsThenValidWriteRetiresOldInputs(env: Env) {
+        val fixture = Fixture(env, CompletableFuture.completedFuture(null))
+        val renderer = nativeRenderer(fixture)
+        val handle = prepareNative(env, fixture, renderer)
+        done(env, handle.replace(nativeView("accepted page")))
+        assertEquals(
+            gg.grounds.dialogue.core.runtime.InputResult.ACCEPTED,
+            done(env, renderer.browse(fixture.targets.current()!!, 3)),
+        )
+        val page = fixture.targets.current()!!
+        val geometry = fixture.surface.geometry()
+        assertEquals(setOf("c4", "c5", "c6"), page.choices().keys)
+        val tokens =
+            gg.grounds.dialogue.minestom.input.ChatInputTokens(
+                fixture.guard,
+                fixture.targets,
+                System::nanoTime,
+            )
+        val capability = tokens.issue("c4", page)
+        fixture.overriddenBinding =
+            MinestomSpeakerBinding("foreign", env.createFlatInstance()) {
+                throw AssertionError("Foreign snapshot must not be read")
+            }
+        assertThrows(CompletionException::class.java) { done(env, renderer.browse(page, 0)) }
+        org.junit.jupiter.api.Assertions.assertSame(page, fixture.targets.current())
+        org.junit.jupiter.api.Assertions.assertSame(geometry, fixture.surface.geometry())
+        assertTrue(tokens.resolve(fixture.first, 1, capability).isPresent)
+        assertFalse(fixture.token.isCancelled())
+        fixture.overriddenBinding = null
+        renderer.refreshOutput()
+        assertTrue(env.tickWhile({ fixture.targets.current() === page }, Duration.ofSeconds(2)))
+        assertEquals(setOf("c4", "c5", "c6"), fixture.targets.current()!!.choices().keys)
+        done(
+            env,
+            handle.reconfigure(
+                PresentationPreferences("npc", Duration.ZERO, false, mapOf("hideHud" to "true"))
+            ),
+        )
+        done(env, handle.replace(nativeView("accepted page")))
+        val before = fixture.targets.current()!!
+        val hudCount = fixture.hud.size
+        fixture.hudGate = CompletableFuture()
+        val next = renderer.browse(before, 0)
+        assertTrue(env.tickWhile({ fixture.hud.size == hudCount }, Duration.ofSeconds(2)))
+        assertNull(
+            fixture.targets.current(),
+            "Validated native write fences old page input before ACK",
+        )
+        assertTrue(tokens.resolve(fixture.first, 1, capability).isEmpty)
+        assertEquals(
+            gg.grounds.dialogue.core.runtime.InputResult.STALE,
+            done(env, renderer.browse(before, 3)),
+        )
+        fixture.hudGate.complete(null)
+        assertEquals(gg.grounds.dialogue.core.runtime.InputResult.ACCEPTED, done(env, next))
+        assertEquals(setOf("c1", "c2", "c3"), fixture.targets.current()!!.choices().keys)
+        done(env, handle.closeAsync())
+        assertTrue(fixture.displays().isEmpty())
+    }
+
+    @Test
+    fun integratedForeignBindingKeepsAcknowledgedOutputAndValidRetry(env: Env) {
+        val fixture = Fixture(env, CompletableFuture.completedFuture(null))
+        val renderer = nativeRenderer(fixture)
+        val handle = prepareNative(env, fixture, renderer)
+        done(env, handle.replace(RenderFixtures.view("accepted", 8)))
+        val accepted = fixture.targets.current()
+        val geometry = fixture.surface.geometry()
+        var snapshots = 0
+        fixture.overriddenBinding =
+            MinestomSpeakerBinding("foreign", env.createFlatInstance()) {
+                snapshots++
+                throw AssertionError("Foreign snapshot must not be read")
+            }
+        assertThrows(CompletionException::class.java) {
+            done(env, handle.replace(RenderFixtures.view("foreign", 7)))
+        }
+        assertEquals(0, snapshots)
+        assertFalse(fixture.token.isCancelled())
+        org.junit.jupiter.api.Assertions.assertSame(accepted, fixture.targets.current())
+        org.junit.jupiter.api.Assertions.assertSame(geometry, fixture.surface.geometry())
+        assertEquals("npc", renderer.effectiveSurface())
+        fixture.overriddenBinding = null
+        renderer.refreshOutput()
+        repeat(10) { env.tick() }
+        done(env, handle.replace(RenderFixtures.view("valid retry", 11)))
+        done(env, handle.closeAsync())
+        assertTrue(fixture.displays().isEmpty())
+    }
+
+    @Test
+    fun integratedFirstRejectedFrameAllowsValidRetry(env: Env) {
+        val fixture = Fixture(env, CompletableFuture.completedFuture(null))
+        val renderer = nativeRenderer(fixture)
+        val handle = prepareNative(env, fixture, renderer)
+        fixture.overriddenBinding =
+            MinestomSpeakerBinding("foreign", env.createFlatInstance()) {
+                throw AssertionError("Foreign snapshot must not be read")
+            }
+        assertThrows(CompletionException::class.java) {
+            done(env, handle.replace(RenderFixtures.view("foreign", 7)))
+        }
+        assertFalse(fixture.token.isCancelled())
+        assertNull(fixture.targets.current())
+        fixture.overriddenBinding = null
+        done(env, handle.replace(RenderFixtures.view("valid retry", 11)))
+        assertEquals("npc", renderer.effectiveSurface())
+        done(env, handle.closeAsync())
+        assertTrue(fixture.displays().isEmpty())
     }
 
     @Test

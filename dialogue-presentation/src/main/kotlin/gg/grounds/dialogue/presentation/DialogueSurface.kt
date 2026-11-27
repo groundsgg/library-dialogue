@@ -10,6 +10,14 @@ import java.util.concurrent.CompletionStage
 
 /** An open surface is hidden until its first frame. Close prevents all later mutations. */
 fun interface DialogueSurface {
+    /**
+     * The attempted frame committed no owned output, input or resource mutation. Previously
+     * acknowledged output remains usable. Emit only after validation proves this contract;
+     * ordinary/partial writes, acquisition failures, cancellation and timeouts are not rejections.
+     * Core retains authority over how it handles a failed rendering operation.
+     */
+    class FrameRejected(message: String) : IllegalArgumentException(message)
+
     @JvmRecord
     data class SurfaceContext(
         val sessionId: UUID,
@@ -73,6 +81,12 @@ fun interface DialogueSurface {
     }
 
     interface SurfaceHandle : OwnedResource {
+        /**
+         * Acknowledges this frame's owned output. [FrameRejected] proves no owned mutation and
+         * permits reuse of the prior acknowledged presentation; other failures make no such
+         * guarantee. Observers recognize that marker only through standard completion/execution
+         * wrappers, never through an arbitrary failure's cause chain.
+         */
         fun replace(frame: WidgetFrame): CompletionStage<Void>
 
         fun configure(preferences: PresentationPreferences): CompletionStage<Void> =

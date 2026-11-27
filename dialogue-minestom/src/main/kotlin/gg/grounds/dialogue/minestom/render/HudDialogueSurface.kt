@@ -155,7 +155,7 @@ class HudDialogueSurface(
         override fun replace(frame: WidgetFrame): CompletionStage<Void> {
             if (frame.semantic().sessionId() != context.sessionId) {
                 return CompletableFuture.failedFuture(
-                    IllegalArgumentException("Native frame session mismatch")
+                    DialogueSurface.FrameRejected("Native frame session mismatch")
                 )
             }
             val result = CompletableFuture<Void>()

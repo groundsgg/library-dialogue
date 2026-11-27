@@ -355,7 +355,7 @@ internal constructor(
         override fun replace(frame: WidgetFrame): CompletionStage<Void> {
             if (frame.semantic().sessionId() != context.sessionId) {
                 return CompletableFuture.failedFuture(
-                    IllegalArgumentException("Native frame session mismatch")
+                    DialogueSurface.FrameRejected("Native frame session mismatch")
                 )
             }
             val result = CompletableFuture<Void>()
@@ -383,7 +383,8 @@ internal constructor(
             val speaker =
                 speaker.apply(frame.semantic())
                     ?: throw NullPointerException("Missing logical speaker binding")
-            require(speaker.instance === scope.instance) { "NPC binding owner mismatch" }
+            if (speaker.instance !== scope.instance)
+                throw DialogueSurface.FrameRejected("NPC binding owner mismatch")
             val snapshot = speaker.snapshot.get()
             if (!snapshot.valid) {
                 context.cancellation.cancel(DialogueEndReason.HOST_CHANGED)

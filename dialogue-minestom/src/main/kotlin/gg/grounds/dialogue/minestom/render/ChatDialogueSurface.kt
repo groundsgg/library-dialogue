@@ -73,7 +73,7 @@ class ChatDialogueSurface(
         override fun replace(frame: WidgetFrame): CompletionStage<Void> {
             if (frame.semantic().sessionId() != context.sessionId) {
                 return CompletableFuture.failedFuture(
-                    IllegalArgumentException("Native frame session mismatch")
+                    DialogueSurface.FrameRejected("Native frame session mismatch")
                 )
             }
             if (closed || !scope.isCurrent() || context.cancellation.isCancelled()) {

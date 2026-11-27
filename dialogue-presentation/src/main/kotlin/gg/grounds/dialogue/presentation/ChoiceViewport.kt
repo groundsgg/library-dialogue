@@ -18,6 +18,14 @@ class ChoiceViewport {
         private var selection: String? = null
         private var start = 0
 
+        internal fun copy(): Cursor =
+            Cursor().also {
+                it.session = session
+                it.visit = visit
+                it.selection = selection
+                it.start = start
+            }
+
         fun startFor(view: DialogueView, capacity: Int): Int {
             val viewport = ChoiceViewport()
             start =

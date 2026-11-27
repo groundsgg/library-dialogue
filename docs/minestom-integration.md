@@ -22,6 +22,12 @@ A surface's retirement generation is independent. Rejecting a foreign request,
 frame or NPC binding preserves valid output; bindings from another instance are
 rejected before snapshot callbacks. Publish input only after acknowledged output,
 and use its exact revisions/visit/surface generation when submitting to Core.
+A proven `DialogueSurface.FrameRejected` preserves the last physically
+acknowledged view and viewport and fails only observers associated with that
+attempt. Newer queued work keeps its original deadline; unknown/partial writes
+retain normal failure handling. The marker is recognized only through standard
+completion/execution wrappers, never an arbitrary cause chain. Core's own
+response to a failed render remains Core-owned.
 The short renderer overload and explicit null tokens preserve output, but require
 external resolution through the surface's issuing token store.
 

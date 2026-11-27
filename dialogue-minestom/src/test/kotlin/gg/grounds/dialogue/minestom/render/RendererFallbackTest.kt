@@ -45,6 +45,8 @@ import org.junit.jupiter.api.Test
 class RendererFallbackTest {
     private class Surface : DialogueSurface {
         var writes = 0
+        val frames = ArrayList<WidgetFrame>()
+        var draw: ((WidgetFrame) -> CompletionStage<Void>)? = null
         var closes = 0
         var fail = false
         var openError: Throwable? = null
@@ -62,6 +64,10 @@ class RendererFallbackTest {
                 object : DialogueSurface.SurfaceHandle {
                     override fun replace(frame: WidgetFrame): CompletionStage<Void> {
                         writes++
+                        frames.add(frame)
+                        draw?.let {
+                            return it(frame)
+                        }
                         drawError?.let {
                             return CompletableFuture.failedFuture(it)
                         }
@@ -84,7 +90,10 @@ class RendererFallbackTest {
     private fun <T> done(env: Env, stage: CompletionStage<T>): T =
         HudDialogueSurfaceTest.done(env, stage)
 
-    private inner class Fixture(env: Env) {
+    private inner class Fixture(
+        env: Env,
+        scheduler: gg.grounds.dialogue.core.port.DialogueScheduler? = null,
+    ) {
         val player =
             env.createConnection()
                 .connect(
@@ -92,7 +101,7 @@ class RendererFallbackTest {
                     net.minestom.server.coordinate.Pos(0.0, 42.0, 0.0),
                 )
         val scope = gg.grounds.dialogue.minestom.MinestomConnectionScope(player, 1, player.instance)
-        val clock = MinestomDialogueScheduler(player.instance)
+        val clock = scheduler ?: MinestomDialogueScheduler(player.instance)
         val hud = Surface()
         val chat = Surface()
         val npc = Surface()
@@ -196,6 +205,194 @@ class RendererFallbackTest {
             System.nanoTime() + 5_000_000_000L,
             budgets(),
         )
+
+    private class Clock : gg.grounds.dialogue.core.port.DialogueScheduler {
+        var now = 0L
+        private val ready = java.util.ArrayDeque<Runnable>()
+
+        private class Task(val at: Long, val action: Runnable) {
+            var cancelled = false
+        }
+
+        private val timers = java.util.PriorityQueue<Task>(compareBy { it.at })
+
+        override fun execute(command: Runnable) {
+            ready.add(command)
+        }
+
+        override fun nanoTime(): Long = now
+
+        override fun schedule(
+            delay: Duration,
+            command: Runnable,
+        ): gg.grounds.dialogue.core.port.DialogueScheduler.ScheduledTask {
+            val task = Task(now + delay.toNanos(), command)
+            timers.add(task)
+            return gg.grounds.dialogue.core.port.DialogueScheduler.ScheduledTask {
+                task.cancelled = true
+            }
+        }
+
+        fun drain() {
+            var remaining = 10000
+            while (ready.isNotEmpty()) {
+                check(remaining-- > 0)
+                ready.remove().run()
+            }
+        }
+
+        fun advance(duration: Duration) {
+            val end = now + duration.toNanos()
+            drain()
+            while (timers.isNotEmpty() && timers.peek().at <= end) {
+                val task = timers.remove()
+                now = task.at
+                if (!task.cancelled) task.action.run()
+                drain()
+            }
+            now = end
+            drain()
+        }
+    }
+
+    private fun direct(fixture: Fixture, clock: Clock): DialogueRenderer.PresentationHandle {
+        val pending =
+            fixture.renderer.prepare(
+                DialogueRenderer.PresentationRequest(
+                    RenderFixtures.SESSION,
+                    fixture.player.uuid.toString(),
+                    1,
+                    PresentationPreferences("chat", Duration.ZERO, false, emptyMap()),
+                    CancellationToken(),
+                    Duration.ofSeconds(5).toNanos(),
+                    budgets(),
+                )
+            )
+        clock.drain()
+        return pending.toCompletableFuture().join()
+    }
+
+    @Test
+    fun rejectedWritePreservesQueuedWorkAndItsOriginalDeadline(env: Env) {
+        val clock = Clock()
+        val fixture = Fixture(env, clock)
+        val handle = direct(fixture, clock)
+        handle.replace(RenderFixtures.view("accepted", 8))
+        clock.drain()
+        val bad = CompletableFuture<Void>()
+        val good = CompletableFuture<Void>()
+        fixture.chat.draw = { if (it.semantic().text() == "bad") bad else good }
+        val rejected = handle.replace(RenderFixtures.view("bad", 3))
+        clock.drain()
+        val queued = handle.replace(RenderFixtures.view("good", 4))
+        clock.drain()
+        clock.advance(Duration.ofSeconds(4))
+        bad.completeExceptionally(
+            java.util.concurrent.CompletionException(
+                java.util.concurrent.ExecutionException(DialogueSurface.FrameRejected("owner"))
+            )
+        )
+        clock.drain()
+        assertTrue(rejected.toCompletableFuture().isCompletedExceptionally)
+        assertFalse(queued.toCompletableFuture().isDone)
+        assertEquals("good", fixture.chat.frames.last().semantic().text())
+        clock.advance(Duration.ofSeconds(1))
+        assertTrue(
+            queued.toCompletableFuture().isCompletedExceptionally,
+            "Rejection cannot extend already pending work",
+        )
+        assertEquals("", fixture.renderer.effectiveSurface())
+        good.complete(null)
+        clock.drain()
+        handle.closeAsync()
+        fixture.core.closeAsync()
+        clock.drain()
+    }
+
+    @Test
+    fun intermediatePhysicalAckSurvivesLaterRejectionAndExpiredOldTimer(env: Env) {
+        val clock = Clock()
+        val fixture = Fixture(env, clock)
+        val handle = direct(fixture, clock)
+        val first = CompletableFuture<Void>()
+        val bad = CompletableFuture<Void>()
+        fixture.chat.draw = { if (it.semantic().text() == "first") first else bad }
+        val accepted = handle.replace(RenderFixtures.view("first", 5))
+        clock.drain()
+        val rejected = handle.replace(RenderFixtures.view("bad", 3))
+        clock.drain()
+        first.complete(null)
+        clock.drain()
+        assertFalse(
+            accepted.toCompletableFuture().isDone,
+            "Retain existing coalesced observer timing",
+        )
+        bad.completeExceptionally(DialogueSurface.FrameRejected("owner"))
+        clock.drain()
+        assertTrue(rejected.toCompletableFuture().isCompletedExceptionally)
+        accepted.toCompletableFuture().join()
+        assertEquals("chat", fixture.renderer.effectiveSurface())
+        clock.advance(Duration.ofSeconds(6))
+        assertEquals(
+            "chat",
+            fixture.renderer.effectiveSurface(),
+            "Retired batch timer cannot tear down accepted output",
+        )
+        fixture.chat.draw = { CompletableFuture.completedFuture(null) }
+        fixture.renderer.refreshOutput()
+        clock.drain()
+        assertEquals("first", fixture.chat.frames.last().semantic().text())
+        handle.closeAsync()
+        fixture.core.closeAsync()
+        clock.drain()
+    }
+
+    @Test
+    fun firstFrameRetryKeepsOriginalRequestDeadline(env: Env) {
+        val clock = Clock()
+        val fixture = Fixture(env, clock)
+        val handle = direct(fixture, clock)
+        val first = CompletableFuture<Void>()
+        val retry = CompletableFuture<Void>()
+        fixture.chat.draw = { if (it.semantic().text() == "bad") first else retry }
+        val rejected = handle.replace(RenderFixtures.view("bad", 3))
+        clock.drain()
+        clock.advance(Duration.ofSeconds(4))
+        first.completeExceptionally(DialogueSurface.FrameRejected("owner"))
+        clock.drain()
+        assertTrue(rejected.toCompletableFuture().isCompletedExceptionally)
+        val pending = handle.replace(RenderFixtures.view("retry", 5))
+        clock.drain()
+        assertFalse(pending.toCompletableFuture().isDone)
+        clock.advance(Duration.ofSeconds(1))
+        assertTrue(pending.toCompletableFuture().isCompletedExceptionally)
+        retry.complete(null)
+        clock.drain()
+        handle.closeAsync()
+        fixture.core.closeAsync()
+        clock.drain()
+    }
+
+    @Test
+    fun ordinaryFailureWrappingMarkerRemainsFatal(env: Env) {
+        val clock = Clock()
+        val fixture = Fixture(env, clock)
+        val handle = direct(fixture, clock)
+        handle.replace(RenderFixtures.view("accepted", 8))
+        clock.drain()
+        fixture.chat.drawError =
+            IllegalStateException("partial write", DialogueSurface.FrameRejected("nested"))
+        val failed = handle.replace(RenderFixtures.view("bad", 3))
+        clock.drain()
+        assertTrue(failed.toCompletableFuture().isCompletedExceptionally)
+        assertEquals(1, fixture.chat.closes)
+        assertEquals("", fixture.renderer.effectiveSurface())
+        val retry = handle.replace(RenderFixtures.view("retry", 5))
+        clock.drain()
+        assertTrue(retry.toCompletableFuture().isCompletedExceptionally)
+        fixture.core.closeAsync()
+        clock.drain()
+    }
 
     @Test
     fun nativeConstructorsRequireExactScopeRegistryAndIssuer(env: Env) {

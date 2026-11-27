@@ -18,10 +18,13 @@ import gg.grounds.dialogue.presentation.WidgetFrame.Kind
 import gg.grounds.dialogue.presentation.WidgetFrame.Rect
 import gg.grounds.dialogue.presentation.WidgetFrame.Widget
 import java.time.Duration
+import java.util.IdentityHashMap
 import java.util.Locale
 import java.util.concurrent.CancellationException
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionException
 import java.util.concurrent.CompletionStage
+import java.util.concurrent.ExecutionException
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.function.Function
 import java.util.function.Supplier
@@ -31,7 +34,12 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.round
 
-/** Shared widget composition; does not own a second reveal clock or graph. */
+/**
+ * Shared widget composition; does not own a second reveal clock or graph. A surface's proven
+ * [DialogueSurface.FrameRejected] restores the last physically acknowledged view and viewport while
+ * preserving newer queued work and existing coalescing. Ordinary write errors carry no prior-output
+ * guarantee; the calling runtime retains authority over failed rendering.
+ */
 class DialoguePresenter : DialogueRenderer {
     @JvmRecord
     data class SurfaceProfile(
@@ -383,7 +391,10 @@ class DialoguePresenter : DialogueRenderer {
 
     private inner class SurfaceSession(private val request: DialogueRenderer.PresentationRequest) :
         DialogueRenderer.PresentationHandle, ChoiceViewport.Controller {
-        val choiceCursor = ChoiceViewport.Cursor()
+        var choiceCursor = ChoiceViewport.Cursor()
+        private var acknowledgedView: DialogueView? = null
+        private var pageIntent: PageIntent? = null
+        private val selectedViews = IdentityHashMap<CompletableFuture<Void>, DialogueView>()
         val queue: SerialCommandQueue
         val scope: OwnedScope
         val ready = CompletableFuture<DialogueRenderer.PresentationHandle>()
@@ -417,6 +428,49 @@ class DialoguePresenter : DialogueRenderer {
             val waiters = ArrayList<CompletableFuture<Void>>()
         }
 
+        private inner class PageIntent(val expected: DialogueView, val start: Int)
+
+        private inner class Composition(
+            val widgets: WidgetFrame,
+            val cursor: ChoiceViewport.Cursor,
+            val page: PageIntent?,
+        )
+
+        private fun composeAttempt(
+            view: DialogueView,
+            key: String,
+            prefs: PresentationPreferences,
+        ): Composition {
+            val cursor = choiceCursor.copy()
+            val page = pageIntent
+            if (page != null && page.expected == view && !profile(key).semanticOnly) {
+                val layout = profile(key).resolveLayout(prefs)
+                if (layout.navigationButtons) cursor.browse(view, layout.choiceCapacity, page.start)
+            }
+            return Composition(composeCurrent(view, key, prefs, cursor), cursor, page)
+        }
+
+        private fun acknowledge(composition: Composition) {
+            acknowledgedView = composition.widgets.semantic()
+            choiceCursor = composition.cursor
+            if (pageIntent === composition.page) pageIntent = null
+        }
+
+        private fun rejectFrame(frame: PendingFrame, composition: Composition, error: Throwable) {
+            val next = pending
+            if (next != null) {
+                val duplicates = next.waiters.filter { selectedViews[it] == frame.view }
+                next.waiters.removeAll(duplicates.toSet())
+                duplicates.forEach {
+                    selectedViews.remove(it)
+                    it.completeExceptionally(error)
+                }
+                if (next.waiters.isEmpty()) pending = null
+            }
+            lastView = pending?.view ?: acknowledgedView
+            if (pageIntent === composition.page) pageIntent = null
+        }
+
         inner class Switch(
             val gen: Long,
             val deadline: Long,
@@ -432,6 +486,7 @@ class DialoguePresenter : DialogueRenderer {
             view: DialogueView,
             key: String,
             prefs: PresentationPreferences,
+            cursor: ChoiceViewport.Cursor,
         ): WidgetFrame {
             if (profile(key).semanticOnly) return compose(view, key, prefs)
             val currentLayout = profile(key).resolveLayout(prefs)
@@ -440,7 +495,7 @@ class DialoguePresenter : DialogueRenderer {
                 key,
                 prefs,
                 if (currentLayout.navigationButtons)
-                    choiceCursor.startFor(view, currentLayout.choiceCapacity)
+                    cursor.startFor(view, currentLayout.choiceCapacity)
                 else null,
             )
         }
@@ -449,7 +504,7 @@ class DialoguePresenter : DialogueRenderer {
             val result = CompletableFuture<Boolean>()
             queue.execute {
                 try {
-                    val current = lastView
+                    val current = acknowledgedView
                     if (
                         closed.get() ||
                             current == null ||
@@ -460,10 +515,11 @@ class DialoguePresenter : DialogueRenderer {
                         return@execute
                     }
                     val currentLayout = profile(surfaceKey).resolveLayout(preferences)
-                    result.complete(
+                    val valid =
                         currentLayout.navigationButtons &&
-                            choiceCursor.browse(current, currentLayout.choiceCapacity, start)
-                    )
+                            choiceCursor.copy().browse(current, currentLayout.choiceCapacity, start)
+                    if (valid) pageIntent = PageIntent(current, start)
+                    result.complete(valid)
                 } catch (failure: Throwable) {
                     result.completeExceptionally(failure)
                 }
@@ -549,7 +605,9 @@ class DialoguePresenter : DialogueRenderer {
                     return@execute
                 }
                 if (request.sessionId != view.sessionId()) {
-                    result.completeExceptionally(IllegalArgumentException("Foreign session view"))
+                    result.completeExceptionally(
+                        DialogueSurface.FrameRejected("Foreign session view")
+                    )
                     return@execute
                 }
                 track(result)
@@ -557,13 +615,23 @@ class DialoguePresenter : DialogueRenderer {
                 if (previous != null && view.stateRevision() < previous.stateRevision()) {
                     when {
                         lastWritten >= view.stateRevision() -> result.complete(null)
-                        pending != null -> pending!!.waiters += result
-                        inflight != null -> inflight!!.waiters += result
-                        else -> enqueue(previous, listOf(result))
+                        pending != null -> {
+                            selectedViews[result] = pending!!.view
+                            pending!!.waiters += result
+                        }
+                        inflight != null -> {
+                            selectedViews[result] = inflight!!.view
+                            inflight!!.waiters += result
+                        }
+                        else -> {
+                            selectedViews[result] = previous
+                            enqueue(previous, listOf(result))
+                        }
                     }
                     return@execute
                 }
                 lastView = view
+                selectedViews[result] = view
                 enqueue(view, listOf(result))
             }
             return result.minimalCompletionStage()
@@ -579,6 +647,7 @@ class DialoguePresenter : DialogueRenderer {
 
         fun finishFrame(frame: PendingFrame, error: Throwable?) {
             frame.waiters.forEach {
+                selectedViews.remove(it)
                 if (error == null) it.complete(null) else it.completeExceptionally(error)
             }
             frame.waiters.clear()
@@ -589,22 +658,27 @@ class DialoguePresenter : DialogueRenderer {
             val frame = pending ?: return
             if (closed.get() || inflight != null) return
             pending = null
-            val widgets =
+            val composition =
                 try {
-                    composeCurrent(frame.view, surfaceKey, preferences)
+                    composeAttempt(frame.view, surfaceKey, preferences)
                 } catch (error: Throwable) {
                     finishFrame(frame, error)
                     flush()
                     return
                 }
+            frame.waiters.forEach { selectedViews[it] = frame.view }
             inflight = frame
             val gen = outputGeneration
-            call { target.replace(widgets) }
+            call { target.replace(composition.widgets) }
                 .whenComplete { _, error ->
                     queue.execute {
-                        if (gen != outputGeneration) return@execute
-                        if (error == null)
+                        if (closed.get() || gen != outputGeneration) return@execute
+                        if (error == null) {
                             lastWritten = max(lastWritten, frame.view.stateRevision())
+                            acknowledge(composition)
+                        } else if (frameRejection(error) != null) {
+                            rejectFrame(frame, composition, error)
+                        }
                         finishFrame(frame, error)
                         inflight = null
                         flush()
@@ -728,14 +802,14 @@ class DialoguePresenter : DialogueRenderer {
             val frame =
                 try {
                     lastView?.let {
-                        composeCurrent(it, operation.next.surfaceKey, operation.next)
+                        composeAttempt(it, operation.next.surfaceKey, operation.next)
                     }
                 } catch (failure: Throwable) {
                     reject(operation, "SURFACE_LAYOUT_REJECTED", failure)
                     return
                 }
             val first =
-                frame?.let { call { candidate.replace(it) } }
+                frame?.let { call { candidate.replace(it.widgets) } }
                     ?: CompletableFuture.completedFuture(null)
             first.whenComplete { _, drawError ->
                 queue.execute { commitSwitch(operation, candidate, frame, drawError) }
@@ -745,7 +819,7 @@ class DialoguePresenter : DialogueRenderer {
         private fun commitSwitch(
             operation: Switch,
             value: DialogueSurface.SurfaceHandle,
-            frame: WidgetFrame?,
+            frame: Composition?,
             drawError: Throwable?,
         ) {
             if (!valid(operation)) {
@@ -769,7 +843,8 @@ class DialoguePresenter : DialogueRenderer {
             preferences = operation.next
             operation.committed = true
             outputGeneration++
-            lastWritten = frame?.semantic()?.stateRevision() ?: -1
+            lastWritten = frame?.widgets?.semantic()?.stateRevision() ?: -1
+            frame?.let(::acknowledge)
             val transferred = ArrayList<CompletableFuture<Void>>()
             inflight?.let {
                 transferred.addAll(it.waiters)
@@ -807,6 +882,7 @@ class DialoguePresenter : DialogueRenderer {
                 val error = CancellationException("Surface closed")
                 outstanding.forEach { it.completeExceptionally(error) }
                 outstanding.clear()
+                selectedViews.clear()
                 pending?.let { finishFrame(it, error) }
                 pending = null
                 inflight?.let { finishFrame(it, error) }
@@ -816,6 +892,8 @@ class DialoguePresenter : DialogueRenderer {
                     queue.execute {
                         surface = null
                         lastView = null
+                        acknowledgedView = null
+                        pageIntent = null
                         val failure =
                             if (cleanup == null) preparationFailure
                             else OwnedResource.PreparationFailure(cleanup)
@@ -830,6 +908,14 @@ class DialoguePresenter : DialogueRenderer {
     }
 
     companion object {
+        private fun frameRejection(error: Throwable): DialogueSurface.FrameRejected? {
+            var current = error
+            while (current is CompletionException || current is ExecutionException) {
+                current = current.cause ?: return null
+            }
+            return current as? DialogueSurface.FrameRejected
+        }
+
         private fun <T> call(supplier: Supplier<CompletionStage<T>>): CompletionStage<T> =
             try {
                 requireNotNull(supplier.get())

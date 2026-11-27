@@ -192,3 +192,29 @@ and [Kotlin](../fixtures/minestom-consumer/src/test/kotlin/example/NativePipelin
 custom pipelines. Both run real output ACK, native targets, chat capability input
 through Core, owner rejection, retirement and owned entity cleanup using published
 JARs and a public scheduler implementation.
+
+### Proven frame rejection
+
+`DialogueSurface.FrameRejected(message)` is an additive Presentation SPI marker
+for a failed `SurfaceHandle.replace` that committed no owned output, input or
+resource mutation. Native foreign-session and foreign-instance binding checks
+use it. The presenter and native renderer keep the last physically acknowledged
+view/page and reject observers associated with the offending attempted write;
+newer queued work keeps its existing absolute deadline. A first rejected frame
+may be retried before the original request deadline. Duplicate/lower-revision
+observers associated with the rejected attempt cannot become successful by
+acknowledging restored old output. Unattempted coalesced/stale views retain the
+existing acknowledgement contract and are not individually preflighted.
+
+The marker is recognized through `CompletionException`/`ExecutionException`
+wrappers only. An ordinary failure with this marker somewhere in its cause chain
+is still ordinary. Custom surfaces must make the no-mutation guarantee before
+emitting it; partial writes, unknown errors, failed acquisitions, genuine lost
+anchors and timeouts do not qualify. Those failures retain existing failure and
+cleanup handling. Core remains free to stop when its own render operation fails.
+
+Browse cursor changes commit on frame ACK. A rejected browse retains the matching
+visible page and targets; validated native writes still retire old inputs before
+publishing their new acknowledged targets. The existing adapter impulse and
+surface-retirement fences remain in place. Refresh after rejection uses the last
+physical ACK rather than replaying the rejected desired view.
